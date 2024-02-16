@@ -31,6 +31,7 @@ packaging==23.2
 pandas==2.2.0
 pillow==10.2.0
 protobuf==4.25.2
+pyarrow==15.0.0
 pyparsing==3.1.1
 pyproj==3.6.1
 python-dateutil==2.8.2
@@ -54,3 +55,4 @@ transformers==4.37.2
 typing_extensions==4.9.0
 tzdata==2024.1
 urllib3==2.2.0
+utils==1.0.2
