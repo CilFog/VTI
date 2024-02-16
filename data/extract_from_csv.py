@@ -10,6 +10,7 @@ import datetime as dt
 
 INPUT_FOLDER = os.path.join(os.path.dirname(__file__), 'input')
 OUTPUT_FOLDER = os.path.join(os.path.dirname(__file__), 'output')
+GTI_OUTPUT_FOLDER = os.path.join(os.path.dirname(__file__), '../../GTI/data/ais')
 
 
 def connect_to_to_ais_web_server_and_get_data():
@@ -55,9 +56,6 @@ def download_interval(interval: str):
     for file in files_to_download:
         download_cleanse_insert(file_name=file)
 
-
-
-
 def download_cleanse_insert(file_name: str):
     """
     Downloads the given file, runs it through the pipeline and adds the file to the log.
@@ -78,7 +76,6 @@ def download_cleanse_insert(file_name: str):
         df = cleanse_csv_file_and_convert_to_df(file_name=file_name)
         print(df.head())
         #partition_trips_and_insert(file, df)
-
 
 def download_file_from_ais_web_server(file_name: str):
     """
@@ -117,7 +114,6 @@ def download_file_from_ais_web_server(file_name: str):
         print("Error")
         quit()
 
-
 def cleanse_csv_file_and_convert_to_df(file_name: str):
     """
     Takes a .csv file and cleanses it according to the set predicates.
@@ -143,8 +139,8 @@ def cleanse_csv_file_and_convert_to_df(file_name: str):
         'ETA': str,
         'Data source type': str,
     }
-    
-    df = pd.read_csv(str.format("{0}/{1}", INPUT_FOLDER, file_name), na_values=['Unknown','Undefined'], dtype=types, nrows=10000) #, nrows=1000000    
+
+    df = pd.read_csv(str.format("{0}/{1}", INPUT_FOLDER, file_name), na_values=['Unknown','Undefined'], dtype=types, nrows=100000) #, nrows=1000000    
     
     # Remove unwanted columns containing data we do not need. This saves a little bit of memory.
     # errors='ignore' is sat because older ais data files may not contain these columns.
@@ -153,10 +149,7 @@ def cleanse_csv_file_and_convert_to_df(file_name: str):
     df['# Timestamp'] = pd.to_datetime(df['# Timestamp'], format="%d/%m/%Y %H:%M:%S")
     df['# Timestamp'].astype('int64')//1e9
     df['# Timestamp'] = (df['# Timestamp'] - dt.datetime(1970,1,1)).dt.total_seconds()    
-    print(df)
-    # df['epoch'].astype('int64')//1e9
-    
-    
+
     # Remove all the rows which does not satisfy our conditions
     df = df[
             (df["Type of mobile"] != "Class B") &
@@ -191,25 +184,21 @@ def cleanse_csv_file_and_convert_to_df(file_name: str):
 
     df = df.drop(columns=['index','type_of_mobile','type_of_position_fixing_device', 'width', 'length', 'name', 'callsign','imo', 'destination','navigational_status', 'rot'], errors='ignore')
 
-    #create_trajectory_gti(df)
-
+    create_trajectory_gti(df)
     
-
     return df
 
-def create_trajectory_gti(data):
-
-    df = pd.DataFrame(data)
-
+def create_trajectory_gti(df:pd.DataFrame):
+    trip = 0
     # Group by 'mmsi' and iterate over each group
     for mmsi, group_df in df.groupby('mmsi'):
-            if mmsi == 219027026:
-                file_name = f"{mmsi}.txt"
-                with open(file_name, 'w') as file:
-                    # Iterate over rows in the group
-                    for idx, row in group_df.reset_index().iterrows():
-                        # Write timestamp, latitude, and longitude to the file
-                        file.write(f"{idx+1},{row['latitude']},{row['longitude']},{row['draught']},{row['cog']},{row['sog']}{row['timestamp']}\n")
+        file_name = os.path.join(GTI_OUTPUT_FOLDER, f"trip{trip}.txt")
+        with open(file_name, 'w') as file:
+            # Iterate over rows in the group
+            for idx, row in group_df.reset_index().iterrows():
+                # Write timestamp, latitude, and longitude to the file
+                file.write(f"{idx},{row['latitude']},{row['longitude']},{row['timestamp']}\n")
+        trip += 1
 
 
 
