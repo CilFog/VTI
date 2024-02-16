@@ -140,7 +140,7 @@ def cleanse_csv_file_and_convert_to_df(file_name: str):
         'Data source type': str,
     }
 
-    df = pd.read_csv(str.format("{0}/{1}", INPUT_FOLDER, file_name), na_values=['Unknown','Undefined'], dtype=types, nrows=100000) #, nrows=1000000    
+    df = pd.read_csv(str.format("{0}/{1}", INPUT_FOLDER, file_name), na_values=['Unknown','Undefined'], dtype=types) #, nrows=1000000    
     
     # Remove unwanted columns containing data we do not need. This saves a little bit of memory.
     # errors='ignore' is sat because older ais data files may not contain these columns.
@@ -183,25 +183,34 @@ def cleanse_csv_file_and_convert_to_df(file_name: str):
     df.columns = map(str.lower, df.columns)
 
     df = df.drop(columns=['index','type_of_mobile','type_of_position_fixing_device', 'width', 'length', 'name', 'callsign','imo', 'destination','navigational_status', 'rot'], errors='ignore')
-
-    create_trajectory_gti(df)
-    
+        
     return df
 
-def create_trajectory_gti(df:pd.DataFrame):
-    trip = 0
+def create_trajectory_gti(df:pd.DataFrame, trip_id):
     # Group by 'mmsi' and iterate over each group
     for mmsi, group_df in df.groupby('mmsi'):
-        file_name = os.path.join(GTI_OUTPUT_FOLDER, f"trip{trip}.txt")
+        file_name = os.path.join(GTI_OUTPUT_FOLDER, f"trip{trip_id}.txt")
         with open(file_name, 'w') as file:
             # Iterate over rows in the group
             for idx, row in group_df.reset_index().iterrows():
                 # Write timestamp, latitude, and longitude to the file
                 file.write(f"{idx},{row['latitude']},{row['longitude']},{row['timestamp']}\n")
-        trip += 1
+        trip_id += 1
 
+def create_gti_txt_trajectories():
+    filenames = os.listdir(INPUT_FOLDER)
+    print(filenames)
+    trip_id = 0
+    for file_index in range(len(filenames)):
+        file_name = filenames[file_index]
+        print('creating trajectories for ' + file_name)
+        df = cleanse_csv_file_and_convert_to_df(file_name)
+        create_trajectory_gti(trip_id)
+        print('finished trajectories for ' + file_name)
 
+        trip_id += df.__len__()
 
-#download_interval("2024-02-12::2024-02-12")
+#download_interval("2024-02-10::2024-02-12")
 
-cleanse_csv_file_and_convert_to_df("aisdk-2024-02-12.csv")
+#cleanse_csv_file_and_convert_to_df("aisdk-2024-02-12.csv")
+create_gti_txt_trajectories()
