@@ -1,18 +1,16 @@
 import os
 import tarfile
-from urllib.error import HTTPError, URLError
 import zipfile
 from bs4 import BeautifulSoup
 from urllib.request import urlopen
 import numpy as np
 import requests
-import geopandas as gpd
 import pandas as pd
-import time
-import datetime
-import timeit
+import datetime as dt
 
-CSV_FILES_PATH = 'C:/Users/alexf/P-10/'
+INPUT_FOLDER = os.path.join(os.path.dirname(__file__), 'input')
+OUTPUT_FOLDER = os.path.join(os.path.dirname(__file__), 'output')
+
 
 def connect_to_to_ais_web_server_and_get_data():
     """
@@ -93,7 +91,7 @@ def download_file_from_ais_web_server(file_name: str):
     download_result.raise_for_status()
 
 
-    path_to_compressed_file = CSV_FILES_PATH + file_name
+    path_to_compressed_file = INPUT_FOLDER + file_name
 
     try:
         f = open(path_to_compressed_file,'wb')
@@ -106,10 +104,10 @@ def download_file_from_ais_web_server(file_name: str):
     try:
         if ".zip" in path_to_compressed_file: 
             with zipfile.ZipFile(path_to_compressed_file, 'r') as zip_ref:
-                zip_ref.extractall(CSV_FILES_PATH)
+                zip_ref.extractall(INPUT_FOLDER)
         elif ".rar" in path_to_compressed_file:
             with tarfile.RarFile(path_to_compressed_file) as rar_ref:
-                rar_ref.extractall(path=CSV_FILES_PATH)
+                rar_ref.extractall(path=INPUT_FOLDER)
         else:
             print("Error")
             
@@ -145,20 +143,19 @@ def cleanse_csv_file_and_convert_to_df(file_name: str):
         'ETA': str,
         'Data source type': str,
     }
-    df = pd.read_csv(CSV_FILES_PATH + file_name, parse_dates=['# Timestamp'], na_values=['Unknown','Undefined'], dtype=types, nrows=10000) #, nrows=1000000
+    
+    df = pd.read_csv(str.format("{0}/{1}", INPUT_FOLDER, file_name), na_values=['Unknown','Undefined'], dtype=types, nrows=10000) #, nrows=1000000    
     
     # Remove unwanted columns containing data we do not need. This saves a little bit of memory.
     # errors='ignore' is sat because older ais data files may not contain these columns.
     df = df.drop(['A','B','C','D','ETA','Cargo type','Data source type'],axis=1, errors='ignore')
     
-    #df['# Timestamp'] = pd.to_datetime(df['# Timestamp'], format="%d/%m/%Y %H:%M:%S", errors='coerce')
-    df['epoch_time'] = pd.to_datetime(df['# Timestamp'], format="%d/%m/%Y %H:%M:%S", errors="coerce").astype('int64').astype(int) // 10**9
-    #df['epoch_time'] = df['# Timestamp'].dt.total_seconds()
-    #df['# Timestamp'] = (df['# Timestamp'] - datetime.datetime(1970,1,1)).dt.total_seconds()
+    df['# Timestamp'] = pd.to_datetime(df['# Timestamp'], format="%d/%m/%Y %H:%M:%S")
+    df['# Timestamp'].astype('int64')//1e9
+    df['# Timestamp'] = (df['# Timestamp'] - dt.datetime(1970,1,1)).dt.total_seconds()    
     print(df)
-    #time = datetime.datetime.now()
-    #print(time.timestamp())
-
+    # df['epoch'].astype('int64')//1e9
+    
     
     # Remove all the rows which does not satisfy our conditions
     df = df[
