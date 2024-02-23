@@ -11,6 +11,7 @@ from bs4 import BeautifulSoup
 from urllib.request import urlopen
 from sys import stdout
 
+CSV_FOLDER = os.path.join(os.path.dirname(__file__), 'csv')
 INPUT_FOLDER = os.path.join(os.path.dirname(__file__), 'input')
 OUTPUT_FOLDER = os.path.join(os.path.dirname(__file__), 'output')
 GTI_INPUT_FOLDER = os.path.join(os.path.dirname(__file__), '../../GTI/data/ais')
@@ -126,15 +127,12 @@ def download_file_from_ais_web_server(file_name: str):
 
 def extract_trajectories_from_csv_files():
     
-    #create_csv_file_for_mmsi(file_name=os.path.join(TEST_DATA_FOLDER,'aisdk-2024-02-11.csv'), mmsi=219423000)
-    file_names = os.listdir(TEST_DATA_FOLDER)
-    #file_names = os.listdir(INPUT_FOLDER)
+    #create_csv_file_for_mmsi(file_name=os.path.join('../csv','aisdk-2024-02-11.csv'), mmsi=219423000)
+    #file_names = os.listdir(TEST_DATA_FOLDER)
+    file_names = os.listdir(INPUT_FOLDER)
     existing_trips = os.listdir(OUTPUT_FOLDER)
     trajectory_id:int = len(existing_trips)
     completed:int = 0
-    
-    print(trajectory_id)
-    quit()
     
     logging.info(f'Began extracting trajectories from {len(file_names)} csv files')
     
@@ -144,7 +142,7 @@ def extract_trajectories_from_csv_files():
         logging.info(f'Currently extracting file: {file_name} (Completed ({completed}/{len(file_names)}) csv files)')        
         
         df:gpd.GeoDataFrame = cleanse_csv_file_and_convert_to_df(file_name)
-        # df:gpd.GeoDataFrame = cleanse_csv_file_and_convert_to_df(file_name)
+        
         completed +=1
         
         logging.info(f'Finished extracting file: {file_name} (Completed ({completed}/{len(file_names)}) csv files)')        
