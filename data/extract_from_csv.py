@@ -128,10 +128,14 @@ def download_file_from_ais_web_server(file_name: str):
 def extract_trajectories_from_csv_files():
     
     #create_csv_file_for_mmsi(file_name=os.path.join('../csv','aisdk-2024-02-11.csv'), mmsi=219423000)
-    #file_names = os.listdir(TEST_DATA_FOLDER)
-    file_names = os.listdir(INPUT_FOLDER)
+    file_names = os.listdir(TEST_DATA_FOLDER)
+    #file_names = os.listdir(INPUT_FOLDER)
     existing_trips = os.listdir(OUTPUT_FOLDER)
-    trajectory_id:int = len(existing_trips)
+    trajectory_id = 0
+    
+    if len(existing_trips) != 0:
+        trajectory_id = int(file_name.split('_')[1]) + 1
+
     completed:int = 0
     
     logging.info(f'Began extracting trajectories from {len(file_names)} csv files')
@@ -186,7 +190,7 @@ def cleanse_csv_file_and_convert_to_df(file_name: str):
     
     # Remove unwanted columns containing data we do not need. This saves a little bit of memory.
     # errors='ignore' is sat because older ais data files may not contain these columns.
-    df = df.drop(['A','B','C','D','ETA','Cargo type','Data source type', 'Destination', 'Length', 'Width', 'Type of position fixing device',
+    df = df.drop(['A','B','C','D','ETA','Cargo type','Data source type', 'Destination', 'Type of position fixing device',
                   'Callsign', 'Name'],axis=1, errors='ignore')
         
     # Remove all the rows which does not satisfy our conditions
@@ -279,8 +283,7 @@ def create_trajectories(trajectory_id: int, gdf: gpd.GeoDataFrame) -> int:
     
     for mmsi, locations in gdf.sort_values('timestamp').groupby('mmsi'):
         logging.info(f'Creating trajectories for mmsi {mmsi}')
-        sub_trajectories_df = trajectory_in_motion_filter(trajectory_id=trajectory_id, sorted_gdf=locations) 
-        sub_trajectories_df = split_trajectories(sub_trajectories_df)
+        sub_trajectories_df = make_sub_trajectories(trajectory_id=trajectory_id, sorted_locations_gdf=locations) 
         
         write_gti_input_trajectories(sub_trajectories_df)
         write_TrImpute_input_trajectories(sub_trajectories_df)
@@ -289,174 +292,95 @@ def create_trajectories(trajectory_id: int, gdf: gpd.GeoDataFrame) -> int:
     
     return trajectory_id
 
-def trajectory_in_motion_filter(trajectory_id: int,sorted_gdf: gpd.GeoDataFrame):
-    radius_threshold = 10  
+def make_sub_trajectories(trajectory_id: int, sorted_locations_gdf: gpd.GeoDataFrame):
+    if sorted_locations_gdf.empty:
+        return sorted_locations_gdf
+        
+
+    sorted_locations_gdf = sorted_locations_gdf.reset_index(drop=True)
+    sorted_locations_gdf = order_by_diff_vessels(sorted_locations_gdf)
+    sorted_locations_gdf = sorted_locations_gdf.drop_duplicates()
+    sorted_locations_gdf = sorted_locations_gdf.reset_index(drop=True) # to ensure indexes are still fine
+    
+    radius_threshold = 5 # meters, diameter is 10
+    sub_trajectories = []
+    sub_trajectory_id = 1
     moving = True
-    sub_trajectories = []
-    consecutive_points_within_radius = []
     
-    sorted_gdf = sorted_gdf.reset_index(drop=True)  
-    
-    if sorted_gdf.empty:
-        return sorted_gdf
-    
-    logging.info(f'Beginning motion filtering. Currently {len(sorted_gdf)} AIS samples')
-    for idx in range(len(sorted_gdf) - 1):
-        current_location = sorted_gdf.iloc[idx]
-        next_location = sorted_gdf.iloc[idx + 1]
-        distance = current_location.geometry.distance(next_location.geometry)
+    for vessel_id, locations_df in sorted_locations_gdf.groupby('vessel_id'):
+        current_sub_trajectory = []
+        consecutive_points_within_radius = []
 
-        if (moving): # if moving
-            if (current_location.geometry == next_location.geometry and current_location.sog == 0.0): # not moving
-                moving = False
-                continue
-            if (distance <= radius_threshold): #check if within 50 meters distance (possible stopped)
-                consecutive_points_within_radius.append(next_location)                    
-                if len(consecutive_points_within_radius) >= 5:
+        for index, row in locations_df[1:].iterrows():
+            current_location = row
+            last_location = locations_df.iloc[index - 1]
+            distance = current_location.geometry.distance(last_location.geometry)
+            
+            if (consecutive_points_within_radius):
+                distance = consecutive_points_within_radius[0].geometry.distance(current_location.geometry)
+
+            if moving:  # If moving
+                if (current_location.geometry == last_location.geometry and current_location.sog == 0.0):  # Not moving
                     moving = False
-            else:
-                if consecutive_points_within_radius: #if nonempty
-                    sub_trajectories.extend(consecutive_points_within_radius)                        
-                    consecutive_points_within_radius = [] # reset
-                sub_trajectories.append(next_location) 
-        else:
-            if (distance > radius_threshold):
-                consecutive_points_within_radius = []
-                sub_trajectories.append(next_location)
-                moving = True
-            else:
-                continue # we have already concluded that we are not moving
-    
-    logging.info('Finished filtration')
-    
-    if sub_trajectories:
-        sub_trajectories_df = gpd.GeoDataFrame(sub_trajectories, columns=sorted_gdf.columns)
-        sub_trajectories_df['trajectory_id'] = trajectory_id
-        return sub_trajectories_df
-    else:
-        empty_df = pd.DataFrame(columns=sorted_gdf.columns)
-        empty_gdf = gpd.GeoDataFrame(empty_df)
-        return empty_gdf
+                    consecutive_points_within_radius.append(current_location)
+                    continue
 
-def split_trajectories(sorted_gdf: gpd.GeoDataFrame):
-    if (sorted_gdf.empty):
-        return sorted_gdf
-    
-    sub_trajectories = []
-    current_trajectory = []   
-    
-    # Append the first row to the current trajectory
-    current_trajectory.append(sorted_gdf.iloc[0])
-    sub_trajectories.append(current_trajectory)
+                if distance <= radius_threshold:  # Check if within radius threshold
+                    consecutive_points_within_radius.append(current_location)
+                    if len(consecutive_points_within_radius) >= 5:
+                        moving = False
+                else:
+                    if consecutive_points_within_radius:  # If non-empty
+                        current_sub_trajectory.extend(consecutive_points_within_radius)
+                        consecutive_points_within_radius = []  # Reset
+                    current_sub_trajectory.append(current_location)
+            else:  # If not moving
+                if distance > radius_threshold:
+                    # create sub trjaectory df
+                    if current_sub_trajectory: 
+                        sub_trajectory_df = pd.DataFrame(current_sub_trajectory, columns=sorted_locations_gdf.columns)
+                        sub_trajectory_df['sub_trajectory_id'] = sub_trajectory_id
+                        sub_trajectories.append(sub_trajectory_df)
+                        sub_trajectory_id += 1
+                    print(f'made trajectry {sub_trajectory_id}')    
+                    # reset for next sub trajectory
+                    current_sub_trajectory = []  # Reset
+                    consecutive_points_within_radius = []  # Reset
+                    current_sub_trajectory.append(current_location)
+                    moving = True
+                else:
+                    continue
 
-    sorted_gdf = sorted_gdf.sort_values('timestamp')
+        if current_sub_trajectory:  # Append the last sub-trajectory if not empty
+            sub_trajectory_df = pd.DataFrame(current_sub_trajectory, columns=sorted_locations_gdf.columns)
+            sub_trajectory_df['sub_trajectory_id'] = sub_trajectory_id
+            sub_trajectories.append(sub_trajectory_df)
+                      
+    result_sub_trajectory_df = pd.concat(sub_trajectories, ignore_index=True)
+    result_sub_trajectory_df['trajectory_id'] = trajectory_id 
 
-    logging.info('Began splitting trajectories')        
-            
-    next_location_id = 1
-    next_location_ids = [next_location_id] # should always have the same length as sub trajectories
-    
-    # iterate through all trajectory sub id (only one to start)
-    for sub_trajectory_id, sub_trajectory in enumerate(sub_trajectories):
-        print(f'timestamp: {sub_trajectory[-1].timestamp}')
-        for location_idx in range(next_location_id, len(sorted_gdf)):    
-            if (len(sub_trajectories) != len(next_location_ids)):
-                print('EEEEERRRRROR')
-                     
-            current_location = sub_trajectory[-1] # select last element of the sub_trajectory
-            next_location = sorted_gdf.iloc[location_idx]
-            
-            #ensure locations are not the same
-            if (current_location.equals(next_location)):
-                print('locations should never be the same')
-                continue
+    return result_sub_trajectory_df
 
-            # check if transmission time has exceeded 180 seconds
-            time_between_transmissions = (next_location.timestamp - current_location.timestamp)
-            sub_trajectory_stopped = time_between_transmissions > 180
-            
-            if (sub_trajectory_stopped): 
-                if (sub_trajectory_id == len(sub_trajectories) - 1): # no other sub trajectories
-                    sub_trajectories.append([next_location]) # add location as a new sub trajectory
-                    next_location_id = location_idx + 1
-                    next_location_ids.append(next_location_id) #move to next location
-                    print(f'added new trajectory, cause current one stopped {sub_trajectory_id} has {len(sub_trajectory)} elements')
-                    break
-                else: # check if another sub trajectory can get data
-                    print('time between values')
-                    print(f'moved on to another trajectory, cause current one stopped. {sub_trajectory_id} has {len(sub_trajectory)} elements')
-                    next_location_id = next_location_ids[sub_trajectory_id + 1]
-                    break
-                
-            #calculate maximum speed          
-            max_speed_knots = max(current_location.sog, next_location.sog)
-            
-            #calculate we can reach the next destination
-            is_reachable = is_location_reachable(current_location, next_location, max_speed_knots)
-            
-            # we can reach next location, add next location to subtrajectory
-            if is_reachable:
-                sub_trajectory.append(next_location)
-            
-            #if we cannot reach the next location, and we have no other sub_trajectories to look at, we
-            # we add the next location as a sub trajectory
-            # otherwise, we check the sub trajectory
-            if not is_reachable and sub_trajectory_id == len(sub_trajectories) - 1:
-                sub_trajectories.append([next_location])
-                next_location_id = location_idx + 1
-                next_location_ids.append(next_location_id)
-                print(f'id: {sub_trajectory_id} is the last sub trajectory with {len(sub_trajectory)} elements]. Adding new one')
+def order_by_diff_vessels(sorted_locations_df: gpd.GeoDataFrame):
+    sorted_locations_df.fillna({'imo': -1, 'ship_type': 'None', 'width': -1, 'length': -1}, inplace=True)
+    sorted_locations_df['vessel_id'] = sorted_locations_df.groupby(['imo', 'ship_type', 'width', 'length']).ngroup() 
 
-            continue 
-            
-    # Create a copy of the original DataFrame to avoid SettingWithCopyWarning
-    result_df = sorted_gdf.copy()
-    
-    # Initialize the 'trajectory_sub_id' column with -1
-    result_df['trajectory_sub_id'] = -1
-    
-    for sub_trajectory_id, sub_trajectory in enumerate(sub_trajectories):
-        for location in sub_trajectory:
-            result_df.at[location.name, 'trajectory_sub_id'] = sub_trajectory_id
-    
-    result_df = result_df[result_df['trajectory_sub_id'] != -1]                
-    logging.info('Finished splitting trajectories')
-    
-    return result_df
-            
-def is_location_reachable(current_location, next_location, max_speed_knots):
+    return sorted_locations_df.dropna()
     # """
-    # Check if it's possible to reach the next location from the current location
-    # within a given threshold based on the maximum speed.
-    # """
-    
-    # distance = current_location.geometry.distance(next_location.geometry) # distance is in meters
-    # #print(f'distance = {distance}')
-    # time_diff_hours = (next_location.timestamp - current_location.timestamp) / 3600  # Convert seconds to hours
-    
-    # #print(f'time_dif_hours = {time_diff_hours}')
-
-    # speed_meters_per_second = max_speed_knots * 0.514444  # 1 knot = 0.514444 meters/second
-    
-    # #print(f'speed_meters_per_second = {speed_meters_per_second}')
-    
-    # distance_covered = speed_meters_per_second * time_diff_hours * 3600  # Convert hours to seconds
-
-    # #print(f'distance_covered = {distance_covered}')
-
-    # distance_covered += 200
-    
-    # return distance_covered >= distance      
+    # Check if the next point is within 10 km of the current point
+    # """   
     distance = current_location.geometry.distance(next_location.geometry) # distance is in meters
-    return distance <= 1000
+    return distance <= 10000
     
 def write_gti_input_trajectories(gdf: gpd.GeoDataFrame):
     # Group by 'trajectory_id' and 'trajectory_sub_id' and iterate over each group
+    
     if (gdf.empty):
         return
     
-    for (trajectory_id, trajectory_sub_id), trajectories in gdf.groupby(['trajectory_id', 'trajectory_sub_id']):        
-        file_path = os.path.join(GTI_INPUT_FOLDER, f"trip_{trajectory_id}{trajectory_sub_id}.txt")
+    for (trajectory_id, trajectory_sub_id), trajectories in gdf.groupby(['trajectory_id', 'sub_trajectory_id']):        
+        file_path = os.path.join(GTI_INPUT_FOLDER, f"trip_{trajectory_id}_{trajectory_sub_id}.txt")
+        print(file_path)
         with open(file_path, 'w') as file:
             # Iterate over rows in the group
             for idx, row in trajectories.reset_index().iterrows():
@@ -467,8 +391,8 @@ def write_TrImpute_input_trajectories(gdf: gpd.GeoDataFrame):
     # Group by 'trajectory_id' and 'trajectory_sub_id' and iterate over each group
     if (gdf.empty):
         return
-    
-    for (trajectory_id, trajectory_sub_id), trajectories in gdf.groupby(['trajectory_id', 'trajectory_sub_id']):        
+        
+    for (trajectory_id, trajectory_sub_id), trajectories in gdf.groupby(['trajectory_id', 'sub_trajectory_id']):        
         file_path = os.path.join(TRIMPUTE_INPUT_FOLDER, f"trip_{trajectory_id}{trajectory_sub_id}.txt")
         trajectories[['latitude', 'longitude', 'timestamp']].to_csv(file_path, index=True)
         
