@@ -129,13 +129,7 @@ def extract_trajectories_from_csv_files():
     
     #create_csv_file_for_mmsi(file_name=os.path.join('../csv','aisdk-2024-02-11.csv'), mmsi=219423000)
     file_names = os.listdir(TEST_DATA_FOLDER)
-    #file_names = os.listdir(INPUT_FOLDER)
-    existing_trips = os.listdir(OUTPUT_FOLDER)
-    trajectory_id = 0
-    
-    if len(existing_trips) != 0:
-        trajectory_id = int(file_name.split('_')[1]) + 1
-
+    #file_names = os.listdir(CSV_FOLDER)
     completed:int = 0
     
     logging.info(f'Began extracting trajectories from {len(file_names)} csv files')
@@ -153,7 +147,7 @@ def extract_trajectories_from_csv_files():
         logging.info(f'Began crating trajectories for file: {file_name}')
 
         if (not df.empty):
-            trajectory_id = create_trajectories(trajectory_id, df)
+            create_trajectories(gdf=df)
         else:
             logging.warning(f'No data was extracted from {file_name}')
     
@@ -277,22 +271,19 @@ def create_csv_file_for_mmsi(file_name: str, mmsi: int):
     
     logging.info(f'csv for {mmsi} created in {TEST_DATA_FOLDER}')
   
-def create_trajectories(trajectory_id: int, gdf: gpd.GeoDataFrame) -> int:
+def create_trajectories(gdf: gpd.GeoDataFrame):
     if (gdf.empty):
         return gdf
     
     for mmsi, locations in gdf.sort_values('timestamp').groupby('mmsi'):
         logging.info(f'Creating trajectories for mmsi {mmsi}')
-        sub_trajectories_df = make_sub_trajectories(trajectory_id=trajectory_id, sorted_locations_gdf=locations) 
+        sub_trajectories_df = make_sub_trajectories(sorted_locations_gdf=locations) 
         
+        write_to_input_folder(sub_trajectories_df)
         write_gti_input_trajectories(sub_trajectories_df)
         write_TrImpute_input_trajectories(sub_trajectories_df)
-        
-        trajectory_id += 1
-    
-    return trajectory_id
 
-def make_sub_trajectories(trajectory_id: int, sorted_locations_gdf: gpd.GeoDataFrame):
+def make_sub_trajectories(sorted_locations_gdf: gpd.GeoDataFrame):
     if sorted_locations_gdf.empty:
         return sorted_locations_gdf
         
@@ -357,7 +348,6 @@ def make_sub_trajectories(trajectory_id: int, sorted_locations_gdf: gpd.GeoDataF
             sub_trajectories.append(sub_trajectory_df)
                       
     result_sub_trajectory_df = pd.concat(sub_trajectories, ignore_index=True)
-    result_sub_trajectory_df['trajectory_id'] = trajectory_id 
 
     return result_sub_trajectory_df
 
@@ -372,41 +362,48 @@ def order_by_diff_vessels(sorted_locations_df: gpd.GeoDataFrame):
     distance = current_location.geometry.distance(next_location.geometry) # distance is in meters
     return distance <= 10000
     
-def write_gti_input_trajectories(gdf: gpd.GeoDataFrame):
-    # Group by 'trajectory_id' and 'trajectory_sub_id' and iterate over each group
-    
+def write_gti_input_trajectories(gdf: gpd.GeoDataFrame):    
     if (gdf.empty):
         return
     
-    for (trajectory_id, trajectory_sub_id), trajectories in gdf.groupby(['trajectory_id', 'sub_trajectory_id']):        
-        file_path = os.path.join(GTI_INPUT_FOLDER, f"trip_{trajectory_id}_{trajectory_sub_id}.txt")
-        print(file_path)
-        with open(file_path, 'w') as file:
-            # Iterate over rows in the group
-            for idx, row in trajectories.reset_index().iterrows():
-                # Write timestamp, latitude, and longitude to the file
-                file.write(f"{idx},{row['latitude']},{row['longitude']},{row['timestamp']}\n")
+    os.makedirs(GTI_INPUT_FOLDER, exist_ok=True)  # Create the folder if it doesn't exist
+    
+    current_files = os.listdir(GTI_INPUT_FOLDER)
+    trip_id = len(current_files)
+
+    for _, trajectories in gdf.groupby(['sub_trajectory_id']):        
+        file_path = os.path.join(GTI_INPUT_FOLDER, f"trip_{trip_id}.txt")
+        trajectories[['latitude', 'longitude', 'timestamp']].to_csv(file_path, sep=',', index=True, header=False, mode='w')
+        trip_id += 1
 
 def write_TrImpute_input_trajectories(gdf: gpd.GeoDataFrame):
-    # Group by 'trajectory_id' and 'trajectory_sub_id' and iterate over each group
     if (gdf.empty):
         return
+    
+    os.makedirs(TRIMPUTE_INPUT_FOLDER, exist_ok=True)  # Create the folder if it doesn't exist
+    
+    current_files = os.listdir(TEST_DATA_FOLDER)
+
+    trip_id = len(current_files)
+    
+    for _, trajectories in gdf.groupby(['sub_trajectory_id']):        
+        file_path = os.path.join(TRIMPUTE_INPUT_FOLDER, f"trip_{trip_id}.txt")
+        trajectories[['latitude', 'longitude', 'timestamp']].to_csv(file_path, sep=',', index=True, header=False, mode='w')
+        trip_id += 1
         
-    for (trajectory_id, trajectory_sub_id), trajectories in gdf.groupby(['trajectory_id', 'sub_trajectory_id']):        
-        file_path = os.path.join(TRIMPUTE_INPUT_FOLDER, f"trip_{trajectory_id}{trajectory_sub_id}.txt")
-        trajectories[['latitude', 'longitude', 'timestamp']].to_csv(file_path, index=True)
-        
-def write_to_output_folder(gdf: gpd.GeoDataFrame):
+def write_to_input_folder(gdf: gpd.GeoDataFrame):
     if (gdf.empty):
         return
-    gdf.sort_values('timestamp')
-    for mmsi, trajectories in gdf.groupby('mmsi'):        
-        file_name = os.path.join(OUTPUT_FOLDER, f"{mmsi}.txt")
-        with open(file_name, 'w') as file:
-            # Iterate over rows in the group
-            for idx, row in trajectories.reset_index().iterrows():
-                # Write timestamp, latitude, and longitude to the file
-                file.write(f"{idx},{row['mmsi']},{row['latitude']},{row['longitude']},{row['timestamp']}\n")
+    
+    for _, sub_trajectories in gdf.groupby('sub_trajectory_id'):
+        folder_path = os.path.join(INPUT_FOLDER, str(sub_trajectories.iloc[0].mmsi))
+        os.makedirs(folder_path, exist_ok=True)  # Create the folder if it doesn't exist
+        
+        dt_object = dt.datetime.utcfromtimestamp(sub_trajectories.iloc[0].timestamp)
+        dt_str = dt_object.strftime('%d/%m/%Y %H:%M:%S').replace('/', '-').replace(' ', '_')
+            
+        file_name = os.path.join(folder_path, f'{dt_str}.txt')        
+        sub_trajectories[['latitude', 'longitude', 'timestamp', 'sog', 'draught', 'ship_type']].to_csv(file_name, sep=',', index=True, header=False, mode='w')
 
 #get_csv_files_in_interval("2024-02-10::2024-02-12")
 extract_trajectories_from_csv_files()
