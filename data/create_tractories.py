@@ -32,45 +32,74 @@ def make_subtrajectories_split_from_harbor(harbors_df: gpd.GeoDataFrame, traject
     for _, positions_df in trajectories_df.groupby('vessel_id'):
         in_harbor_trajectory = []
         current_sub_trajectory = []
-        entered_harbor = False
         prev_position = None
+        from_sea = False
+        from_harbor = False
+        itt = 0
             
         for _, current_position in positions_df.iterrows():
-            if prev_position is not None:
-                if prev_position.geometry.equals(current_position.geometry):
-                    continue
-
-            # if at sea, sailing towards harbor
-            if (not current_position.in_harbor and not in_harbor_trajectory):
-                print('at sea')
-                current_sub_trajectory.append(current_position)
-            # we are analysing a current trajectory that just entered a harbor area
-            elif (current_position.in_harbor and current_sub_trajectory and not entered_harbor):
-                print('entered harbor area')
-                in_harbor_trajectory.append(current_position)
-                entered_harbor = True
-            # we are analysing a current trajectory that just is either passing through or getting ready to get moored
-            elif(entered_harbor and current_position.in_harbor and current_sub_trajectory):
-                print(f'In harbor area: {len(in_harbor_trajectory)}')
-                in_harbor_trajectory.append(current_position)
-            # our trajectory has left the harbor and should be split appropriately
-            elif (not current_position.in_harbor and in_harbor_trajectory and current_sub_trajectory):
-                print('left harbor area')
-                entered_harbor = False
-                (state, in_harbor_trajectory, harbor_trajectory_positions) = update_harbor_positions_and_return_state(in_harbor_trajectory) 
                 
-                # either passing through or at anchor
+            if (prev_position is None and current_position.in_harbor):
+                from_harbor = True
+                from_sea = False
+            elif (prev_position is None and not current_position.in_harbor):
+                from_harbor = False
+                from_sea = True
+            else:
+                if prev_position.geometry.equals(current_position.geometry):
+                    prev_position = current_position
+                    continue
+            if from_sea and current_position.in_harbor and current_sub_trajectory:
+                in_harbor_trajectory.append(current_position)
+                prev_position = current_position                
+            elif from_sea and not current_position.in_harbor and in_harbor_trajectory and current_sub_trajectory:
+                (state, in_harbor_trajectory, harbor_trajectory_positions) = update_harbor_positions_and_return_state(in_harbor_trajectory)     
                 if (state == HarborState.PASSING_THROUGH):
                     current_sub_trajectory.extend(harbor_trajectory_positions)
                     current_sub_trajectory.append(current_position)
                     in_harbor_trajectory = []
+                    prev_position = current_position
                     continue
                 elif (state == HarborState.ENTERING):
                     current_sub_trajectory.extend(harbor_trajectory_positions)
                     sub_trajectories.append(current_sub_trajectory)
                     current_sub_trajectory = []
-            
-            prev_position = current_position
+                    prev_position = None
+                    
+            elif from_harbor and current_position.in_harbor:
+                in_harbor_trajectory.append(current_position)
+                prev_position = current_position
+            elif from_harbor and not current_position.in_harbor:
+                (state, in_harbor_trajectory, harbor_trajectory_positions) = update_harbor_positions_and_return_state(in_harbor_trajectory) 
+                
+                if (state == HarborState.LEAVING):
+                    current_sub_trajectory.extend(harbor_trajectory_positions)
+                    current_sub_trajectory.append(current_position)
+                    in_harbor_trajectory = []
+                    prev_position = current_position
+                    continue
+                else:
+                    if (state == HarborState.AT_ANCHOR): # don't do anything
+                        print('at anchor. seems right?')
+                        in_harbor_trajectory = []
+                        prev_position = None
+                        pass
+                    
+                    prev_position = None
+            elif (from_sea and not current_sub_trajectory and not current_position.in_harbor and in_harbor_trajectory): # beginning trajectory with leftover harbor positions
+                (state, in_harbor_trajectory, harbor_trajectory_positions) = update_harbor_positions_and_return_state(in_harbor_trajectory) 
+                if state == HarborState.LEAVING:
+                    current_sub_trajectory.extend(harbor_trajectory_positions)
+                    current_sub_trajectory.append(current_position)
+                    prev_position = current_position
+                
+                in_harbor_trajectory = []
+                itt += 1
+                continue
+            else:
+                current_sub_trajectory.append(current_position)
+                prev_position = current_position
+                
                 
         if current_sub_trajectory:
             sub_trajectories.append(current_sub_trajectory)
@@ -84,9 +113,7 @@ def make_subtrajectories_split_from_harbor(harbors_df: gpd.GeoDataFrame, traject
         
     # Convert to DataFrame
     sub_trajectory_df = pd.DataFrame(flattened_sub_trajectories)
-    
-    print(len(sub_trajectory_df))
-    
+        
     return sub_trajectory_df
 
 
@@ -94,69 +121,82 @@ def update_harbor_positions_and_return_state(in_harbor_positions:list) -> tuple[
     state: HarborState
     
     if len(in_harbor_positions) > 2:
-        if calculate_speed(in_harbor_positions[0], in_harbor_positions[1]) <= 0.2: # assume currently moorred 
-            if in_harbor_positions[-1].sog > in_harbor_positions[0] and in_harbor_positions[-1] > 0.2: # if last position is faster than current, assuming leaving
-                (index,leaving_positions) = get_leaving_harbor_positions(in_harbor_positions)
-                
-                state = HarborState.LEAVING
-
-                index, in_harbor_positions = in_harbor_positions[index:]
-                return (state, in_harbor_positions, leaving_positions)
+        if in_harbor_positions[-1].sog > in_harbor_positions[0].sog and in_harbor_positions[-1].sog > 0.2: # if last position is faster than current, assuming leaving
+            leaving_positions = get_leaving_harbor_positions(in_harbor_positions)
+            
+            state = HarborState.LEAVING
+            
+            return (state, [], leaving_positions)
 
         if in_harbor_positions[0].sog > 0.2: # assuming that we are entering to moor or perhaps passing through
             (index, entering_positions) = get_entering_harbor_positions(in_harbor_positions)
-            if len(in_harbor_positions) == len(entering_positions):
-                state = HarborState.PASSING_THROUGH
-                in_harbor_positions = []
-                return (state, in_harbor_positions, entering_positions)
-                        
-            in_harbor_positions = in_harbor_positions[:index]
-            state = HarborState.ENTERING
+            if len(entering_positions) == 0:
+                is_passing_through = get_entering_harbor_positions(in_harbor_positions)
+                
+                if (is_passing_through):
+                    state = HarborState.PASSING_THROUGH
+                    return (state, [], in_harbor_positions)
+            else:
+                in_harbor_positions = in_harbor_positions[index + 1:]
+                state = HarborState.ENTERING
             return (state, in_harbor_positions, entering_positions)
 
         return (HarborState.AT_ANCHOR, [], []) 
     else:
         return (HarborState.PASSING_THROUGH, [], in_harbor_positions) 
     
-def get_leaving_harbor_positions(positions:list) -> tuple[int, list]:
-    leaving_position_index = next((i for i, (prev_position, current_position) in enumerate(zip(positions, positions[1:]), start=1) 
-                            if calculate_speed(prev_position, current_position) > 0.2), None)
+def get_leaving_harbor_positions(positions:list) -> list:   
+    reversed_positions = list(reversed(positions))
+    reversed_indices = range(len(reversed_positions), 0, -1)
+    leaving_position_index = next((i for i, (prev_position, current_position) in zip(reversed_indices, zip(reversed_positions, reversed_positions[1:])) 
+                                if calculate_speed(current_position, prev_position) < 0.2), None)
+    
+    if leaving_position_index is None:
+        leaving_position_index = next((i for i, current_position in enumerate(reversed_positions) if current_position.sog < 0.2), None)
     
     if leaving_position_index is not None:
-        leaving_positions = positions[leaving_position_index - 1:]
+        if (leaving_position_index + 1) > (len(reversed_positions) - 1):
+            leaving_positions = reversed_positions[:leaving_position_index]
+        else:
+            leaving_positions = reversed_positions[:leaving_position_index + 1]   
+            leaving_positions = reversed(reversed_positions) 
     else:
         # If no position above 0.2 was found, return an empty list or handle as needed
         leaving_positions = []
-        return (0, leaving_positions)
     
-    return (leaving_position_index - 1, leaving_positions)
+    return leaving_positions
 
 def get_entering_harbor_positions(positions:list) -> tuple[int, list]:
-    
     stopped_position_index = next((i for i, (prev_position, current_position) in enumerate(zip(positions, positions[1:]), start=1) 
-                                if calculate_speed(prev_position, current_position) < 0.2), None)
-    # index = 0
-    # for i in range(len((positions))):
-    #     if i == len(positions) - 1:
-    #         index = len(positions) - 1    
-    #     else:   
-    #         speed = calculate_speed(positions[i], positions[i+1])
-    #         print(speed)
-    #         if speed < 0.2:
-    #             index = i
-    #             break
-
+                                if calculate_speed(prev_position, current_position) <= 0.2), None)
     
-    print(f'stopped here {stopped_position_index}')
+    if (stopped_position_index is None):
+        stopped_position_index = next((i for i, current_position in enumerate(positions)
+                                            if current_position.sog <= 0.2), None)
     
     if stopped_position_index is not None:
-        entering_positions = positions[:stopped_position_index]
+        if (stopped_position_index + 1) > (len(positions) - 1):
+            entering_positions = positions[:stopped_position_index ]
+        else:
+            entering_positions = positions[:stopped_position_index + 1]
     else:
         # If no position above 0.2 was found, return an empty list or handle as needed
         entering_positions = []
-        return (0, entering_positions)
+        stopped_position_index = 0
     
     return (stopped_position_index, entering_positions)
+
+def is_passing_through(positions:list) -> bool:
+    indexes = next((i for i, (prev_position, current_position) in enumerate(zip(positions, positions[1:]), start=1) 
+                                if calculate_speed(prev_position, current_position) <= 0.5), None)      
+    
+    if indexes is None:
+        indexes = next((i for i, current_position in enumerate(positions) if current_position.sog <= 0.5), None)  
+    
+    if indexes is None:
+        return False
+    
+    return True 
      
 def add_in_harbor_column(trajectory_df:gpd.GeoDataFrame, harbors_df: gpd.GeoDataFrame):
     """
@@ -332,6 +372,6 @@ def calculate_speed(p1:gpd.GeoDataFrame, p2:gpd.GeoDataFrame) -> float:
         return max(p1.sog, p2.sog)
 
     kilometers_pr_hour = distance_in_kilometers/time_in_hours
-    knot_pr_hour = kilometers_pr_hour * 1.85
-    
+    knot_pr_hour = kilometers_pr_hour/1.85
+        
     return knot_pr_hour
