@@ -10,13 +10,17 @@ import datetime as dt
 from bs4 import BeautifulSoup
 from urllib.request import urlopen
 from sys import stdout
+from shapely import wkb
+from create_tractories import create_trajectories_from_df
 
-CSV_FOLDER = os.path.join(os.path.dirname(__file__), 'csv')
+AIS_CSV_FOLDER = os.path.join(os.path.dirname(__file__), 'ais_csv')
 INPUT_FOLDER = os.path.join(os.path.dirname(__file__), 'input')
 OUTPUT_FOLDER = os.path.join(os.path.dirname(__file__), 'output')
 GTI_INPUT_FOLDER = os.path.join(os.path.dirname(__file__), '../../GTI/data/ais')
 TRIMPUTE_INPUT_FOLDER = os.path.join(os.path.dirname(__file__), '../../TrImpute/datasets/input/ais_csv')
 TEST_DATA_FOLDER = os.path.join(os.path.dirname(__file__), 'test_data')
+TXT_DATA_FOLDER = os.path.join(os.path.dirname(__file__), 'txtfiles')
+HARBORS_FILE = os.path.join(os.path.dirname(__file__), 'harbors.csv')
 
 logging.basicConfig(level=logging.INFO)
     
@@ -127,7 +131,7 @@ def download_file_from_ais_web_server(file_name: str):
 
 def extract_trajectories_from_csv_files():
     
-    #create_csv_file_for_mmsi(file_name=os.path.join('../csv','aisdk-2024-02-11.csv'), mmsi=219423000)
+    #create_csv_file_for_mmsis(file_path=os.path.join(CSV_FOLDER,'aisdk-2024-02-11.csv')) #specify in method which mmsi
     file_names = os.listdir(TEST_DATA_FOLDER)
     #file_names = os.listdir(CSV_FOLDER)
     completed:int = 0
@@ -139,21 +143,21 @@ def extract_trajectories_from_csv_files():
         
         logging.info(f'Currently extracting file: {file_name} (Completed ({completed}/{len(file_names)}) csv files)')        
         
-        df:gpd.GeoDataFrame = cleanse_csv_file_and_convert_to_df(file_name)
-        
+        df:gpd.GeoDataFrame = cleanse_csv_file_and_convert_to_df(os.path.join(TEST_DATA_FOLDER, file_name))
+
         completed +=1
         
         logging.info(f'Finished extracting file: {file_name} (Completed ({completed}/{len(file_names)}) csv files)')        
         logging.info(f'Began crating trajectories for file: {file_name}')
-
+    
         if (not df.empty):
-            create_trajectories(gdf=df)
+            create_trajectories_files(gdf=df)
         else:
             logging.warning(f'No data was extracted from {file_name}')
     
     logging.info('Finished creating trajecatories. Terminating')
 
-def cleanse_csv_file_and_convert_to_df(file_name: str):
+def cleanse_csv_file_and_convert_to_df(file_path: str):
     """
     Takes a .csv file and cleanses it according to the set predicates.
     :param file_name: File name to cleanse. Example: 'aisdk-2022-01-01.csv'
@@ -179,14 +183,13 @@ def cleanse_csv_file_and_convert_to_df(file_name: str):
         'Data source type': str
     }
     
-    #df = pd.read_csv(str.format("{0}/{1}", INPUT_FOLDER, file_name), na_values=['Unknown','Undefined'], dtype=types)#, nrows=1000000)    
-    df = pd.read_csv(str.format("{0}/{1}", TEST_DATA_FOLDER, file_name), na_values=['Unknown','Undefined'], dtype=types)#, nrows=1000000)    
+    df = pd.read_csv(file_path, na_values=['Unknown','Undefined'], dtype=types)#, nrows=1000000)    
     
     # Remove unwanted columns containing data we do not need. This saves a little bit of memory.
     # errors='ignore' is sat because older ais data files may not contain these columns.
     df = df.drop(['A','B','C','D','ETA','Cargo type','Data source type', 'Destination', 'Type of position fixing device',
-                  'Callsign', 'Name'],axis=1, errors='ignore')
-        
+                  'Callsign'],axis=1, errors='ignore')
+       
     # Remove all the rows which does not satisfy our conditions
     df = df[
             (df["Type of mobile"] != "Class B") &
@@ -196,7 +199,8 @@ def cleanse_csv_file_and_convert_to_df(file_name: str):
             (df['Latitude'] >=53.5) & (df['Latitude'] <=58.5) &
             (df['Longitude'] >= 3.2) & (df['Longitude'] <=16.5) &
             (df['SOG'] >= 0.1) & (df['SOG'] <=102)
-           ].reset_index()
+    ].reset_index()
+    
     
     subset_columns = ['MMSI', 'Latitude', 'Longitude', '# Timestamp']  # Adjust these based on your actual columns
     df = df.drop_duplicates(subset=subset_columns, keep='first')
@@ -225,13 +229,20 @@ def cleanse_csv_file_and_convert_to_df(file_name: str):
     # lower case names in the columns
     df.columns = map(str.lower, df.columns)
     
+    # Grouping by the columns 'imo', 'name', 'length', 'width', and 'ship_type'
+    # and filling missing values within each group with the first non-null value
+    df[['imo', 'name', 'length', 'width', 'ship_type']] = df.groupby('mmsi')[['imo', 'name', 'length', 'width', 'ship_type']].transform(lambda x: x.ffill())
+
+    # Filling any remaining missing values with the last non-null value
+    df[['imo', 'name', 'length', 'width', 'ship_type']] = df.groupby('mmsi')[['imo', 'name', 'length', 'width', 'ship_type']].transform(lambda x: x.bfill())
+    
     df = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df['longitude'], df['latitude']), crs="EPSG:4326")
     df = df.drop(columns=['index'], errors='ignore')
     df = df.to_crs(epsg="3857") # to calculate in meters
     
     return df
 
-def create_csv_file_for_mmsi(file_name: str, mmsi: int):
+def create_csv_file_for_mmsis(file_path: str):
     """
     Takes a .csv file and cleanses it according to the set predicates.
     :param file_name: File name to cleanse. Example: 'aisdk-2022-01-01.csv'
@@ -256,112 +267,51 @@ def create_csv_file_for_mmsi(file_name: str, mmsi: int):
         'ETA': str,
         'Data source type': str
     }
-
-    df = pd.read_csv(str.format("{0}/{1}", INPUT_FOLDER, file_name), na_values=['Unknown','Undefined'], dtype=types) #, nrows=1000000)    
+    
+    mmsis = [211190000, 210524000, 210524000, 210853000, 210549000, 209536000, 210332000]
+    
+    df = pd.read_csv(file_path, na_values=['Unknown','Undefined'], dtype=types) #, nrows=1000000)    
     
     if (df.empty):
         logging.warning('No data found in csv')
-    
-    df = df[df['MMSI'] == mmsi]
-    
-    if (df.empty):
-        logging.warning('Could not find mmsi in the csv. Nothing created')
-    
-    df.to_csv(f'{TEST_DATA_FOLDER}/{str(mmsi)}.csv', index=False)  # Set index=False if you don't want to write row numbers
-    
-    logging.info(f'csv for {mmsi} created in {TEST_DATA_FOLDER}')
-  
-def create_trajectories(gdf: gpd.GeoDataFrame):
+
+    df_filtered = df[df['MMSI'].isin(mmsis)]
+
+    if df_filtered.empty:
+        logging.warning('Could not find MMSI in the csv. Nothing created')
+    else:
+        for mmsi in mmsis:
+            df_mmsi = df_filtered[df_filtered['MMSI'] == mmsi]
+            df_mmsi.reset_index().to_csv(f'{TEST_DATA_FOLDER}/{mmsi}.csv', index=False)  # Set index=False if you don't want to write row numbers
+            df_mmsi.reset_index().to_csv(f'{TXT_DATA_FOLDER}/{mmsi}.txt', index=False) 
+            logging.info(f'csv for {mmsi} created')
+        
+def create_trajectories_files(gdf: gpd.GeoDataFrame):
     if (gdf.empty):
         return gdf
     
-    for mmsi, locations in gdf.sort_values('timestamp').groupby('mmsi'):
+    harbors_df = extract_harbors_df()
+    
+    for mmsi, trajectory_df in gdf.sort_values('timestamp').groupby('mmsi'):
         logging.info(f'Creating trajectories for mmsi {mmsi}')
-        sub_trajectories_df = make_sub_trajectories(sorted_locations_gdf=locations) 
         
-        write_to_input_folder(sub_trajectories_df)
-        write_gti_input_trajectories(sub_trajectories_df)
-        write_TrImpute_input_trajectories(sub_trajectories_df)
+        if mmsi == 209536000:
+            sub_trajectories_df = create_trajectories_from_df(harbors_df=harbors_df, trajectory_df=trajectory_df) 
 
-def make_sub_trajectories(sorted_locations_gdf: gpd.GeoDataFrame):
-    if sorted_locations_gdf.empty:
-        return sorted_locations_gdf
-        
+            if not sub_trajectories_df.empty:
+                write_to_input_folder(sub_trajectories_df)
+                #write_gti_input_trajectories(sub_trajectories_df)
+                #write_TrImpute_input_trajectories(sub_trajectories_df)
 
-    sorted_locations_gdf = sorted_locations_gdf.reset_index(drop=True)
-    sorted_locations_gdf = order_by_diff_vessels(sorted_locations_gdf)
-    sorted_locations_gdf = sorted_locations_gdf.drop_duplicates()
-    sorted_locations_gdf = sorted_locations_gdf.reset_index(drop=True) # to ensure indexes are still fine
+def extract_harbors_df() -> gpd.GeoDataFrame:    
+    df = pd.read_csv(HARBORS_FILE, na_values=['Unknown','Undefined']) 
+    df['geometry'] = df['geometry'].apply(lambda x: wkb.loads(bytes.fromhex(x)))
+    gdf = gpd.GeoDataFrame(df, geometry='geometry', crs="EPSG:4326")
+    gdf = gdf.drop(columns=['index'], errors='ignore')
+    gdf = gdf.to_crs(epsg="3857") # to calculate in meters
     
-    radius_threshold = 5 # meters, diameter is 10
-    sub_trajectories = []
-    sub_trajectory_id = 1
-    moving = True
-    
-    for vessel_id, locations_df in sorted_locations_gdf.groupby('vessel_id'):
-        current_sub_trajectory = []
-        consecutive_points_within_radius = []
+    return gdf
 
-        for index, row in locations_df[1:].iterrows():
-            current_location = row
-            last_location = locations_df.iloc[index - 1]
-            distance = current_location.geometry.distance(last_location.geometry)
-            
-            if (consecutive_points_within_radius):
-                distance = consecutive_points_within_radius[0].geometry.distance(current_location.geometry)
-
-            if moving:  # If moving
-                if (current_location.geometry == last_location.geometry and current_location.sog == 0.0):  # Not moving
-                    moving = False
-                    consecutive_points_within_radius.append(current_location)
-                    continue
-
-                if distance <= radius_threshold:  # Check if within radius threshold
-                    consecutive_points_within_radius.append(current_location)
-                    if len(consecutive_points_within_radius) >= 5:
-                        moving = False
-                else:
-                    if consecutive_points_within_radius:  # If non-empty
-                        current_sub_trajectory.extend(consecutive_points_within_radius)
-                        consecutive_points_within_radius = []  # Reset
-                    current_sub_trajectory.append(current_location)
-            else:  # If not moving
-                if distance > radius_threshold:
-                    # create sub trjaectory df
-                    if current_sub_trajectory: 
-                        sub_trajectory_df = pd.DataFrame(current_sub_trajectory, columns=sorted_locations_gdf.columns)
-                        sub_trajectory_df['sub_trajectory_id'] = sub_trajectory_id
-                        sub_trajectories.append(sub_trajectory_df)
-                        sub_trajectory_id += 1
-                    print(f'made trajectry {sub_trajectory_id}')    
-                    # reset for next sub trajectory
-                    current_sub_trajectory = []  # Reset
-                    consecutive_points_within_radius = []  # Reset
-                    current_sub_trajectory.append(current_location)
-                    moving = True
-                else:
-                    continue
-
-        if current_sub_trajectory:  # Append the last sub-trajectory if not empty
-            sub_trajectory_df = pd.DataFrame(current_sub_trajectory, columns=sorted_locations_gdf.columns)
-            sub_trajectory_df['sub_trajectory_id'] = sub_trajectory_id
-            sub_trajectories.append(sub_trajectory_df)
-                      
-    result_sub_trajectory_df = pd.concat(sub_trajectories, ignore_index=True)
-
-    return result_sub_trajectory_df
-
-def order_by_diff_vessels(sorted_locations_df: gpd.GeoDataFrame):
-    sorted_locations_df.fillna({'imo': -1, 'ship_type': 'None', 'width': -1, 'length': -1}, inplace=True)
-    sorted_locations_df['vessel_id'] = sorted_locations_df.groupby(['imo', 'ship_type', 'width', 'length']).ngroup() 
-
-    return sorted_locations_df.dropna()
-    # """
-    # Check if the next point is within 10 km of the current point
-    # """   
-    distance = current_location.geometry.distance(next_location.geometry) # distance is in meters
-    return distance <= 10000
-    
 def write_gti_input_trajectories(gdf: gpd.GeoDataFrame):    
     if (gdf.empty):
         return
@@ -373,7 +323,7 @@ def write_gti_input_trajectories(gdf: gpd.GeoDataFrame):
 
     for _, trajectories in gdf.groupby(['sub_trajectory_id']):        
         file_path = os.path.join(GTI_INPUT_FOLDER, f"trip_{trip_id}.txt")
-        trajectories[['latitude', 'longitude', 'timestamp']].to_csv(file_path, sep=',', index=True, header=False, mode='w')
+        trajectories[['latitude', 'longitude', 'timestamp']].reset_index().to_csv(file_path, sep=',', index=True, header=False, mode='w')
         trip_id += 1
 
 def write_TrImpute_input_trajectories(gdf: gpd.GeoDataFrame):
@@ -388,7 +338,7 @@ def write_TrImpute_input_trajectories(gdf: gpd.GeoDataFrame):
     
     for _, trajectories in gdf.groupby(['sub_trajectory_id']):        
         file_path = os.path.join(TRIMPUTE_INPUT_FOLDER, f"trip_{trip_id}.txt")
-        trajectories[['latitude', 'longitude', 'timestamp']].to_csv(file_path, sep=',', index=True, header=False, mode='w')
+        trajectories[['latitude', 'longitude', 'timestamp']].reset_index().to_csv(file_path, sep=',', index=True, header=False, mode='w')
         trip_id += 1
         
 def write_to_input_folder(gdf: gpd.GeoDataFrame):
@@ -403,7 +353,7 @@ def write_to_input_folder(gdf: gpd.GeoDataFrame):
         dt_str = dt_object.strftime('%d/%m/%Y %H:%M:%S').replace('/', '-').replace(' ', '_')
             
         file_name = os.path.join(folder_path, f'{dt_str}.txt')        
-        sub_trajectories[['latitude', 'longitude', 'timestamp', 'sog', 'draught', 'ship_type']].to_csv(file_name, sep=',', index=True, header=False, mode='w')
+        sub_trajectories[['latitude', 'longitude', 'timestamp', 'sog', 'draught', 'ship_type']].reset_index().to_csv(file_name, sep=',', index=True, header=False, mode='w')
 
 #get_csv_files_in_interval("2024-02-10::2024-02-12")
 extract_trajectories_from_csv_files()
