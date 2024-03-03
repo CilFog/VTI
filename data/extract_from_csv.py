@@ -136,15 +136,17 @@ def download_file_from_ais_web_server(file_name: str):
 
 def extract_trajectories_from_csv_files():
     #create_csv_file_for_mmsis(file_path=os.path.join(AIS_CSV_FOLDER,'aisdk-2024-02-11.csv')) #specify in method which mmsi
-    file_names = os.listdir(TEST_DATA_FOLDER)
-    #file_names = os.listdir(AIS_CSV_FOLDER)
+    #file_names = os.listdir(TEST_DATA_FOLDER)
+    file_names = os.listdir(AIS_CSV_FOLDER)
     completed:int = 0
     
     logging.info(f'Began extracting trajectories from {len(file_names)} csv files')
     
     for file_index in range(len(file_names)):
         file_name = file_names[file_index]
-        file_path = os.path.join(TEST_DATA_FOLDER, file_name)
+        #file_path = os.path.join(TEST_DATA_FOLDER, file_name)
+        file_path = os.path.join(AIS_CSV_FOLDER, file_name)
+
         logging.info(f'Currently extracting file: {file_name} (Completed ({completed}/{len(file_names)}) csv files)')        
         df:gpd.GeoDataFrame = cleanse_csv_file_and_convert_to_df(file_path)
         completed +=1
@@ -309,8 +311,8 @@ def create_trajectories_files(gdf: gpd.GeoDataFrame):
 
         if not sub_trajectories_df.empty:
             write_to_input_folder(sub_trajectories_df)
-            #write_gti_input_trajectories(sub_trajectories_df)
-            #write_TrImpute_input_trajectories(sub_trajectories_df)
+            write_gti_input_trajectories(sub_trajectories_df)
+            write_TrImpute_input_trajectories(sub_trajectories_df)
 
 def extract_harbors_df() -> gpd.GeoDataFrame:    
     df = pd.read_csv(HARBORS_FILE, na_values=['Unknown','Undefined']) 
@@ -368,5 +370,6 @@ def write_to_input_folder(gdf: gpd.GeoDataFrame):
             
         file_path = os.path.join(folder_path, f'{dt_str}.txt')        
         sub_trajectories[['latitude', 'longitude', 'timestamp', 'sog', 'draught', 'ship_type']].reset_index(drop=True).to_csv(file_path, sep=',', index=True, header=True, mode='w')
-#get_csv_files_in_interval("2024-02-19::2024-02-29")
+
+get_csv_files_in_interval("2024-02-19::2024-02-29")
 extract_trajectories_from_csv_files()
