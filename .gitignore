@@ -167,6 +167,8 @@ data/input/
 data/output/
 
 data/csv/
+db/database.ini
+data/database.ini
 
 data/ais_csv/
 
