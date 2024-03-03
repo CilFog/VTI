@@ -167,3 +167,7 @@ data/input/
 data/output/
 
 data/csv/
+
+data/ais_csv/
+
+data/test_data/*.txt

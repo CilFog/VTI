@@ -107,7 +107,8 @@ def download_file_from_ais_web_server(file_name: str):
     download_result = requests.get('https://web.ais.dk/aisdata/' + file_name, allow_redirects=True)
     download_result.raise_for_status()
 
-    path_to_compressed_file = INPUT_FOLDER + file_name
+    path_to_compressed_file = AIS_CSV_FOLDER + file_name
+    os.makedirs(AIS_CSV_FOLDER, exist_ok=True)
 
     try:
         f = open(path_to_compressed_file,'wb')
@@ -120,10 +121,10 @@ def download_file_from_ais_web_server(file_name: str):
     try:
         if ".zip" in path_to_compressed_file: 
             with zipfile.ZipFile(path_to_compressed_file, 'r') as zip_ref:
-                zip_ref.extractall(INPUT_FOLDER)
+                zip_ref.extractall(path=AIS_CSV_FOLDER)
         elif ".rar" in path_to_compressed_file:
             with tarfile.RarFile(path_to_compressed_file) as rar_ref:
-                rar_ref.extractall(path=INPUT_FOLDER)
+                rar_ref.extractall(path=AIS_CSV_FOLDER)
         else:
             logging.error(f'File {file_name} must either be of type .zip or .rar. Not extracted')
             
@@ -143,8 +144,9 @@ def extract_trajectories_from_csv_files():
     
     for file_index in range(len(file_names)):
         file_name = file_names[file_index]
+        file_path = os.path.join(TEST_DATA_FOLDER, file_name)
         logging.info(f'Currently extracting file: {file_name} (Completed ({completed}/{len(file_names)}) csv files)')        
-        df:gpd.GeoDataFrame = cleanse_csv_file_and_convert_to_df(os.path.join(TEST_DATA_FOLDER, file_name))
+        df:gpd.GeoDataFrame = cleanse_csv_file_and_convert_to_df(file_path)
         completed +=1
         
         logging.info(f'Finished extracting file: {file_name} (Completed ({completed}/{len(file_names)}) csv files)')        
@@ -154,6 +156,8 @@ def extract_trajectories_from_csv_files():
             create_trajectories_files(gdf=df)
         else:
             logging.warning(f'No data was extracted from {file_name}')
+            
+        #os.remove(file_path)
     
     logging.info('Finished creating trajecatories. Terminating')
 
@@ -189,6 +193,8 @@ def cleanse_csv_file_and_convert_to_df(file_path: str):
     # errors='ignore' is sat because older ais data files may not contain these columns.
     df = df.drop(['A','B','C','D','ETA','Cargo type','Data source type', 'Destination', 'Type of position fixing device',
                   'Callsign'],axis=1, errors='ignore')
+    
+    ship_types = ['Cargo', 'Tanker']  
        
     # Remove all the rows which does not satisfy our conditions
     df = df[
@@ -198,9 +204,9 @@ def cleanse_csv_file_and_convert_to_df(file_path: str):
             (df['# Timestamp'].notnull()) &
             (df['Latitude'] >=53.5) & (df['Latitude'] <=58.5) &
             (df['Longitude'] >= 3.2) & (df['Longitude'] <=16.5) &
-            (df['SOG'] <=102)
+            (df['SOG'] <=102) &
+            (df['Ship type'].isin(ship_types))
     ].reset_index()
-    
     
     subset_columns = ['MMSI', 'Latitude', 'Longitude', '# Timestamp']  # Adjust these based on your actual columns
     df = df.drop_duplicates(subset=subset_columns, keep='first')
@@ -225,10 +231,12 @@ def cleanse_csv_file_and_convert_to_df(file_path: str):
             'Ship type':'ship_type',
             'Type of position fixing device':'type_of_position_fixing_device',
         })
-    
+
     # lower case names in the columns
     df.columns = map(str.lower, df.columns)
     
+    if (df.empty):
+        return df
     # Grouping by the columns 'imo', 'name', 'length', 'width', and 'ship_type'
     # and filling missing values within each group with the first non-null value
     df[['imo', 'name', 'length', 'width', 'ship_type']] = df.groupby('mmsi')[['imo', 'name', 'length', 'width', 'ship_type']].transform(lambda x: x.ffill())
@@ -268,7 +276,7 @@ def create_csv_file_for_mmsis(file_path: str):
         'Data source type': str
     }
     
-    mmsis = [211190000, 210524000, 210853000, 210549000, 209536000, 210332000]
+    mmsis = [210388000, 211190000, 210524000, 210853000, 210549000, 209536000, 210332000]
     
     df = pd.read_csv(file_path, na_values=['Unknown','Undefined'], dtype=types) #, nrows=1000000)    
     
@@ -283,7 +291,7 @@ def create_csv_file_for_mmsis(file_path: str):
         for mmsi in mmsis:
             df_mmsi = df_filtered[df_filtered['MMSI'] == mmsi]
             df_mmsi.reset_index().to_csv(f'{TEST_DATA_FOLDER}/{mmsi}.csv', index=False)  # Set index=False if you don't want to write row numbers
-            df_mmsi.reset_index().to_csv(f'{TXT_DATA_FOLDER}/{mmsi}.txt', index=False) 
+            # df_mmsi.reset_index().to_csv(f'{TXT_DATA_FOLDER}/{mmsi}.txt', index=False) 
             logging.info(f'csv for {mmsi} created')
         
 def create_trajectories_files(gdf: gpd.GeoDataFrame):
@@ -297,9 +305,8 @@ def create_trajectories_files(gdf: gpd.GeoDataFrame):
                 
         #trajectory_df.reset_index().to_csv(f'{TEST_DATA_FOLDER}/{mmsi}.csv', index=False)  # Set index=False if you don't want to write row numbers
         #trajectory_df.reset_index().to_csv(f'{TXT_DATA_FOLDER}/{mmsi}.txt', index=False) 
-        
         sub_trajectories_df = create_trajectories_from_df(harbors_df=harbors_df, trajectory_df=trajectory_df) 
-        
+
         if not sub_trajectories_df.empty:
             write_to_input_folder(sub_trajectories_df)
             #write_gti_input_trajectories(sub_trajectories_df)
@@ -361,5 +368,5 @@ def write_to_input_folder(gdf: gpd.GeoDataFrame):
             
         file_path = os.path.join(folder_path, f'{dt_str}.txt')        
         sub_trajectories[['latitude', 'longitude', 'timestamp', 'sog', 'draught', 'ship_type']].reset_index(drop=True).to_csv(file_path, sep=',', index=True, header=True, mode='w')
-#get_csv_files_in_interval("2024-02-10::2024-02-12")
+#get_csv_files_in_interval("2024-02-19::2024-02-29")
 extract_trajectories_from_csv_files()
