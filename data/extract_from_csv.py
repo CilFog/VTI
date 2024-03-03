@@ -159,7 +159,7 @@ def extract_trajectories_from_csv_files():
         else:
             logging.warning(f'No data was extracted from {file_name}')
             
-        #os.remove(file_path)
+        os.remove(file_path)
     
     logging.info('Finished creating trajecatories. Terminating')
 
