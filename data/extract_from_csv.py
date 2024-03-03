@@ -2,7 +2,6 @@ import os
 import tarfile
 import zipfile
 import requests
-import logging 
 import numpy as np
 import pandas as pd
 import geopandas as gpd
@@ -12,6 +11,7 @@ from urllib.request import urlopen
 from sys import stdout
 from shapely import wkb
 from create_tractories import create_trajectories_from_df
+from logs.logging import setup_logger
 
 AIS_CSV_FOLDER = os.path.join(os.path.dirname(__file__), 'ais_csv')
 INPUT_FOLDER = os.path.join(os.path.dirname(__file__), 'input')
@@ -21,8 +21,9 @@ TRIMPUTE_INPUT_FOLDER = os.path.join(os.path.dirname(__file__), '../../TrImpute/
 TEST_DATA_FOLDER = os.path.join(os.path.dirname(__file__), 'test_data')
 TXT_DATA_FOLDER = os.path.join(os.path.dirname(__file__), 'txtfiles')
 HARBORS_FILE = os.path.join(os.path.dirname(__file__), 'harbors.csv')
+CSV_EXTRACT_FILE_LOG = 'ais_extraction_log.txt'
 
-logging.basicConfig(level=logging.INFO)
+logging = setup_logger(CSV_EXTRACT_FILE_LOG)
     
 def get_csv_files_in_interval(interval: str):
     """
@@ -50,12 +51,15 @@ def get_csv_files_in_interval(interval: str):
     
     logging.info('Began extracting csv files')
     
-    for file in files_to_download:
-        extract_csv_file(file_name=file)
-        downloaded += 1
-        stdout.write(f'\rDownloaded {file}.  Completed ({downloaded}/{len(files_to_download)})')
-        stdout.flush()
-    logging.info('\nCompleted extracting csv files')
+    try:
+        for file in files_to_download:
+            extract_csv_file(file_name=file)
+            downloaded += 1
+            stdout.write(f'\rDownloaded {file}.  Completed ({downloaded}/{len(files_to_download)})')
+            stdout.flush()
+        logging.info('\nCompleted extracting csv files')
+    except Exception as e:
+        logging.error(f'Failed to extract csv "{file}" file with error: {repr(e)}')
 
 def connect_to_to_ais_web_server_and_get_data():
     """
@@ -130,26 +134,22 @@ def download_file_from_ais_web_server(file_name: str):
         quit()
 
 def extract_trajectories_from_csv_files():
-    
-    #create_csv_file_for_mmsis(file_path=os.path.join(CSV_FOLDER,'aisdk-2024-02-11.csv')) #specify in method which mmsi
-    #file_names = os.listdir(TEST_DATA_FOLDER)
-    file_names = os.listdir(AIS_CSV_FOLDER)
+    #create_csv_file_for_mmsis(file_path=os.path.join(AIS_CSV_FOLDER,'aisdk-2024-02-11.csv')) #specify in method which mmsi
+    file_names = os.listdir(TEST_DATA_FOLDER)
+    #file_names = os.listdir(AIS_CSV_FOLDER)
     completed:int = 0
     
     logging.info(f'Began extracting trajectories from {len(file_names)} csv files')
     
     for file_index in range(len(file_names)):
         file_name = file_names[file_index]
-        
         logging.info(f'Currently extracting file: {file_name} (Completed ({completed}/{len(file_names)}) csv files)')        
-        
-        df:gpd.GeoDataFrame = cleanse_csv_file_and_convert_to_df(os.path.join(AIS_CSV_FOLDER, file_name))
-
+        df:gpd.GeoDataFrame = cleanse_csv_file_and_convert_to_df(os.path.join(TEST_DATA_FOLDER, file_name))
         completed +=1
         
         logging.info(f'Finished extracting file: {file_name} (Completed ({completed}/{len(file_names)}) csv files)')        
         logging.info(f'Began crating trajectories for file: {file_name}')
-    
+
         if (not df.empty):
             create_trajectories_files(gdf=df)
         else:
@@ -184,7 +184,7 @@ def cleanse_csv_file_and_convert_to_df(file_path: str):
     }
     
     df = pd.read_csv(file_path, na_values=['Unknown','Undefined'], dtype=types)#, nrows=1000000)    
-    
+
     # Remove unwanted columns containing data we do not need. This saves a little bit of memory.
     # errors='ignore' is sat because older ais data files may not contain these columns.
     df = df.drop(['A','B','C','D','ETA','Cargo type','Data source type', 'Destination', 'Type of position fixing device',
@@ -198,7 +198,7 @@ def cleanse_csv_file_and_convert_to_df(file_path: str):
             (df['# Timestamp'].notnull()) &
             (df['Latitude'] >=53.5) & (df['Latitude'] <=58.5) &
             (df['Longitude'] >= 3.2) & (df['Longitude'] <=16.5) &
-            (df['SOG'] >= 0.1) & (df['SOG'] <=102)
+            (df['SOG'] <=102)
     ].reset_index()
     
     
@@ -268,7 +268,7 @@ def create_csv_file_for_mmsis(file_path: str):
         'Data source type': str
     }
     
-    mmsis = [211190000, 210524000, 210524000, 210853000, 210549000, 209536000, 210332000]
+    mmsis = [211190000, 210524000, 210853000, 210549000, 209536000, 210332000]
     
     df = pd.read_csv(file_path, na_values=['Unknown','Undefined'], dtype=types) #, nrows=1000000)    
     
@@ -294,12 +294,12 @@ def create_trajectories_files(gdf: gpd.GeoDataFrame):
     
     for mmsi, trajectory_df in gdf.sort_values('timestamp').groupby('mmsi'):
         logging.info(f'Creating trajectories for mmsi {mmsi}')
-        
-        # trajectory_df.reset_index().to_csv(f'{TEST_DATA_FOLDER}/{mmsi}.csv', index=False)  # Set index=False if you don't want to write row numbers
-        # trajectory_df.reset_index().to_csv(f'{TXT_DATA_FOLDER}/{mmsi}.txt', index=False) 
+                
+        #trajectory_df.reset_index().to_csv(f'{TEST_DATA_FOLDER}/{mmsi}.csv', index=False)  # Set index=False if you don't want to write row numbers
+        #trajectory_df.reset_index().to_csv(f'{TXT_DATA_FOLDER}/{mmsi}.txt', index=False) 
         
         sub_trajectories_df = create_trajectories_from_df(harbors_df=harbors_df, trajectory_df=trajectory_df) 
-
+        
         if not sub_trajectories_df.empty:
             write_to_input_folder(sub_trajectories_df)
             #write_gti_input_trajectories(sub_trajectories_df)
@@ -325,7 +325,7 @@ def write_gti_input_trajectories(gdf: gpd.GeoDataFrame):
 
     for _, trajectories in gdf.groupby(['sub_trajectory_id']):        
         file_path = os.path.join(GTI_INPUT_FOLDER, f"trip_{trip_id}.txt")
-        trajectories[['latitude', 'longitude', 'timestamp']].reset_index().to_csv(file_path, sep=',', index=True, header=False, mode='w')
+        trajectories[['latitude', 'longitude', 'timestamp']].reset_index(drop=True).to_csv(file_path, sep=',', index=True, header=False, mode='w')
         trip_id += 1
 
 def write_TrImpute_input_trajectories(gdf: gpd.GeoDataFrame):
@@ -338,9 +338,11 @@ def write_TrImpute_input_trajectories(gdf: gpd.GeoDataFrame):
 
     trip_id = len(current_files)
     
-    for _, trajectories in gdf.groupby(['sub_trajectory_id']):        
+    for _, sub_trajectories in gdf.groupby(['sub_trajectory_id']):  
+        if len(sub_trajectories) < 2:
+            continue      
         file_path = os.path.join(TRIMPUTE_INPUT_FOLDER, f"trip_{trip_id}.txt")
-        trajectories[['latitude', 'longitude', 'timestamp']].reset_index().to_csv(file_path, sep=',', index=True, header=False, mode='w')
+        sub_trajectories[['latitude', 'longitude', 'timestamp']].reset_index(drop=True).to_csv(file_path, sep=',', index=True, header=False, mode='w')
         trip_id += 1
         
 def write_to_input_folder(gdf: gpd.GeoDataFrame):
@@ -348,14 +350,16 @@ def write_to_input_folder(gdf: gpd.GeoDataFrame):
         return
     
     for _, sub_trajectories in gdf.groupby('sub_trajectory_id'):
+        if len(sub_trajectories) < 2:
+            continue
+        
         folder_path = os.path.join(INPUT_FOLDER, str(sub_trajectories.iloc[0].mmsi))
         os.makedirs(folder_path, exist_ok=True)  # Create the folder if it doesn't exist
         
         dt_object = dt.datetime.utcfromtimestamp(sub_trajectories.iloc[0].timestamp)
         dt_str = dt_object.strftime('%d/%m/%Y %H:%M:%S').replace('/', '-').replace(' ', '_')
             
-        file_name = os.path.join(folder_path, f'{dt_str}.txt')        
-        sub_trajectories[['latitude', 'longitude', 'timestamp', 'sog', 'draught', 'ship_type']].reset_index().to_csv(file_name, sep=',', index=True, header=False, mode='w')
-
+        file_path = os.path.join(folder_path, f'{dt_str}.txt')        
+        sub_trajectories[['latitude', 'longitude', 'timestamp', 'sog', 'draught', 'ship_type']].reset_index(drop=True).to_csv(file_path, sep=',', index=True, header=True, mode='w')
 #get_csv_files_in_interval("2024-02-10::2024-02-12")
 extract_trajectories_from_csv_files()

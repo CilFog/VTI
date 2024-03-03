@@ -2,6 +2,7 @@ import os
 
 # open qgis -> plugins -> python
 # update basefolder to a folder with txt files
+# ensure header in the txt files
 # paste script to qgis
 basefolder = 'path-to-folder'
 epsg_code=4326
