@@ -343,7 +343,7 @@ def write_TrImpute_input_trajectories(gdf: gpd.GeoDataFrame):
     
     os.makedirs(TRIMPUTE_INPUT_FOLDER, exist_ok=True)  # Create the folder if it doesn't exist
     
-    current_files = os.listdir(TEST_DATA_FOLDER)
+    current_files = os.listdir(TRIMPUTE_INPUT_FOLDER)
 
     trip_id = len(current_files)
     
@@ -371,5 +371,5 @@ def write_to_input_folder(gdf: gpd.GeoDataFrame):
         file_path = os.path.join(folder_path, f'{dt_str}.txt')        
         sub_trajectories[['latitude', 'longitude', 'timestamp', 'sog', 'draught', 'ship_type']].reset_index(drop=True).to_csv(file_path, sep=',', index=True, header=True, mode='w')
 
-get_csv_files_in_interval("2024-02-19::2024-02-29")
+#get_csv_files_in_interval("2024-02-19::2024-02-29")
 extract_trajectories_from_csv_files()
