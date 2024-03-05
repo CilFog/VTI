@@ -13,11 +13,14 @@ from sqlalchemy import create_engine
 from config import load_config
 from connect import connect
 
+#DEPTH_MAP = 'C:/Users/alexf/Desktop/ddm_50m.dybde.tiff'
 DEPTH_MAP = '/srv/P-10/ddm_50m.dybde.tiff'
 
 def extract_depth_map():
     points = []
     processed_pixels = 0
+
+    print("Starting depth map extraction")
 
     with rasterio.open(DEPTH_MAP, crs="3034") as dataset:
         
@@ -50,6 +53,9 @@ def extract_depth_map():
                     point = Point(lat_trans, lon_trans)
                     points.append((point, depth_value))
                     processed_pixels += 1
+
+                    if processed_pixels == 1000000:
+                        print("Reached 1,000,000 processed pixels.")
 
             #     if processed_pixels == 10000000:
             #             break
