@@ -12,13 +12,13 @@ class HarborState(Enum):
     AT_ANCHOR = 2
     PASSING_THROUGH = 3
 
-def create_trajectories_from_df(harbors_df:gpd.GeoDataFrame, trajectory_df:gpd.GeoDataFrame):
+def split_trajectories_from_df(harbors_df:gpd.GeoDataFrame, trajectory_df:gpd.GeoDataFrame):
     trajectory_df = trajectory_df.reset_index(drop=True)
     trajectories_df = order_by_diff_vessels(trajectory_df)
     trajectories_df = trajectories_df.drop_duplicates(subset=['vessel_id', 'timestamp'], keep='first')
 
     trajectories_df = trajectories_df.reset_index(drop=True) # to ensure indexes are still fine
-    sub_trajectories_df = make_subtrajectories_split_from_harbor(harbors_df, trajectories_df)
+    sub_trajectories_df = split_to_sub_trajectories_using_harbor(harbors_df, trajectories_df)
     
     return sub_trajectories_df
 
@@ -27,7 +27,7 @@ def order_by_diff_vessels(sorted_locations_df: gpd.GeoDataFrame):
     sorted_locations_df['vessel_id'] = sorted_locations_df.groupby(['imo', 'ship_type', 'width', 'length']).ngroup() 
     return sorted_locations_df
 
-def make_subtrajectories_split_from_harbor(harbors_df: gpd.GeoDataFrame, trajectories_df: gpd.GeoDataFrame):
+def split_to_sub_trajectories_using_harbor(harbors_df: gpd.GeoDataFrame, trajectories_df: gpd.GeoDataFrame):
     trajectories_df = add_in_harbor_column(trajectories_df, harbors_df)
     
     sub_trajectories = []
@@ -323,19 +323,3 @@ def get_leaving_harbor_positions(harbor_positions:list) -> tuple[HarborState, li
         return LeavingTuple(harbor_state=HarborState.LEAVING, to_current_sub_trajectory=leaving_positions)
     else:
         return LeavingTuple(harbor_state=HarborState.AT_ANCHOR, to_current_sub_trajectory=[])
-    
-
-# def calculate_speed(p1:gpd.GeoDataFrame, p2:gpd.GeoDataFrame) -> float:
-#     distance_in_meters = p2.geometry.distance(p1.geometry)
-#     distance_in_kilometers = distance_in_meters/1000
-    
-#     time_in_seconds = p2.timestamp - p1.timestamp 
-#     time_in_hours = time_in_seconds/60/60
-     
-#     if time_in_seconds == 0:
-#         return max(p1.sog, p2.sog)
-
-#     kilometers_pr_hour = distance_in_kilometers/time_in_hours
-#     knot_pr_hour = kilometers_pr_hour/1.85
-        
-#     return knot_pr_hour
