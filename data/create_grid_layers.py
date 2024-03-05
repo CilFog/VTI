@@ -19,6 +19,7 @@ DEPTH_MAP = '/srv/P-10/ddm_50m.dybde.tiff'
 def extract_depth_map():
     points = []
     processed_pixels = 0
+    pixels_to_reach = 1000000
 
     print("Starting depth map extraction")
 
@@ -54,8 +55,8 @@ def extract_depth_map():
                     points.append((point, depth_value))
                     processed_pixels += 1
 
-                    if processed_pixels == 1000000:
-                        print("Reached 1,000,000 processed pixels.")
+                    if processed_pixels % pixels_to_reach == 0:
+                        print(f"Reached {processed_pixels} processed pixels.")
 
             #     if processed_pixels == 10000000:
             #             break
