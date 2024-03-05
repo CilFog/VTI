@@ -13,7 +13,7 @@ from sqlalchemy import create_engine
 from config import load_config
 from connect import connect
 
-DEPTH_MAP = 'C:/Users/alexf/Desktop/ddm_50m.dybde.tiff'
+DEPTH_MAP = '/srv/P-10/ddm_50m.dybde.tiff'
 
 def extract_depth_map():
     points = []
