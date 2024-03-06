@@ -10,6 +10,7 @@ xfield, yfield = 'longitude', 'latitude'
 delimiter = ','
 
 layers=[]
+i = 0
 for root, folder, files in os.walk(basefolder):
     for file in files:
         fullPath = os.path.join(root, file)
@@ -17,5 +18,11 @@ for root, folder, files in os.walk(basefolder):
             uri = "file://{}?delimiter='{}'&xField={}&yField={}&crs=epsg:{}".format(fullPath, delimiter, xfield, yfield, epsg_code)
             vlayer = QgsVectorLayer(uri, os.path.basename(file).split('.')[0] , "delimitedtext")
             layers.append(vlayer)
+            i += 1
+        
+        if i == 50:
+            break
+    if i == 50:
+        break
 
 QgsProject.instance().addMapLayers(layers)
