@@ -81,7 +81,7 @@ def cleanse_csv_file_and_convert_to_df(file_path: str):
     df = df.drop(['A','B','C','D','ETA','Cargo type','Data source type', 'Destination', 'Type of position fixing device',
                   'Callsign'],axis=1, errors='ignore')
     
-    ship_types = ['Cargo', 'Tanker']  
+    ship_types = ['Cargo']  
        
     # Remove all the rows which does not satisfy our conditions
     df = df[
@@ -210,4 +210,4 @@ def write_to_input_folder(gdf: gpd.GeoDataFrame):
         dt_str = dt_object.strftime('%d/%m/%Y %H:%M:%S').replace('/', '-').replace(' ', '_')
             
         file_path = os.path.join(folder_path, f'{dt_str}.txt')        
-        sub_trajectories[['latitude', 'longitude', 'timestamp', 'sog', 'draught', 'ship_type']].reset_index(drop=True).to_csv(file_path, sep=',', index=True, header=True, mode='w')
+        sub_trajectories[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].reset_index(drop=True).to_csv(file_path, sep=',', index=True, header=True, mode='w')
