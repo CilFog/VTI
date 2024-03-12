@@ -9,12 +9,12 @@ from shapely.geometry import Point, box
 import geopandas as gpd
 import geoalchemy2
 import sqlalchemy
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, ForeignKey
 from config import load_config
 from connect import connect
 
-#DEPTH_MAP = 'C:/Users/alexf/Desktop/ddm_50m.dybde.tiff'
-DEPTH_MAP = '/srv/P-10/ddm_50m.dybde.tiff'
+DEPTH_MAP = 'C:/Users/alexf/Desktop/ddm_50m.dybde.tiff'
+#DEPTH_MAP = '/srv/P-10/ddm_50m.dybde.tiff'
 
 def extract_depth_map():
     points = []
@@ -58,21 +58,22 @@ def extract_depth_map():
                     if processed_pixels % pixels_to_reach == 0:
                         print(f"Reached {processed_pixels} processed pixels.")
 
-            #     if processed_pixels == 10000000:
-            #             break
-            # if processed_pixels == 10000000:
-            #     break
+                if processed_pixels == 10000:
+                        break
+            if processed_pixels == 10000:
+                break
 
     gdf = gpd.GeoDataFrame(geometry=[point for point, _ in points], crs="EPSG:4326")
     gdf['depth'] = [depth for _, depth in points]
 
 
-    create_and_insert_grid_into_db(gdf, 1.0, '1000')
-    create_and_insert_grid_into_db_with_relation(gdf, 0.5, '500', 'grid_1000')
-    create_and_insert_grid_into_db_with_relation(gdf, 0.2, '200', 'grid_500')
-    create_and_insert_grid_into_db_with_relation(gdf, 0.1, '100', 'grid_200')
-    create_and_insert_grid_into_db_with_relation(gdf, 0.05, '50', 'grid_100')
-    create_and_insert_grid_into_db_with_relation(gdf, 0.025, '25', 'grid_50')
+    create_and_insert_grid_into_db(gdf, 1.6, '1600')
+    create_and_insert_grid_into_db_with_relation(gdf, 0.8, '800', 'grid_1600')
+    #create_and_insert_grid_into_db_with_relation(gdf, 0.4, '400', 'grid_800')
+    #create_and_insert_grid_into_db_with_relation(gdf, 0.2, '200', 'grid_400')
+    #create_and_insert_grid_into_db_with_relation(gdf, 0.1, '100', 'grid_200')
+    #create_and_insert_grid_into_db_with_relation(gdf, 0.05, '50', 'grid_100')
+    #create_and_insert_grid_into_db_with_relation(gdf, 0.025, '25', 'grid_50')
 
 
 def create_and_insert_grid_into_db(gdf, cell_size_km, table_name):
@@ -87,21 +88,6 @@ def create_and_insert_grid_into_db(gdf, cell_size_km, table_name):
 
     grid_gdf = grouped_joined
 
-    """ Create tables in the PostgreSQL database"""
-    commands = (
-        """
-            CREATE EXTENSION IF NOT EXISTS postgis;
-        """,
-
-        """
-            CREATE TABLE IF NOT EXISTS grid_{} (
-                grid_id SERIAL PRIMARY KEY,
-                geometry geometry(Polygon, 4326),   
-                depth double precision
-            )
-        """.format(table_name), 
-    )
-
     try:
         # Load configuration from the config file
         config = load_config()
@@ -115,31 +101,21 @@ def create_and_insert_grid_into_db(gdf, cell_size_km, table_name):
         cursor = conn.cursor()
 
         try:
-            # Execute each command
-            for command in commands:
-                cursor.execute(command)
-
-            # Commit the changes to the database
-            conn.commit()
-
             print("Inserting into db")
 
             # Convert geometries to WKT
             grid_gdf['geometry_wkt'] = grid_gdf['geometry'].apply(lambda geom: geom.wkt)
-            grid_gdf['grid_id'] = grid_gdf.index + 1
+            grid_gdf = grid_gdf.drop(columns=['geometry'])
 
-            grid_gdf[['grid_id','geometry_wkt', 'depth']].reset_index(drop=True).to_sql(
+            grid_gdf[['geometry_wkt', 'depth']].reset_index(drop=True).to_sql(
                 f'grid_{table_name}', 
                 engine, 
-                index=False, 
+                index=True, 
                 if_exists='replace', 
                 dtype={
-                'grid_id': sqlalchemy.types.Integer(),
                 'geometry_wkt': geoalchemy2.Geometry('POLYGON', srid=4326),
                 'depth': sqlalchemy.types.Float(),
             })
-
-            return grid_gdf
 
         except psycopg2.Error as e:
             print("Error executing SQL command:", e)
@@ -158,7 +134,6 @@ def create_and_insert_grid_into_db(gdf, cell_size_km, table_name):
 
 def create_and_insert_grid_into_db_with_relation(gdf, cell_size_km, table_name, parent_grid):
 
-
     grid_gdf = create_grid_layer(cell_size_km)
 
     # Spatial join
@@ -167,19 +142,7 @@ def create_and_insert_grid_into_db_with_relation(gdf, cell_size_km, table_name, 
     grouped_joined = valid_joined.groupby('geometry')['depth'].mean().reset_index()
     grouped_joined = gpd.GeoDataFrame(grouped_joined, geometry='geometry')
 
-    
-
-    """ Create tables in the PostgreSQL database"""
-    commands = (
-        """
-            CREATE TABLE IF NOT EXISTS grid_{} (
-                grid_id SERIAL PRIMARY KEY,
-                geometry geometry(Polygon, 4326),   
-                depth double precision,
-                parent_grid_id INTEGER
-            )
-        """.format(table_name), 
-    )
+    grid_gdf = grouped_joined
 
     try:
         # Load configuration from the config file
@@ -194,42 +157,33 @@ def create_and_insert_grid_into_db_with_relation(gdf, cell_size_km, table_name, 
         cursor = conn.cursor()
 
         try:
+            print("Creating key constraint between grids, and inserting into db")
+
             # Retrieve the existing grid_1000 data from the database
             parent_grid_id = f"SELECT * FROM {parent_grid}"
             parent_grid_id_gdf = gpd.read_postgis(parent_grid_id, engine, geom_col='geometry_wkt')
-            
-            grid_gdf = grouped_joined
 
-            # Create a new column 'parent_grid_id' in grid_gdf
+            # Create a new column 'parent_grid_id' in grid_gdf and populate with parent_grid_id if it is contianed within it
             grid_gdf['parent_grid_id'] = None
-            
-            # Populate 'parent_grid_id' based on spatial containment
             grid_gdf['parent_grid_id'] = grid_gdf.apply(lambda row: find_parent_grid(row['geometry'], parent_grid_id_gdf), axis=1)
 
-            # Execute each command
-            for command in commands:
-                cursor.execute(command)
-
-            # Commit the changes to the database
-            conn.commit()
-
-            print("Inserting into db")
 
             # Convert geometries to WKT
             grid_gdf['geometry_wkt'] = grid_gdf['geometry'].apply(lambda geom: geom.wkt)
-            grid_gdf['grid_id'] = grid_gdf.index + 1
+            grid_gdf = grid_gdf.drop(columns=['geometry'])
 
-            grid_gdf[['grid_id', 'geometry_wkt', 'depth', 'parent_grid_id']].reset_index(drop=True).to_sql(
+            # Write to the database with the foreign key constraint
+            grid_gdf[['geometry_wkt', 'depth', 'parent_grid_id']].reset_index(drop=True).to_sql(
                 f'grid_{table_name}', 
-                engine, 
-                index=False, 
-                if_exists='replace', 
+                engine,
+                index=True,  
+                if_exists='replace',
                 dtype={
-                'grid_id': sqlalchemy.types.Integer(),
-                'geometry_wkt': geoalchemy2.Geometry('POLYGON', srid=4326),
-                'depth': sqlalchemy.types.Float(),
-                'parent_grid_id': sqlalchemy.types.Integer(),
-            })
+                    'geometry_wkt': geoalchemy2.Geometry('POLYGON', srid=4326),
+                    'depth': sqlalchemy.types.Float(),
+                    'parent_grid_id': sqlalchemy.types.Integer(),
+                },
+            )
 
         except psycopg2.Error as e:
             print("Error executing SQL command:", e)
@@ -251,7 +205,7 @@ def find_parent_grid(geometry, parent_grid):
     intersecting_grid = parent_grid[parent_grid['geometry_wkt'].intersects(centroid)]
     
     if not intersecting_grid.empty:
-        return intersecting_grid['grid_id'].values[0]
+        return intersecting_grid['index'].values[0]
     else:
         return None
 
