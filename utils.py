@@ -1,7 +1,8 @@
-
-import math
 import numpy as np
 import geopandas as gp
+from geopy.distance import geodesic
+
+THETA_ANGLE_PENALTY = 50
 
 def calculate_initial_compass_bearing(df_curr:gp.GeoDataFrame, df_next:gp.GeoDataFrame) -> gp.GeoDataFrame:
     """
@@ -31,10 +32,10 @@ def calculate_initial_compass_bearing(df_curr:gp.GeoDataFrame, df_next:gp.GeoDat
     
     # Handle the last row 
     bearing_deg.fillna(0, inplace=True)
-    
+
     return bearing_deg
 
-def get_haversine_dist_in_meters(df_curr:gp.GeoDataFrame, df_next:gp.GeoDataFrame) -> gp.GeoDataFrame:
+def get_haversine_dist_df_in_meters(df_curr:gp.GeoDataFrame, df_next:gp.GeoDataFrame) -> gp.GeoDataFrame:
     """
     Calculate the great circle distance between two points
     on the earth (specified in decimal degrees)
@@ -50,6 +51,20 @@ def get_haversine_dist_in_meters(df_curr:gp.GeoDataFrame, df_next:gp.GeoDataFram
     # Radius of earth in kilometers is 6371
     distance_km = 6371 * c
     dist = distance_km * 1000
-    #dist.fillna(0, inplace=True)
+    dist.fillna(0, inplace=True)
     
     return dist
+
+# Function to calculate distance and adjust based on COG
+def adjusted_distance(x, y):
+    # Calculate Haversine distance
+    haversine_dist = geodesic((x[0], x[1]), (y[0], y[1])).m
+    
+    # Example COG adjustment: if COG difference is > 45 degrees, increase distance
+    cog_diff = abs(x[2] - y[2])
+    cog_diff = min(cog_diff, 360-cog_diff)
+
+    # apply the angle penalty
+    haversine_dist = np.sqrt(haversine_dist ** 2 + (THETA_ANGLE_PENALTY * cog_diff /180) ** 2)
+
+    return haversine_dist
