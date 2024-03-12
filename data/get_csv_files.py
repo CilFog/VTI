@@ -9,7 +9,6 @@ from sys import stdout
 from logs.logging import setup_logger
 
 AIS_CSV_FOLDER = os.path.join(os.path.dirname(__file__), 'ais_csv')
-INPUT_FOLDER = os.path.join(os.path.dirname(__file__), 'input')
 TEST_DATA_FOLDER = os.path.join(os.path.dirname(__file__), 'test_data')
 TXT_DATA_FOLDER = os.path.join(os.path.dirname(__file__), 'txtfiles')
 CSV_EXTRACT_FILE_LOG = 'get_csv_files_log.txt'

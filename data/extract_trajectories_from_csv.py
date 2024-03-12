@@ -8,10 +8,9 @@ from split_tractories import split_trajectories_from_df
 from logs.logging import setup_logger
 
 AIS_CSV_FOLDER = os.path.join(os.path.dirname(__file__), 'ais_csv')
-INPUT_FOLDER = os.path.join(os.path.dirname(__file__), 'input')
+ORIGINAL_FOLDER = os.path.join(os.path.dirname(__file__), 'original')
+INPUT_FOLDER = os.path.join(os.path.dirname(__file__), 'input_graph')
 OUTPUT_FOLDER = os.path.join(os.path.dirname(__file__), 'output')
-GTI_INPUT_FOLDER = os.path.join(os.path.dirname(__file__), '../../GTI/data/ais')
-TRIMPUTE_INPUT_FOLDER = os.path.join(os.path.dirname(__file__), '../../TrImpute/datasets/input/ais_csv')
 TEST_DATA_FOLDER = os.path.join(os.path.dirname(__file__), 'test_data')
 TXT_DATA_FOLDER = os.path.join(os.path.dirname(__file__), 'txtfiles')
 HARBORS_FILE = os.path.join(os.path.dirname(__file__), 'harbors.csv')
@@ -80,9 +79,7 @@ def cleanse_csv_file_and_convert_to_df(file_path: str):
     # errors='ignore' is sat because older ais data files may not contain these columns.
     df = df.drop(['A','B','C','D','ETA','Cargo type','Data source type', 'Destination', 'Type of position fixing device',
                   'Callsign'],axis=1, errors='ignore')
-    
-    ship_types = ['Cargo']  
-       
+           
     # Remove all the rows which does not satisfy our conditions
     df = df[
             (df["Type of mobile"] != "Class B") &
@@ -91,8 +88,7 @@ def cleanse_csv_file_and_convert_to_df(file_path: str):
             (df['# Timestamp'].notnull()) &
             (df['Latitude'] >=53.5) & (df['Latitude'] <=58.5) &
             (df['Longitude'] >= 3.2) & (df['Longitude'] <=16.5) &
-            (df['SOG'] <=102) &
-            (df['Ship type'].isin(ship_types))
+            (df['SOG'] <=102)
     ].reset_index()
     
     subset_columns = ['MMSI', 'Latitude', 'Longitude', '# Timestamp']  # Adjust these based on your actual columns
@@ -151,9 +147,7 @@ def create_trajectories_files(gdf: gpd.GeoDataFrame):
         sub_trajectories_df = split_trajectories_from_df(harbors_df=harbors_df, trajectory_df=trajectory_df) 
 
         if not sub_trajectories_df.empty:
-            write_to_input_folder(sub_trajectories_df)
-            write_gti_input_trajectories(sub_trajectories_df)
-            write_TrImpute_input_trajectories(sub_trajectories_df)
+            write_trajectories_to_original_folder(sub_trajectories_df)
 
 def extract_harbors_df() -> gpd.GeoDataFrame:    
     df = pd.read_csv(HARBORS_FILE, na_values=['Unknown','Undefined']) 
@@ -164,50 +158,64 @@ def extract_harbors_df() -> gpd.GeoDataFrame:
     
     return gdf
 
-def write_gti_input_trajectories(gdf: gpd.GeoDataFrame):    
+def write_trajectories_to_original_folder(gdf: gpd.GeoDataFrame):
     if (gdf.empty):
-        return
-    
-    os.makedirs(GTI_INPUT_FOLDER, exist_ok=True)  # Create the folder if it doesn't exist
-    
-    current_files = os.listdir(GTI_INPUT_FOLDER)
-    trip_id = len(current_files)
-
-    for _, trajectories in gdf.groupby(['sub_trajectory_id']):        
-        file_path = os.path.join(GTI_INPUT_FOLDER, f"trip_{trip_id}.txt")
-        trajectories[['latitude', 'longitude', 'timestamp']].reset_index(drop=True).to_csv(file_path, sep=',', index=True, header=False, mode='w')
-        trip_id += 1
-
-def write_TrImpute_input_trajectories(gdf: gpd.GeoDataFrame):
-    if (gdf.empty):
-        return
-    
-    os.makedirs(TRIMPUTE_INPUT_FOLDER, exist_ok=True)  # Create the folder if it doesn't exist
-    
-    current_files = os.listdir(TRIMPUTE_INPUT_FOLDER)
-
-    trip_id = len(current_files)
-    
-    for _, sub_trajectories in gdf.groupby(['sub_trajectory_id']):  
-        if len(sub_trajectories) < 2:
-            continue      
-        file_path = os.path.join(TRIMPUTE_INPUT_FOLDER, f"trip_{trip_id}.txt")
-        sub_trajectories[['latitude', 'longitude', 'timestamp']].reset_index(drop=True).to_csv(file_path, sep=',', index=True, header=False, mode='w')
-        trip_id += 1
+            return
         
-def write_to_input_folder(gdf: gpd.GeoDataFrame):
-    if (gdf.empty):
-        return
-    
     for _, sub_trajectories in gdf.groupby('sub_trajectory_id'):
         if len(sub_trajectories) < 2:
             continue
         
-        folder_path = os.path.join(INPUT_FOLDER, str(sub_trajectories.iloc[0].mmsi))
-        os.makedirs(folder_path, exist_ok=True)  # Create the folder if it doesn't exist
+        datetime_object = dt.datetime.utcfromtimestamp(sub_trajectories.iloc[0].timestamp)
+        str_datetime = datetime_object.strftime('%d/%m/%Y %H:%M:%S').replace('/', '-').replace(' ', '_')
+        folder_name = str(sub_trajectories.iloc[0].mmsi)
+        file_name = f'{folder_name}_{str_datetime}.txt'
         
-        dt_object = dt.datetime.utcfromtimestamp(sub_trajectories.iloc[0].timestamp)
-        dt_str = dt_object.strftime('%d/%m/%Y %H:%M:%S').replace('/', '-').replace(' ', '_')
-            
-        file_path = os.path.join(folder_path, f'{dt_str}.txt')        
-        sub_trajectories[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].reset_index(drop=True).to_csv(file_path, sep=',', index=True, header=True, mode='w')
+        folder_path = os.path.join(ORIGINAL_FOLDER, folder_name)
+        
+        os.makedirs(folder_path, exist_ok=True)  # Create the folder if it doesn't exist
+       
+        file_path = os.path.join(folder_path, file_name)
+       
+        write_trajectories(file_path, sub_trajectories)     
+
+def write_trajectories_for_area(file_name: str, sub_trajectories: gpd.GeoDataFrame):
+    return
+
+def write_trajectories_for_area_all(file_name: str, sub_trajectories: gpd.GeoDataFrame):
+    return
+
+def write_60_minute_split_trajectory(file_name: str, folder:str, sub_trajectories: gpd.GeoDataFrame):
+    df_hour = sub_trajectories.copy()
+    df_hour['hour'] = df_hour['timestamp'] // 3600
+
+    # Step 2: Group by the 'hour' column and select the first row of each group
+    df_hour = df_hour.groupby('hour').first().reset_index(drop=True)
+    
+    folder_name = f'{folder}/60'
+    folder_path = os.path.join(INPUT_FOLDER, folder_name)
+    
+    os.makedirs(folder_path, exist_ok=True)  # Create the folder if it doesn't exist
+    
+    file_path = os.path.join(folder_path, file_name)
+    
+    write_trajectories(file_path, df_hour)
+
+def write_30_minute_split_trajectory(file_name: str, folder: str, sub_trajectories: gpd.GeoDataFrame):
+    df_thirty = sub_trajectories.copy()
+    df_thirty['30min_interval'] = df_thirty['timestamp'] // 1800
+
+    # Step 2: Group by the 'hour' column and select the first row of each group
+    df_thirty = df_thirty.groupby('30min_interval').first().reset_index(drop=True)
+    
+    folder_name = f'{folder}/30'
+    folder_path = os.path.join(df_thirty, folder_name)
+    
+    os.makedirs(folder_path, exist_ok=True)  # Create the folder if it doesn't exist
+    
+    write_trajectories(file_name, df_thirty)
+def write_15_minute_split_trajectory(file_name: str, sub_trajectories: gpd.GeoDataFrame):
+    return
+
+def write_trajectories(file_path:str, sub_trajectories: gpd.GeoDataFrame):
+    sub_trajectories[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].reset_index(drop=True).to_csv(file_path, sep=',', index=True, header=True, mode='w')
