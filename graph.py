@@ -62,7 +62,7 @@ speed_between_points = []
 points_to_consider = 0
 error_proned_points = 0
 potential_clusters = []
-trajectories = []
+ais_points = []
 
 for dirpath, dirnames, filenames in os.walk(INPUT_FOLDER_PATH):
     for filename in filenames:
@@ -94,13 +94,10 @@ for dirpath, dirnames, filenames in os.walk(INPUT_FOLDER_PATH):
                             
             #gdf_curr[['latitude', 'longitude', 'timestamp', 'cog', 'draught', 'ship_type', 'speed']].to_csv(f'{META_TRAJECTORIES_PATH}/{filename}.txt', sep=',', index=True, header=True, mode='w')     
             
-            trajectories.extend(gdf_curr[['latitude', 'longitude', 'cog']].to_numpy())
-            
-trajectories_df = pd.DataFrame(trajectories, columns=['latitude', 'longitude', 'cog']) 
-gdf = gpd.GeoDataFrame(trajectories_df, geometry=gpd.points_from_xy(trajectories_df.longitude, trajectories_df.latitude))
+            ais_points.extend(gdf_curr[['latitude', 'longitude']].to_numpy())
 
-data = gdf[['latitude', 'longitude', 'cog']].to_numpy()
-
+# ais_points = np.unique(ais_points)
+# kd_tree = cKDTree(ais_points)
 # # Calculate adjusted distance matrix
 # distance_matrix = pairwise_distances(data, metric=adjusted_distance)
 
