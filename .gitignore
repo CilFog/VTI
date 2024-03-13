@@ -177,3 +177,5 @@ data/test_data/*.csv
 data/logs/*.txt
 
 data/meta_trajectories/
+
+data/original/

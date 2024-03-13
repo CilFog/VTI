@@ -4,12 +4,14 @@ import pandas as pd
 import geopandas as gpd
 import datetime as dt
 from shapely import wkb
+from rdp import rdp
 from split_tractories import split_trajectories_from_df
 from logs.logging import setup_logger
 
 AIS_CSV_FOLDER = os.path.join(os.path.dirname(__file__), 'ais_csv')
 ORIGINAL_FOLDER = os.path.join(os.path.dirname(__file__), 'original')
 INPUT_FOLDER = os.path.join(os.path.dirname(__file__), 'input_graph')
+INPUT_FOLDER_ALL = os.path.join(INPUT_FOLDER, 'all')
 OUTPUT_FOLDER = os.path.join(os.path.dirname(__file__), 'output')
 TEST_DATA_FOLDER = os.path.join(os.path.dirname(__file__), 'test_data')
 TXT_DATA_FOLDER = os.path.join(os.path.dirname(__file__), 'txtfiles')
@@ -42,9 +44,7 @@ def extract_trajectories_from_csv_files():
             create_trajectories_files(gdf=df)
         else:
             logging.warning(f'No data was extracted from {file_name}')
-            
-        os.remove(file_path)
-    
+                
     logging.info('Finished creating trajecatories. Terminating')
 
 def cleanse_csv_file_and_convert_to_df(file_path: str):
@@ -185,38 +185,151 @@ def write_trajectories_for_area(file_name: str, sub_trajectories: gpd.GeoDataFra
 def write_trajectories_for_area_all(file_name: str, sub_trajectories: gpd.GeoDataFrame):
     return
 
-def write_60_minute_split_trajectory(file_name: str, folder:str, sub_trajectories: gpd.GeoDataFrame):
-    df_hour = sub_trajectories.copy()
-    df_hour['hour'] = df_hour['timestamp'] // 3600
+def write_ep02_sparsified_trajectories(folder_destination: str): 
+    logging.info(f'Began sparsifiying trajectories with epislon of 0.2')
+    folder_destination = os.path.join(folder_destination, 'rdp_02')
+    os.makedirs(folder_destination, exist_ok=True)  # Create the folder if it doesn't exist
+    
+    for root, folder, files in os.walk(ORIGINAL_FOLDER):
+        for file in files:
+            file_path = os.path.join(root, file)
+            
+            trajectory_df = get_trajectory_df_from_txt(file_path=file_path)
+            sparsified_trajectory_df = get_sparsified_trajectory_given_threshold(trajectory_df, epsilon=0.2)
+            
+            new_file_path = os.path.join(folder_destination, file)
+            write_trajectories(new_file_path, sub_trajectory=sparsified_trajectory_df)
+    logging.info('Finished sparsifying trajectories')
 
-    # Step 2: Group by the 'hour' column and select the first row of each group
-    df_hour = df_hour.groupby('hour').first().reset_index(drop=True)
-    
-    folder_name = f'{folder}/60'
-    folder_path = os.path.join(INPUT_FOLDER, folder_name)
-    
-    os.makedirs(folder_path, exist_ok=True)  # Create the folder if it doesn't exist
-    
-    file_path = os.path.join(folder_path, file_name)
-    
-    write_trajectories(file_path, df_hour)
+def write_ep04_sparsified_trajectories(folder_destination: str):
+    logging.info(f'Began sparsifiying trajectories with epislon of 0.4')
+    folder_destination = os.path.join(folder_destination, 'rdp_04')
+    os.makedirs(folder_destination, exist_ok=True)  # Create the folder if it doesn't exist
 
-def write_30_minute_split_trajectory(file_name: str, folder: str, sub_trajectories: gpd.GeoDataFrame):
-    df_thirty = sub_trajectories.copy()
-    df_thirty['30min_interval'] = df_thirty['timestamp'] // 1800
+    for root, folder, files in os.walk(ORIGINAL_FOLDER):
+        for file in files:
+            file_path = os.path.join(root, file)
+            
+            trajectory_df = get_trajectory_df_from_txt(file_path=file_path)
+            sparsified_trajectory_df = get_sparsified_trajectory_given_threshold(trajectory_df, epsilon=0.4)
+            
+            new_file_path = os.path.join(folder_destination, file)
+            write_trajectories(new_file_path, sub_trajectory=sparsified_trajectory_df)
+    logging.info('Finished sparsifying trajectories')
 
-    # Step 2: Group by the 'hour' column and select the first row of each group
-    df_thirty = df_thirty.groupby('30min_interval').first().reset_index(drop=True)
+def write_ep06_sparsified_trajectories(folder_destination: str):
+    logging.info(f'Began sparsifiying trajectories with epislon of 0.6')
     
-    folder_name = f'{folder}/30'
-    folder_path = os.path.join(df_thirty, folder_name)
+    folder_destination = os.path.join(folder_destination, 'rdp_06')
+    os.makedirs(folder_destination, exist_ok=True)  # Create the folder if it doesn't exist
     
-    os.makedirs(folder_path, exist_ok=True)  # Create the folder if it doesn't exist
-    
-    write_trajectories(file_name, df_thirty)
+    for root, folder, files in os.walk(ORIGINAL_FOLDER):
+        for file in files:
+            file_path = os.path.join(root, file)
+            
+            trajectory_df = get_trajectory_df_from_txt(file_path=file_path)
+            sparsified_trajectory_df = get_sparsified_trajectory_given_threshold(trajectory_df, epsilon=0.6)
+            
+            new_file_path = os.path.join(folder_destination, file)
+            write_trajectories(new_file_path, sub_trajectory=sparsified_trajectory_df)
+    logging.info('Finished sparsifying trajectories')
 
-def write_15_minute_split_trajectory(file_name: str, sub_trajectories: gpd.GeoDataFrame):
-    return
+def write_ep08_sparsified_trajectories(folder_destination: str):
+    logging.info(f'Began sparsifiying trajectories with epislon of 0.8')
+    folder_destination = os.path.join(folder_destination, 'rdp_08')
+    os.makedirs(folder_destination, exist_ok=True)  # Create the folder if it doesn't exist
+    
+    for root, folder, files in os.walk(ORIGINAL_FOLDER):
+        for file in files:
+            file_path = os.path.join(root, file)
+            
+            trajectory_df = get_trajectory_df_from_txt(file_path=file_path)
+            sparsified_trajectory_df = get_sparsified_trajectory_given_threshold(trajectory_df, epsilon=0.8)
+            
+            new_file_path = os.path.join(folder_destination, file)
+            write_trajectories(new_file_path, sub_trajectory=sparsified_trajectory_df)
+            
+    logging.info('Finished sparsifying trajectories')
 
-def write_trajectories(file_path:str, sub_trajectories: gpd.GeoDataFrame):
-    sub_trajectories[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].reset_index(drop=True).to_csv(file_path, sep=',', index=True, header=True, mode='w')
+def get_sparsified_trajectory_given_threshold(trajectory_df: gpd.GeoDataFrame, epsilon:float):
+    trajectory_values = trajectory_df[['latitude', 'longitude']].values.tolist()
+    simplified_trajectory_values = rdp(trajectory_values, episilon=epsilon)
+    
+    simplified_df = pd.DataFrame(simplified_trajectory_values, columns=['latitude', 'longitude'])
+    merged_df = pd.merge(simplified_df, df, on=['latitude', 'longitude'])
+    
+    return merged_df
+        
+def write_trajectories(file_path:str, sub_trajectory: gpd.GeoDataFrame):
+    sub_trajectory[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].reset_index(drop=True).to_csv(file_path, sep=',', index=True, header=True, mode='w')
+
+def get_trajectory_df_from_txt(file_path:str) -> gpd.GeoDataFrame:
+    """
+    Summary:
+        Reads a trajectory txt file and returns is as a dataframe with srid 3857
+        
+    Args:
+        file_path (str): file_path to txt file with trajectory
+
+    Returns:
+        gpd.GeoDataFrame: trajectory as a dataframe
+    """
+    try:
+        df = pd.read_csv(file_path, header=0)
+        
+        if (df.empty):
+            logging.warning(f'No coordinates to extract for {file_path}')
+            print('issue......')
+            quit()
+
+        df = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df['longitude'], df['latitude']), crs="EPSG:4326")
+        df = df.to_crs(epsg="3857") # to calculate in meters
+        return df
+    except Exception as e:
+        logging.warning(f'Error occurred trying to retrieve trajectory csv: {repr(e)}')
+
+def remove_positions_with_sog_below_threshold(sog: float):
+    logging.info(f'Updating existing files with sog below {sog}')
+    for root, folder, files in os.walk(ORIGINAL_FOLDER):
+        for file in files:
+            file_path = os.path.join(root, file)
+            
+            trajectory_df:gpd.GeoDataFrame = get_trajectory_df_from_txt(file_path=file_path)
+            
+            if (trajectory_df.empty):
+                logging.warning(f'fix for {file_path}')
+                quit()
+            
+            filtered_df = trajectory_df[trajectory_df['sog'] > sog]
+            
+            if len(filtered_df) < 2:
+                os.remove(file_path)
+                continue
+            
+            filtered_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].reset_index(drop=True).to_csv(file_path, sep=',', index=True, header=True, mode='w')
+            datetime_object = dt.datetime.utcfromtimestamp(filtered_df.iloc[0].timestamp)
+            mmsi = root.split('/')[-1]
+            str_datetime = datetime_object.strftime('%d/%m/%Y %H:%M:%S').replace('/', '-').replace(' ', '_')            
+            file_name = f'{mmsi}_{str_datetime}.txt'
+            new_file_path = os.path.join(root, file_name)
+            os.rename(file_path, new_file_path)
+    logging.info('Finished update')
+
+def rename_files():
+    logging.info(f'renaming files')
+    for root, folder, files in os.walk(ORIGINAL_FOLDER):
+        for file in files:
+            file_path = os.path.join(root, file)
+            
+            trajectory_df:gpd.GeoDataFrame = get_trajectory_df_from_txt(file_path=file_path)
+            
+            datetime_object = dt.datetime.utcfromtimestamp(trajectory_df.iloc[0].timestamp)
+            mmsi = root.split('/')[-1]
+            str_datetime = datetime_object.strftime('%d/%m/%Y %H:%M:%S').replace('/', '-').replace(' ', '_')            
+            file_name = f'{mmsi}_{str_datetime}.txt'
+            new_file_path = os.path.join(root, file_name)
+            os.rename(file_path, new_file_path)
+    logging.info('finished')
+
+extract_trajectories_from_csv_files()
+write_ep02_sparsified_trajectories(INPUT_FOLDER_ALL)
