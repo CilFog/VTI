@@ -139,13 +139,13 @@ def create_trajectories_files(gdf: gpd.GeoDataFrame):
     
     harbors_df = extract_harbors_df()
     
-    for mmsi, trajectory_df in gdf.sort_values('timestamp').groupby('mmsi'):
-        logging.info(f'Creating trajectories for mmsi {mmsi}')
-                
-        #trajectory_df.reset_index().to_csv(f'{TEST_DATA_FOLDER}/{mmsi}.csv', index=False)  # Set index=False if you don't want to write row numbers
-        #trajectory_df.reset_index().to_csv(f'{TXT_DATA_FOLDER}/{mmsi}.txt', index=False) 
+    trajectories_df = gdf.sort_values('timestamp').groupby('mmsi')
+    
+    logging.info(f'Began creating trajectories for {trajectories_df.ngroups} mmsi')
+    
+    for mmsi, trajectory_df in trajectories_df:                
         sub_trajectories_df = split_trajectories_from_df(harbors_df=harbors_df, trajectory_df=trajectory_df) 
-
+        
         if not sub_trajectories_df.empty:
             write_trajectories_to_original_folder(sub_trajectories_df)
 

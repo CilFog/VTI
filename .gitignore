@@ -163,7 +163,7 @@ cython_debug/
 #.idea/
 
 data/input/
-
+data/original/*.txt
 data/output/
 
 data/csv/
