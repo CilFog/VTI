@@ -1,4 +1,11 @@
-from get_csv_files import *
+import os
+import tarfile
+import zipfile
+import requests
+from bs4 import BeautifulSoup
+from urllib.request import urlopen
+from sys import stdout
+from logs.logging import setup_logger
 from geopandas import gpd
 from extract_trajectories_from_csv import cleanse_csv_file_and_convert_to_df, create_trajectories_files
 

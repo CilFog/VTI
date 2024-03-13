@@ -158,8 +158,6 @@ def handle_stationary_at_sea(current_sub_trajectory, current_position, is_statio
     stationary_trajectory.append(current_position)
     return (current_sub_trajectory, prev_position, stationary_trajectory)
 
-    
-
 def handle_from_sea_left_harbor(sub_trajectories, current_sub_trajectory, trajectory_in_harbor, current_position, from_harbor, from_sea):
     (state, to_current_sub_trajectory, for_next_sub_trajectory) = get_harbor_state_when_entering_harbor(trajectory_in_harbor)              
    

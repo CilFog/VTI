@@ -214,6 +214,7 @@ def write_30_minute_split_trajectory(file_name: str, folder: str, sub_trajectori
     os.makedirs(folder_path, exist_ok=True)  # Create the folder if it doesn't exist
     
     write_trajectories(file_name, df_thirty)
+
 def write_15_minute_split_trajectory(file_name: str, sub_trajectories: gpd.GeoDataFrame):
     return
 
