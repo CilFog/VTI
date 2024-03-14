@@ -288,7 +288,7 @@ def get_trajectory_df_from_txt(file_path:str) -> gpd.GeoDataFrame:
     except Exception as e:
         logging.warning(f'Error occurred trying to retrieve trajectory csv: {repr(e)}')
 
-def remove_positions_with_sog_below_threshold(sog: float):
+def remove_positions_with_sog_not_above_threshold(sog: float):
     logging.info(f'Updating existing files with sog below {sog}')
     for root, folder, files in os.walk(ORIGINAL_FOLDER):
         for file in files:
@@ -298,21 +298,22 @@ def remove_positions_with_sog_below_threshold(sog: float):
             
             if (trajectory_df.empty):
                 logging.warning(f'fix for {file_path}')
-                quit()
             
             filtered_df = trajectory_df[trajectory_df['sog'] > sog]
             
             if len(filtered_df) < 2:
                 os.remove(file_path)
                 continue
-            
-            filtered_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].reset_index(drop=True).to_csv(file_path, sep=',', index=True, header=True, mode='w')
-            datetime_object = dt.datetime.utcfromtimestamp(filtered_df.iloc[0].timestamp)
-            mmsi = root.split('/')[-1]
-            str_datetime = datetime_object.strftime('%d/%m/%Y %H:%M:%S').replace('/', '-').replace(' ', '_')            
-            file_name = f'{mmsi}_{str_datetime}.txt'
-            new_file_path = os.path.join(root, file_name)
-            os.rename(file_path, new_file_path)
+            elif len(filtered_df) == len(trajectory_df):
+                continue
+            else:
+                filtered_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].reset_index(drop=True).to_csv(file_path, sep=',', index=True, header=True, mode='w')
+                datetime_object = dt.datetime.utcfromtimestamp(filtered_df.iloc[0].timestamp)
+                mmsi = root.split('/')[-1]
+                str_datetime = datetime_object.strftime('%d/%m/%Y %H:%M:%S').replace('/', '-').replace(' ', '_')            
+                file_name = f'{mmsi}_{str_datetime}.txt'
+                new_file_path = os.path.join(root, file_name)
+                os.rename(file_path, new_file_path)
     logging.info('Finished update')
 
 def rename_files():
@@ -331,5 +332,6 @@ def rename_files():
             os.rename(file_path, new_file_path)
     logging.info('finished')
 
-extract_trajectories_from_csv_files()
-write_ep02_sparsified_trajectories(INPUT_FOLDER_ALL)
+#extract_trajectories_from_csv_files()
+remove_positions_with_sog_not_above_threshold(0.0)
+#write_ep02_sparsified_trajectories(INPUT_FOLDER_ALL)
