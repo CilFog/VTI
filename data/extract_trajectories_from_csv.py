@@ -351,9 +351,9 @@ def filter_original_trajectories(sog_threshold: float):
                 mmsi = root.split('/')[-1]
                 str_datetime = datetime_object.strftime('%d/%m/%Y %H:%M:%S').replace('/', '-').replace(' ', '_')            
                 file_name = f'{mmsi}_{str_datetime}.txt'
+                os.remove(file_path)
                 new_file_path = os.path.join(root, file_name)
                 filtered_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].reset_index(drop=True).to_csv(new_file_path, sep=',', index=True, header=True, mode='w')
-                os.remove(file_path)
             
             # nothing to update
             elif not some_null_draught and len(filtered_df) == len(trajectory_df):
@@ -375,12 +375,9 @@ def filter_original_trajectories(sog_threshold: float):
                 mmsi = root.split('/')[-1]
                 str_datetime = datetime_object.strftime('%d/%m/%Y %H:%M:%S').replace('/', '-').replace(' ', '_')            
                 file_name = f'{mmsi}_{str_datetime}.txt'
+                os.remove(file_path)
                 new_file_path = os.path.join(root, file_name)
                 filtered_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].reset_index(drop=True).to_csv(new_file_path, sep=',', index=True, header=True, mode='w')
-                os.remove(file_path)
-        
-        if not os.listdir(root):
-            os.rmdir(root)
     
     finished_time = t.perf_counter() - initial_time
     logging.info(f'Removed_due_to_ship: {removed_ship_type}\nRemoved_due_to_sog: {removed_sog}\nRemoved_due_to_draught: {removed_draught}\ntime: Elapsed time: {finished_time:0.4f} seconds"')   
