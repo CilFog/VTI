@@ -185,81 +185,6 @@ def write_trajectories_for_area(file_name: str, sub_trajectories: gpd.GeoDataFra
 
 def write_trajectories_for_area_all(file_name: str, sub_trajectories: gpd.GeoDataFrame):
     return
-
-def write_ep02_sparsified_trajectories(folder_destination: str): 
-    logging.info(f'Began sparsifiying trajectories with epislon of 0.2')
-    folder_destination = os.path.join(folder_destination, 'rdp_02')
-    os.makedirs(folder_destination, exist_ok=True)  # Create the folder if it doesn't exist
-    
-    for root, folder, files in os.walk(ORIGINAL_FOLDER):
-        for file in files:
-            file_path = os.path.join(root, file)
-            
-            trajectory_df = get_trajectory_df_from_txt(file_path=file_path)
-            sparsified_trajectory_df = get_sparsified_trajectory_given_threshold(trajectory_df, epsilon=0.2)
-            
-            new_file_path = os.path.join(folder_destination, file)
-            write_trajectories(new_file_path, sub_trajectory=sparsified_trajectory_df)
-    logging.info('Finished sparsifying trajectories')
-
-def write_ep04_sparsified_trajectories(folder_destination: str):
-    logging.info(f'Began sparsifiying trajectories with epislon of 0.4')
-    folder_destination = os.path.join(folder_destination, 'rdp_04')
-    os.makedirs(folder_destination, exist_ok=True)  # Create the folder if it doesn't exist
-
-    for root, folder, files in os.walk(ORIGINAL_FOLDER):
-        for file in files:
-            file_path = os.path.join(root, file)
-            
-            trajectory_df = get_trajectory_df_from_txt(file_path=file_path)
-            sparsified_trajectory_df = get_sparsified_trajectory_given_threshold(trajectory_df, epsilon=0.4)
-            
-            new_file_path = os.path.join(folder_destination, file)
-            write_trajectories(new_file_path, sub_trajectory=sparsified_trajectory_df)
-    logging.info('Finished sparsifying trajectories')
-
-def write_ep06_sparsified_trajectories(folder_destination: str):
-    logging.info(f'Began sparsifiying trajectories with epislon of 0.6')
-    
-    folder_destination = os.path.join(folder_destination, 'rdp_06')
-    os.makedirs(folder_destination, exist_ok=True)  # Create the folder if it doesn't exist
-    
-    for root, folder, files in os.walk(ORIGINAL_FOLDER):
-        for file in files:
-            file_path = os.path.join(root, file)
-            
-            trajectory_df = get_trajectory_df_from_txt(file_path=file_path)
-            sparsified_trajectory_df = get_sparsified_trajectory_given_threshold(trajectory_df, epsilon=0.6)
-            
-            new_file_path = os.path.join(folder_destination, file)
-            write_trajectories(new_file_path, sub_trajectory=sparsified_trajectory_df)
-    logging.info('Finished sparsifying trajectories')
-
-def write_ep08_sparsified_trajectories(folder_destination: str):
-    logging.info(f'Began sparsifiying trajectories with epislon of 0.8')
-    folder_destination = os.path.join(folder_destination, 'rdp_08')
-    os.makedirs(folder_destination, exist_ok=True)  # Create the folder if it doesn't exist
-    
-    for root, folder, files in os.walk(ORIGINAL_FOLDER):
-        for file in files:
-            file_path = os.path.join(root, file)
-            
-            trajectory_df = get_trajectory_df_from_txt(file_path=file_path)
-            sparsified_trajectory_df = get_sparsified_trajectory_given_threshold(trajectory_df, epsilon=0.8)
-            
-            new_file_path = os.path.join(folder_destination, file)
-            write_trajectories(new_file_path, sub_trajectory=sparsified_trajectory_df)
-            
-    logging.info('Finished sparsifying trajectories')
-
-def get_sparsified_trajectory_given_threshold(trajectory_df: gpd.GeoDataFrame, epsilon:float):
-    trajectory_values = trajectory_df[['latitude', 'longitude']].values.tolist()
-    simplified_trajectory_values = rdp(trajectory_values, episilon=epsilon)
-    
-    simplified_df = pd.DataFrame(simplified_trajectory_values, columns=['latitude', 'longitude'])
-    merged_df = pd.merge(simplified_df, df, on=['latitude', 'longitude'])
-    
-    return merged_df
         
 def write_trajectories(file_path:str, sub_trajectory: gpd.GeoDataFrame):
     sub_trajectory[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].reset_index(drop=True).to_csv(file_path, sep=',', index=True, header=True, mode='w')
@@ -301,14 +226,14 @@ def filter_original_trajectories(sog_threshold: float):
         for file in files:
             file_path = os.path.join(root, file)
             trajectory_df:gpd.GeoDataFrame = get_trajectory_df_from_txt(file_path=file_path)
-
+            
             only_null_ship_type = trajectory_df.ship_type.isnull().all() or trajectory_df.ship_type.isna().all()
             
             if only_null_ship_type:
                 removed_ship_type += 1
                 os.remove(file_path)
                 
-                if not os.listdir(root):
+                if not any(os.scandir(root)):
                     os.rmdir(root)
                 continue
             
@@ -320,16 +245,16 @@ def filter_original_trajectories(sog_threshold: float):
             if trajectory_df.iloc[0].ship_type.lower() not in ship_types:
                 removed_ship_type += 1
                 os.remove(file_path)
-                if not os.listdir(root):
+                if not any(os.scandir(root)):
                     os.rmdir(root)
                 continue
             
-            filtered_df = trajectory_df[trajectory_df['sog'] > sog_threshold]
+            filtered_df = trajectory_df[trajectory_df['sog'] > sog_threshold].copy()
             
             if len(filtered_df) < 2:
                 removed_sog += 1
                 os.remove(file_path)
-                if not os.listdir(root):
+                if not any(os.scandir(root)):
                     os.rmdir(root)
                 continue
             
@@ -338,7 +263,7 @@ def filter_original_trajectories(sog_threshold: float):
             if only_null_draught:
                 removed_draught += 1
                 os.remove(file_path)
-                if not os.listdir(root):
+                if not any(os.scandir(root)):
                     os.rmdir(root)
                 
                 continue
@@ -364,7 +289,7 @@ def filter_original_trajectories(sog_threshold: float):
                 max_draught = filtered_df['draught'].max()
                 filtered_df['draught'] = filtered_df['draught'].fillna(max_draught)
                 filtered_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].reset_index(drop=True).to_csv(file_path, sep=',', index=True, header=True, mode='w')
-            
+                
             # both updated
             else:
                 max_draught = filtered_df['draught'].max()
@@ -430,6 +355,13 @@ def sparcify_original_trajectories_for_folder(folder_path: str):
     removed_avg = removed/num_files
     logging.info(f'Removed on avg. pr trajectory: {removed_avg}. Removed in total: {removed}/{total_number_of_points}. Elapsed time: {finished_time:0.4f} seconds')   
 
-#extract_trajectories_from_csv_files()
-#filter_original_trajectories(sog_threshold=0.0)
+extract_trajectories_from_csv_files()
+filter_original_trajectories(sog_threshold=0.0)
+
+for root, folder, files in os.walk(ORIGINAL_FOLDER):
+    is_empty = (len(root) == 0)
+    if (is_empty):
+        print(':((')
+
+
 #sparcify_original_trajectories_for_folder(folder_path=INPUT_FOLDER_ALL)
