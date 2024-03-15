@@ -100,7 +100,6 @@ def split_to_sub_trajectories_using_harbor(harbors_df: gpd.GeoDataFrame, traject
             
         # Convert to DataFrame
         sub_trajectories_df = pd.DataFrame(flattened_sub_trajectories)
-        # sub_trajectories_df = sub_trajectories_df[sub_trajectories_df['sog'] > 0.0]
 
         return sub_trajectories_df
     
