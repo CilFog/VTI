@@ -1,19 +1,19 @@
 import numpy as np
-import geopandas as gp
+import geopandas as gpd
 from geopy.distance import geodesic
 
 THETA_ANGLE_PENALTY = 50
 
-def calculate_initial_compass_bearing(df_curr:gp.GeoDataFrame, df_next:gp.GeoDataFrame) -> gp.GeoDataFrame:
+def calculate_initial_compass_bearing(df_curr:gpd.GeoDataFrame, df_next:gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """
     Summary: Calculates the compas bearing between consecutive rows in a dataframe
 
     Args:
-        df_curr (gp.GeoDataFrame): dataframe containing all first positions
-        df_next (gp.GeoDataFrame): dataframe containing all next positions
+        df_curr (gpd.GeoDataFrame): dataframe containing all first positions
+        df_next (gpd.GeoDataFrame): dataframe containing all next positions
 
     Returns:
-        gp.GeoDataFrame: df_curr with a bearing
+        gpd.GeoDataFrame: df_curr with a bearing
     """
 
     assert len(df_curr) == len(df_next), "DataFrames must have the same length"
@@ -35,7 +35,7 @@ def calculate_initial_compass_bearing(df_curr:gp.GeoDataFrame, df_next:gp.GeoDat
 
     return bearing_deg
 
-def get_haversine_dist_df_in_meters(df_curr:gp.GeoDataFrame, df_next:gp.GeoDataFrame) -> gp.GeoDataFrame:
+def get_haversine_dist_df_in_meters(df_curr:gpd.GeoDataFrame, df_next:gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """
     Calculate the great circle distance between two points
     on the earth (specified in decimal degrees)
@@ -54,6 +54,19 @@ def get_haversine_dist_df_in_meters(df_curr:gp.GeoDataFrame, df_next:gp.GeoDataF
     dist.fillna(0, inplace=True)
     
     return dist
+
+def get_radian_and_radian_diff_columns(df_curr:gpd.GeoDataFrame, df_next:gpd.GeoDataFrame) -> tuple[gpd.GeoDataFrame,gpd.GeoDataFrame]:
+    # Convert to radians
+    df_curr['lat_rad'] = np.radians(df_curr['latitude'])
+    df_curr['lon_rad'] = np.radians(df_curr['longitude'])
+    df_next['lat_rad'] = np.radians(df_next['latitude'])
+    df_next['lon_rad'] = np.radians(df_next['longitude'])
+    
+    # Calculate differences
+    df_curr['diff_lon'] = df_curr['lon_rad'] - df_next['lon_rad']
+    df_curr['diff_lat'] = df_curr['lat_rad'] - df_next['lat_rad']
+    
+    return (df_curr.fillna(0), df_next)
 
 # Function to calculate distance and adjust based on COG
 def adjusted_distance(x, y):
