@@ -379,7 +379,7 @@ def sparcify_original_trajectories_80_percent_for_folder(folder_path: str):
     removed_avg = removed/num_files
     logging.info(f'Removed on avg. pr trajectory: {removed_avg}. Removed in total: {removed}/{total_number_of_points}. Elapsed time: {finished_time:0.4f} seconds')   
 
-def sparcify_original_trajectories(folder_path: str):
+def sparcify_realisticly_original_trajectories(folder_path: str):
     initial_time = t.perf_counter()
     removed = 0
     removed_avg = 0
@@ -389,48 +389,60 @@ def sparcify_original_trajectories(folder_path: str):
      
     for root, dirs, files in os.walk(ORIGINAL_FOLDER):
         num_files += len(files)
+        
         for file in files:
             file_path = os.path.join(root, file)
-            gdf_curr:gpd.GeoDataFrame = get_trajectory_df_from_txt(file_path=file_path)
+            trajectory_df:gpd.GeoDataFrame = get_trajectory_df_from_txt(file_path=file_path)
             
             file_name = file.split('/')[-1]
-            vessel_folder = gdf_curr.iloc[0].ship_type.replace('/', '_')
+            file_folder = root.split('/')[-1]
+            vessel_folder = trajectory_df.iloc[0].ship_type.replace('/', '_')
             vessel_folder_path = f'{folder_path}/{vessel_folder}'
-            new_file_path = os.path.join(vessel_folder_path, file_name)
+            new_file_path = os.path.join(vessel_folder_path, file_folder)
             
-            os.makedirs(vessel_folder_path, exist_ok=True)  # Create the folder if it doesn't exist
+            os.makedirs(new_file_path, exist_ok=True)  # Create the folder if it doesn't exist
         
-            if len(gdf_curr) >= 2:
+            if len(trajectory_df) >= 2:
                 # calculate bearing between consecutive points
-                gdf_next = gdf_curr.shift(-1)
-                gdf_curr, gdf_next = utils.get_radian_and_radian_diff_columns(gdf_curr, gdf_next)
                 
-                bearing_df = utils.calculate_initial_compass_bearing(df_curr=gdf_curr, df_next=gdf_next)
-                gdf_curr['cog'] = gdf_curr['cog'].fillna(bearing_df)
+                trajectory_df['time_diff'] = trajectory_df.timestamp.diff().fillna(0)
+                
+                gdf_next = trajectory_df.shift(-1)
+                trajectory_df, gdf_next = utils.get_radian_and_radian_diff_columns(trajectory_df, gdf_next)
+                
+                bearing_df = utils.calculate_initial_compass_bearing(df_curr=trajectory_df, df_next=gdf_next)
+                trajectory_df['cog'] = trajectory_df['cog'].fillna(bearing_df)
 
-                gdf_curr['dist'] = utils.get_haversine_dist_df_in_meters(df_curr=gdf_curr, df_next=gdf_next).fillna(0)
-                # Calculate the time difference between consecutive points
-                time_differences = gdf_next['timestamp'] - gdf_curr['timestamp']
-                
+                trajectory_df['dist'] = utils.get_haversine_dist_df_in_meters(df_curr=trajectory_df, df_next=gdf_next).fillna(0)
+     
                 # # Calculate speed for points with subsequent points available
-                speeds = gdf_curr['dist'] / time_differences
+                speeds = trajectory_df['dist'] / trajectory_df['time_diff']
                 speeds.fillna(0, inplace=True)
                 
-                gdf_curr['speed'] = speeds
-                                
-                # gdf_curr[['latitude', 'longitude', 'timestamp', 'cog', 'draught', 'ship_type', 'speed']].to_csv(f'{META_TRAJECTORIES_PATH}/{filename}.txt', sep=',', index=True, header=True, mode='w')     
+                trajectory_df['speed'] = speeds
                 
-            # total_number_of_points += len(trajectory_df)
-            # removed += len(trajectory_df) - len(sparsified_trajectory)
+                mask = (trajectory_df['speed'] >= 3) & (trajectory_df['time_diff'] >= 15) | \
+                        (trajectory_df['speed'] < 3) & (trajectory_df['time_diff'] >= 210)
+
+                # Ensure the first and last row are always included
+                mask.iloc[0] = True # Ensure the first row is always included
+                mask.iloc[-1] = True # Ensure the last row is always included
+                
+                # Filter DataFrame
+                sparse_trajectory_df = trajectory_df[mask]                
+                                
+                sparse_trajectory_df[['latitude', 'longitude', 'timestamp', 'cog', 'draught', 'ship_type', 'speed']].to_csv(f'{new_file_path}/{file_name}', sep=',', index=True, header=True, mode='w')     
+                
+                total_number_of_points += len(trajectory_df)
+                removed += len(trajectory_df) - len(sparse_trajectory_df)
             
     finished_time = t.perf_counter() - initial_time
     removed_avg = removed/num_files
     logging.info(f'Removed on avg. pr trajectory: {removed_avg}. Removed in total: {removed}/{total_number_of_points}. Elapsed time: {finished_time:0.4f} seconds')   
 
-
 #extract_trajectories_from_csv_files()
 #filter_original_trajectories(sog_threshold=0.0)
-sparcify_original_trajectories(INPUT_ALL_TEST_FOLDER)
+sparcify_realisticly_original_trajectories(INPUT_ALL_TEST_FOLDER)
 for root, folder, files in os.walk(ORIGINAL_FOLDER):
     is_empty = (len(files) == 0)
     if (is_empty):
