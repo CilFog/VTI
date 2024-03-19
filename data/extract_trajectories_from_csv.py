@@ -335,6 +335,121 @@ def filter_original_trajectories(sog_threshold: float):
     finished_time = t.perf_counter() - initial_time
     logging.info(f'\nRemoved_due_to_ship: {removed_ship_type}\nRemoved_due_to_sog: {removed_sog}\nRemoved_due_to_draught: {removed_draught}\nTotal removed: ({removed}/{initial_num})\nTotal moved to new location: ({moved}/{initial_num})\nElapsed time: {finished_time:0.4f} seconds"')   
 
+def filter_original_trajectories_windows(sog_threshold: float):
+    removed_ship_type = 0
+    removed_sog = 0
+    removed_draught = 0
+    ship_types = ['fishing', 'tanker', 'tug', 'cargo', 'passenger', 'dredging', 'law enforcement', 'anti-pollution', 'pilot', 'pleasure', 'towing', 'port tender', 'diving', 'towing long/wide', ''] 
+    moved = 0
+    initial_num = 0
+    deleted = 0
+    try:
+        initial_time = t.perf_counter()
+        logging.info('Began filtering original trajectories')   
+        for root, folder, files in os.walk(ORIGINAL_FOLDER):
+            for file in files:
+                file_path = os.path.join(root, file)
+                trajectory_df:gpd.GeoDataFrame = get_trajectory_df_from_txt(file_path=file_path)
+                initial_num += 1
+                only_null_ship_type = trajectory_df.ship_type.isnull().all() or trajectory_df.ship_type.isna().all()
+                
+                if only_null_ship_type:
+                    removed_ship_type += 1
+                    os.remove(file_path)
+                    
+                    if not any(os.scandir(root)):
+                        os.rmdir(root)
+                    continue
+                
+                some_null_ship_type = trajectory_df.ship_type.isnull().any() or trajectory_df.ship_type.isna().any()
+                if some_null_ship_type:
+                    first_non_null_index = trajectory_df['ship_type'].first_valid_index()
+                    trajectory_df = trajectory_df['ship_type'].fillna(trajectory_df.loc[first_non_null_index, 'ship_type'])
+
+                if trajectory_df.iloc[0].ship_type.lower() not in ship_types:
+                    removed_ship_type += 1
+                    os.remove(file_path)
+                    if not any(os.scandir(root)):
+                        os.rmdir(root)
+                    continue
+                
+                filtered_df = trajectory_df[trajectory_df['sog'] > sog_threshold].copy()
+                
+                if len(filtered_df) < 2:
+                    removed_sog += 1
+                    os.remove(file_path)
+                    if not any(os.scandir(root)):
+                        os.rmdir(root)
+                    continue
+                
+                only_null_draught = filtered_df.draught.isnull().all() or filtered_df.draught.isna().all()
+                
+                if only_null_draught:
+                    removed_draught += 1
+                    os.remove(file_path)
+                    if not any(os.scandir(root)):
+                        os.rmdir(root)
+                    
+                    continue
+                    
+                some_null_draught = filtered_df.draught.isnull().any() or filtered_df.draught.isna().any()
+                
+                file_name = file.split('/')[-1]
+                vessel_folder = trajectory_df.iloc[0].ship_type.replace('/', '_')
+                mmsi = root.split('/')[-1]
+                new_folder_path = f'{ORIGINAL_FOLDER}/{vessel_folder}/{mmsi}'
+                os.makedirs(new_folder_path, exist_ok=True)  # Create the folder if it doesn't exist
+
+                # only sog updated
+                if not some_null_draught and not len(filtered_df) == len(trajectory_df):
+                    datetime_object = dt.datetime.utcfromtimestamp(filtered_df.iloc[0].timestamp)
+                    str_datetime = datetime_object.strftime('%d/%m/%Y %H:%M:%S').replace('/', '-').replace(' ', '_').replace(':','-')            
+                    file_name = f'{mmsi}_{str_datetime}.txt'
+                    new_file_path = os.path.join(new_folder_path, file_name)
+                    filtered_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].reset_index(drop=True).to_csv(new_file_path, sep=',', index=True, header=True, mode='w')
+                
+                # nothing to update
+                elif not some_null_draught and len(filtered_df) == len(trajectory_df):
+                    new_file_path = os.path.join(new_folder_path, file_name)
+                    filtered_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].reset_index(drop=True).to_csv(new_file_path, sep=',', index=True, header=True, mode='w')
+                
+                # only druaght updated
+                elif some_null_draught and len(filtered_df) == len(trajectory_df):
+                    max_draught = filtered_df['draught'].max()
+                    filtered_df['draught'] = filtered_df['draught'].fillna(max_draught)
+                    new_file_path = os.path.join(new_folder_path, file_name)
+                    filtered_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].reset_index(drop=True).to_csv(new_file_path, sep=',', index=True, header=True, mode='w')
+                    
+                # both updated
+                else:
+                    max_draught = filtered_df['draught'].max()
+                    filtered_df['draught'] = filtered_df['draught'].fillna(max_draught) # update draught
+                    
+                    # fix name, and remove old file
+                    datetime_object = dt.datetime.utcfromtimestamp(filtered_df.iloc[0].timestamp)
+                    str_datetime = datetime_object.strftime('%d/%m/%Y %H:%M:%S').replace('/', '-').replace(' ', '_').replace(':', '-')            
+                    file_name = f'{mmsi}_{str_datetime}.txt'
+                    new_file_path = os.path.join(new_folder_path, file_name)
+                    filtered_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].reset_index(drop=True).to_csv(new_file_path, sep=',', index=True, header=True, mode='w')
+
+                #remove file
+                os.remove(file_path)
+                if not any(os.scandir(root)):
+                    os.rmdir(root)
+                
+                moved += 1
+    
+    except Exception as e:
+        logging.error(f'Failed with {repr(e)}')
+        quit()
+    
+    removed = removed_draught + removed_ship_type + removed_sog
+    
+    finished_time = t.perf_counter() - initial_time
+    logging.info(f'\nRemoved_due_to_ship: {removed_ship_type}\nRemoved_due_to_sog: {removed_sog}\nRemoved_due_to_draught: {removed_draught}\nTotal removed: ({removed}/{initial_num})\nTotal moved to new location: ({moved}/{initial_num})\nElapsed time: {finished_time:0.4f} seconds"')   
+
+
+
 def sparcify_original_trajectories_80_percent_for_folder(folder_path: str):
     initial_time = t.perf_counter()
     removed = 0
@@ -441,8 +556,8 @@ def sparcify_realisticly_original_trajectories(folder_path: str):
     logging.info(f'Removed on avg. pr trajectory: {removed_avg}. Removed in total: {removed}/{total_number_of_points}. Elapsed time: {finished_time:0.4f} seconds')   
 
 #extract_trajectories_from_csv_files()
-#filter_original_trajectories(sog_threshold=0.0)
-sparcify_realisticly_original_trajectories(INPUT_ALL_TEST_FOLDER)
+filter_original_trajectories_windows(sog_threshold=0.0)
+#sparcify_realisticly_original_trajectories(INPUT_ALL_TEST_FOLDER)
 for root, folder, files in os.walk(ORIGINAL_FOLDER):
     is_empty = (len(files) == 0)
     if (is_empty):
