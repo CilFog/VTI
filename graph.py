@@ -7,7 +7,7 @@ from sklearn.cluster import DBSCAN
 from scipy.spatial import cKDTree
 import matplotlib.pyplot as plt
 from data.logs.logging import setup_logger
-from utils import calculate_initial_compass_bearing, get_haversine_dist_df_in_meters, adjusted_distance
+from utils import calculate_initial_compass_bearing, get_haversine_dist_df_in_meters, get_radian_and_radian_diff_columns
 
 LOG_PATH = 'graph_log.txt'
 INPUT_FOLDER_PATH = os.path.join(os.path.dirname(__file__), 'data/input')
@@ -41,20 +41,7 @@ def get_trajectory_df(file_path) -> gpd.GeoDataFrame:
         return df
     except Exception as e:
         logging.warning(f'Error occurred trying to retrieve trajectory csv: {repr(e)}')
-
-def get_radian_and_radian_diff_columns(df_curr:gpd.GeoDataFrame, df_next:gpd.GeoDataFrame) -> tuple[gpd.GeoDataFrame,gpd.GeoDataFrame]:
-    # Convert to radians
-    df_curr['lat_rad'] = np.radians(df_curr['latitude'])
-    df_curr['lon_rad'] = np.radians(df_curr['longitude'])
-    df_next['lat_rad'] = np.radians(df_next['latitude'])
-    df_next['lon_rad'] = np.radians(df_next['longitude'])
-    
-    # Calculate differences
-    df_curr['diff_lon'] = df_curr['lon_rad'] - df_next['lon_rad']
-    df_curr['diff_lat'] = df_curr['lat_rad'] - df_next['lat_rad']
-    
-    return (df_curr.fillna(0), df_next)
-
+        
 print('Adding meta data to trajectories')
 
 points = []
