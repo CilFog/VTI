@@ -1,6 +1,6 @@
 import os
 import sys
-import inspect
+import random
 import time as t
 import numpy as np
 import pandas as pd
@@ -175,7 +175,7 @@ def write_trajectories_to_original_folder(gdf: gpd.GeoDataFrame):
         if len(sub_trajectories) < 2:
             continue
         
-        datetime_object = dt.datetime.utcfromtimestamp(sub_trajectories.iloc[0].timestamp)
+        datetime_object = dt.datetime.fromtimestamp(sub_trajectories.iloc[0].timestamp, tz=dt.timezone.utc)
         str_datetime = datetime_object.strftime('%d/%m/%Y %H:%M:%S').replace('/', '-').replace(' ', '_')
         folder_name = str(sub_trajectories.iloc[0].mmsi)
         file_name = f'{folder_name}_{str_datetime}.txt'
@@ -303,7 +303,7 @@ def filter_original_trajectories(sog_threshold: float):
             
                 # only sog updated
                 if not some_null_draught and not len(filtered_df) == len(trajectory_df):
-                    datetime_object = dt.datetime.utcfromtimestamp(filtered_df.iloc[0].timestamp)
+                    datetime_object = dt.datetime.fromtimestamp(filtered_df.iloc[0].timestamp, tz=dt.timezone.utc)
                     str_datetime = datetime_object.strftime('%d/%m/%Y %H:%M:%S').replace('/', '-').replace(' ', '_')            
                     file_name = f'{mmsi}_{str_datetime}.txt'
                     new_file_path = os.path.join(new_folder_path, file_name)
@@ -327,7 +327,7 @@ def filter_original_trajectories(sog_threshold: float):
                     filtered_df['draught'] = filtered_df['draught'].fillna(max_draught) # update draught
                     
                     # fix name, and remove old file
-                    datetime_object = dt.datetime.utcfromtimestamp(filtered_df.iloc[0].timestamp)
+                    datetime_object = dt.datetime.fromtimestamp(filtered_df.iloc[0].timestamp, tz=dt.timezone.utc)
                     str_datetime = datetime_object.strftime('%d/%m/%Y %H:%M:%S').replace('/', '-').replace(' ', '_')            
                     file_name = f'{mmsi}_{str_datetime}.txt'
                     new_file_path = os.path.join(new_folder_path, file_name)
@@ -349,13 +349,13 @@ def filter_original_trajectories(sog_threshold: float):
     finished_time = t.perf_counter() - initial_time
     logging.info(f'\nRemoved_due_to_ship: {removed_ship_type}\nRemoved_due_to_sog: {removed_sog}\nRemoved_due_to_draught: {removed_draught}\nRemoved_due_to_duplicate: {removed_duplicate}\nTotal removed: ({removed}/{initial_num})\nTotal moved to new location: ({moved}/{initial_num})\nElapsed time: {finished_time:0.4f} seconds"')   
 
-def sparcify_original_trajectories_80_percent_for_folder(folder_path: str):
+def sparcify_trajectories_randomly_using_threshold_for_folder(folder_path: str, removal_percentage: float):
     initial_time = t.perf_counter()
     removed = 0
     removed_avg = 0
     num_files = 0
     total_number_of_points = 0
-    logging.info('Began sparcifying original trajectories') 
+    logging.info(f'Began sparcifying trajectories randomly with threshold of {str(removal_percentage)}%') 
      
     for root, dirs, files in os.walk(ORIGINAL_FOLDER):
         num_files += len(files)
@@ -370,36 +370,40 @@ def sparcify_original_trajectories_80_percent_for_folder(folder_path: str):
             
             os.makedirs(vessel_folder_path, exist_ok=True)  # Create the folder if it doesn't exist
 
+            trajectory_df = add_meta_data(trajectory_df=trajectory_df)
+            
             # Mark ~80% rows for removal
-            # Ensure first and last rows are not marked for removal
-            rows_to_remove = np.random.choice([True, False], size=len(trajectory_df), p=[0.8, 0.2])
+            rows_to_remove = np.random.choice([True, False], size=len(trajectory_df), p=[removal_percentage, 1-removal_percentage])
             
             # Ensure first and last isn't removed
             rows_to_remove[0] = rows_to_remove[-1] = False
             
+            # Convert rows_to_remove to a Pandas Series
+            rows_to_remove_series = pd.Series(rows_to_remove, index=trajectory_df.index)
+            
             # Reindex rows_to_remove to match trajectory_df's index
-            rows_to_remove = rows_to_remove.reindex_like(trajectory_df)
+            rows_to_remove_series = rows_to_remove_series.reindex_like(trajectory_df)
             
             # Sparsify
-            sparsified_trajectory = trajectory_df[~rows_to_remove]
-            sparsified_trajectory.reset_index(drop=True, inplace=True)
+            sparse_trajectory = trajectory_df[~rows_to_remove]
+            sparse_trajectory.reset_index(drop=True, inplace=True)
             
-            sparsified_trajectory[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].reset_index(drop=True).to_csv(new_file_path, sep=',', index=True, header=True, mode='w')
+            sparse_trajectory[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'speed_mps', 'speed_knots']].reset_index(drop=True).to_csv(new_file_path, sep=',', index=True, header=True, mode='w')
 
             total_number_of_points += len(trajectory_df)
-            removed += len(trajectory_df) - len(sparsified_trajectory)
+            removed += len(trajectory_df) - len(sparse_trajectory)
             
     finished_time = t.perf_counter() - initial_time
     removed_avg = removed/num_files
     logging.info(f'Removed on avg. pr trajectory: {removed_avg}. Removed in total: {removed}/{total_number_of_points}. Elapsed time: {finished_time:0.4f} seconds')   
 
-def sparcify_realisticly_original_trajectories(folder_path: str):
+def sparcify_realisticly_trajectories_for_folder(folder_path: str):
     initial_time = t.perf_counter()
     removed = 0
     removed_avg = 0
     num_files = 0
     total_number_of_points = 0
-    logging.info('Began sparcifying original trajectories') 
+    logging.info('Began sparcifying trajectories realisticly') 
      
     for root, dirs, files in os.walk(ORIGINAL_FOLDER):
         num_files += len(files)
@@ -409,75 +413,178 @@ def sparcify_realisticly_original_trajectories(folder_path: str):
             trajectory_df:gpd.GeoDataFrame = get_trajectory_df_from_txt(file_path=file_path)
             
             file_name = file.split('/')[-1]
-            file_folder = root.split('/')[-1]
             vessel_folder = trajectory_df.iloc[0].ship_type.replace('/', '_')
             vessel_folder_path = f'{folder_path}/{vessel_folder}'
-            new_file_path = os.path.join(vessel_folder_path, file_folder)
+            new_file_path = os.path.join(vessel_folder_path, file_name)
             
-            os.makedirs(new_file_path, exist_ok=True)  # Create the folder if it doesn't exist
+            os.makedirs(vessel_folder_path, exist_ok=True)  # Create the folder if it doesn't exist
         
-            gdf_next = trajectory_df.shift(-1)
-            trajectory_df, gdf_next = utils.get_radian_and_radian_diff_columns(trajectory_df, gdf_next)
-            
-            bearing_df = utils.calculate_initial_compass_bearing(df_curr=trajectory_df, df_next=gdf_next)
-            trajectory_df['cog'] = trajectory_df['cog'].fillna(bearing_df)
-
-            trajectory_df['dist'] = utils.get_haversine_dist_df_in_meters(df_curr=trajectory_df, df_next=gdf_next).fillna(0)
-            # Calculate the time difference between consecutive points
-            time_differences = gdf_next['timestamp'] - trajectory_df['timestamp']
-            
-            # # Calculate speed for points with subsequent points available
-            speeds = trajectory_df['dist'] / time_differences
-            speeds.fillna(0, inplace=True)
-            
-            trajectory_df['speed'] = speeds
+            trajectory_df = add_meta_data(trajectory_df=trajectory_df)
                 
             if len(trajectory_df) >= 2:
                 # Initialize an empty DataFrame to store the filtered trajectory
-                sparse_trajectory_df = trajectory_df.copy()
-                curr_point = sparse_trajectory_df.iloc[0]
+                curr_point = trajectory_df.iloc[0]
                 indices_to_drop = []
-                for index, row in sparse_trajectory_df[1:].iterrows():     
+                
+                for index, row in trajectory_df[1:].iterrows():     
                    # Check the speed and time difference conditions
-                    if curr_point.speed >= 3 and row.speed >= 3 and (row.timestamp - curr_point.timestamp) >= 15:
+                    if (curr_point.speed_knots >= 3 and row.speed_knots >= 3 and (row.timestamp - curr_point.timestamp) > 10) \
+                        or (curr_point.speed_knots >= 3 and (row.speed_knots < 3 or (row.timestamp - curr_point.timestamp) > 10)) \
+                        or (curr_point.speed_knots < 3 and row.speed_knots < 3 and (row.timestamp - curr_point.timestamp) > 180) \
+                        or (curr_point.speed_knots < 3 and (row.speed_knots >= 3 or (row.timestamp - curr_point.timestamp) >= 180)):
                         curr_point = row
-                        continue
-                    elif curr_point.speed >= 3 and row.speed < 3:
-                        curr_point = row
-                        continue
-                    elif curr_point.speed < 3 and row.speed < 3 and (row.timestamp - curr_point.timestamp) >= 220:
-                        curr_point = row
-                        # If the conditions are met, set the flag to False to stop removing points
-                        continue
-                    elif curr_point.speed < 3 and row.speed >= 3:
-                        curr_point = row
-                        continue
                     else:
                         # If the conditions are not met, set the flag to True to start removing points
-                        if not index == sparse_trajectory_df.last_valid_index():
-                            # Add the index to the list of indices to drop
+                        if not index == trajectory_df.last_valid_index():
                             indices_to_drop.append(index)
-                            continue
                 
                 # Drop the rows identified by the indices in the list
-                print(len(sparse_trajectory_df))
-                sparse_trajectory_df.drop(indices_to_drop, axis=0, inplace=True)
-                print(len(sparse_trajectory_df))
-
-                sparse_trajectory_df[['latitude', 'longitude', 'timestamp', 'cog', 'draught', 'ship_type', 'speed']].to_csv(f'{new_file_path}/{file_name}', sep=',', index=True, header=True, mode='w')     
+                sparse_trajectory_df = trajectory_df.drop(indices_to_drop).reset_index(drop=True)
+                sparse_trajectory_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'speed_mps', 'speed_knots']].reset_index(drop=True).to_csv(new_file_path, sep=',', index=True, header=True, mode='w')
                 
                 total_number_of_points += len(trajectory_df)
                 removed += len(trajectory_df) - len(sparse_trajectory_df)
             else:
-                trajectory_df[['latitude', 'longitude', 'timestamp', 'cog', 'draught', 'ship_type', 'speed']].to_csv(f'{new_file_path}/{file_name}', sep=',', index=True, header=True, mode='w')     
+                trajectory_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'speed_mps', 'speed_knots']].to_csv(new_file_path, sep=',', index=True, header=True, mode='w')     
                 total_number_of_points += len(trajectory_df)
             
     finished_time = t.perf_counter() - initial_time
     removed_avg = removed/num_files
     logging.info(f'Removed on avg. pr trajectory: {removed_avg}. Removed in total: {removed}/{total_number_of_points}. Elapsed time: {finished_time:0.4f} seconds')   
 
-#extract_trajectories_from_csv_files()
-#sparcify_realisticly_original_trajectories(INPUT_ALL_TEST_FOLDER)
+def sparcify_realisticly_strict_original_trajectories_for_folder(folder_path: str):
+    initial_time = t.perf_counter()
+    removed = 0
+    removed_avg = 0
+    num_files = 0
+    total_number_of_points = 0
+    logging.info('Began sparcifying trajectories realistily, but strict') 
+     
+    for root, dirs, files in os.walk(ORIGINAL_FOLDER):
+        num_files += len(files)
+        
+        for file in files:
+            file_path = os.path.join(root, file)
+            trajectory_df:gpd.GeoDataFrame = get_trajectory_df_from_txt(file_path=file_path)
+            
+            file_name = file.split('/')[-1]
+            vessel_folder = trajectory_df.iloc[0].ship_type.replace('/', '_')
+            vessel_folder_path = f'{folder_path}/{vessel_folder}'
+            new_file_path = os.path.join(vessel_folder_path, file_name)
+            
+            os.makedirs(vessel_folder_path, exist_ok=True)  # Create the folder if it doesn't exist
+        
+            trajectory_df = add_meta_data(trajectory_df=trajectory_df)
+                
+            if len(trajectory_df) >= 2:
+                curr_point = trajectory_df.iloc[0]
+                indices_to_drop = []
+                
+                for index, row in trajectory_df[1:].iterrows():     
+                   # Check the speed and time difference conditions
+                    if (curr_point.speed_knots >= 3 and row.speed_knots >= 3 and (row.timestamp - curr_point.timestamp) > 10) \
+                        or (curr_point.speed_knots >= 3 and (row.timestamp - curr_point.timestamp) > 10) \
+                        or (curr_point.speed_knots < 3 and row.speed_knots < 3 and (row.timestamp - curr_point.timestamp) > 180) \
+                        or (curr_point.speed_knots < 3 and (row.timestamp - curr_point.timestamp) > 180):        
+                        curr_point = row
+                        continue
+                    else:
+                        # If the conditions are not met, set the flag to True to start removing points
+                        if not index == trajectory_df.last_valid_index():
+                            # Add the index to the list of indices to drop
+                            indices_to_drop.append(index)
+                            continue
+                
+                # Drop the rows identified by the indices in the list
+                
+                sparse_trajectory_df = trajectory_df.drop(indices_to_drop).reset_index(drop=True)
+                sparse_trajectory_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'speed_mps', 'speed_knots']].reset_index(drop=True).to_csv(new_file_path, sep=',', index=True, header=True, mode='w')
+                
+                total_number_of_points += len(trajectory_df)
+                removed += len(trajectory_df) - len(sparse_trajectory_df)
+            else:
+                trajectory_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'speed_mps', 'speed_knots']].to_csv(new_file_path, sep=',', index=True, header=True, mode='w')     
+                total_number_of_points += len(trajectory_df)
+            
+    finished_time = t.perf_counter() - initial_time
+    removed_avg = removed/num_files
+    logging.info(f'Removed on avg. pr trajectory: {removed_avg}. Removed in total: {removed}/{total_number_of_points}. Elapsed time: {finished_time:0.4f} seconds')   
+
+def sparcify_large_time_gap_with_threshold_percentage_for_folder(folder_path: str, removal_percentage:float):
+    initial_time = t.perf_counter()
+    removed = 0
+    removed_avg = 0
+    num_files = 0
+    total_number_of_points = 0
+    logging.info(f'Began sparcifying original trajectories with random {removal_percentage}% time gap') 
+     
+    for root, dirs, files in os.walk(ORIGINAL_FOLDER):
+        num_files += len(files)
+        for file in files:
+            file_path = os.path.join(root, file)
+            trajectory_df:gpd.GeoDataFrame = get_trajectory_df_from_txt(file_path=file_path)
+            
+            file_name = file.split('/')[-1]
+            vessel_folder = trajectory_df.iloc[0].ship_type.replace('/', '_')
+            vessel_folder_path = f'{folder_path}/{vessel_folder}'
+            new_file_path = os.path.join(vessel_folder_path, file_name)
+            
+            os.makedirs(vessel_folder_path, exist_ok=True)  # Create the folder if it doesn't exist
+            
+            trajectory_df = add_meta_data(trajectory_df=trajectory_df)
+
+            # Step 1: Select a random row, excluding the first and last rows
+            # Slice the DataFrame to exclude the first and last rows
+            trajectory_df_sliced = trajectory_df.iloc[1:-1]
+
+            # Sample from the sliced DataFrame and ensure that start index is chosen such that removing removal_percentage is possible
+            random_row_index = int(len(trajectory_df_sliced) * (1-removal_percentage)) + 1
+
+            # Step 2: Determine the range of rows to remove
+            # Calculate the number of rows to remove as threshold_percentage% of the total number of rows
+            # Ensure it does not exceed the number of rows after the random row
+            num_rows_to_remove = int(len(trajectory_df) * removal_percentage)
+            start_index = max(1, random.randint(1, random_row_index))            
+            end_index = min(start_index + num_rows_to_remove, len(trajectory_df) - 1)
+
+            # Step 3: Remove the consecutive rows
+            rows_to_remove = np.zeros(len(trajectory_df), dtype=bool)
+            rows_to_remove[start_index:end_index] = True
+
+            # Apply the sparsification
+            sparse_trajectory_df = trajectory_df[~rows_to_remove]
+            sparse_trajectory_df.reset_index(drop=True, inplace=True)
+
+            # Save the sparsified trajectory as before
+            sparse_trajectory_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'speed_mps', 'speed_knots']].reset_index(drop=True).to_csv(new_file_path, sep=',', index=True, header=True, mode='w')
+
+            total_number_of_points += len(trajectory_df)
+            removed += len(trajectory_df) - len(sparse_trajectory_df)
+            
+    finished_time = t.perf_counter() - initial_time
+    removed_avg = removed/num_files
+    logging.info(f'Removed on avg. pr trajectory: {removed_avg}. Removed in total: {removed}/{total_number_of_points}. Elapsed time: {finished_time:0.4f} seconds')   
+
+def add_meta_data(trajectory_df: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    # add meta data
+    gdf_next = trajectory_df.shift(-1)
+    trajectory_df, gdf_next = utils.get_radian_and_radian_diff_columns(trajectory_df, gdf_next)
+    
+    bearing_df = utils.calculate_initial_compass_bearing(df_curr=trajectory_df, df_next=gdf_next)
+    trajectory_df['cog'] = trajectory_df['cog'].fillna(bearing_df)
+
+    trajectory_df['dist'] = utils.get_haversine_dist_df_in_meters(df_curr=trajectory_df, df_next=gdf_next).fillna(0)
+    # Calculate the time difference between consecutive points
+    time_differences = gdf_next['timestamp'] - trajectory_df['timestamp']
+    
+    # Calculate speed for points with subsequent points available
+    speeds_mps = trajectory_df['dist'] / time_differences
+    speeds_mps.fillna(0, inplace=True)
+    
+    trajectory_df['speed_mps'] = speeds_mps
+    trajectory_df['speed_knots'] = trajectory_df['speed_mps'] * 1.943844
+    
+    return trajectory_df
 
 def is_directory_empty(directory):
     # Check if the directory is empty
@@ -499,7 +606,11 @@ def check_empty_directories(root_dir):
             total_files += count_files(dirpath)
 
     print(total_files)
-# check_empty_directories(ORIGINAL_FOLDER)
+#check_empty_directories(ORIGINAL_FOLDER)
 
+#extract_trajectories_from_csv_files()
 #filter_original_trajectories(0.0)
-sparcify_realisticly_original_trajectories(folder_path=INPUT_ALL_TEST_FOLDER)
+#sparcify_large_time_gap_with_threshold_percentage_for_folder(folder_path=INPUT_ALL_TEST_FOLDER + '/large_gap_0_5', removal_percentage=0.5)
+#sparcify_trajectories_randomly_using_threshold_for_folder(folder_path=INPUT_ALL_TEST_FOLDER + '/random_0_5', removal_percentage=0.5)
+sparcify_realisticly_trajectories_for_folder(folder_path=INPUT_ALL_TEST_FOLDER + '/realistic')
+sparcify_realisticly_strict_original_trajectories_for_folder(folder_path=INPUT_ALL_TEST_FOLDER + '/realistic_strict')
