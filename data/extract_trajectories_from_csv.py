@@ -303,7 +303,7 @@ def filter_original_trajectories(sog_threshold: float):
                 some_null_draught = filtered_df.draught.isnull().any() or filtered_df.draught.isna().any()
                 
                 file_name = file.split('/')[-1]
-                vessel_folder = trajectory_df.iloc[0].ship_type.replace('/', '_')
+                vessel_folder = trajectory_df.iloc[0].ship_type.replace('/', '_').replace(' ', '_')
                 mmsi = root.split('/')[-1]
                 new_folder_path = f'{ORIGINAL_FOLDER}/{vessel_folder}/{mmsi}'
                 os.makedirs(new_folder_path, exist_ok=True)  # Create the folder if it doesn't exist
