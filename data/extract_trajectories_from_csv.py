@@ -10,7 +10,7 @@ from shapely import wkb
 from typing import Callable
 from logs.logging import setup_logger
 from shapely.geometry import box, Polygon
-from multiprocessing import freeze_support  # Import freeze_support
+from multiprocessing import freeze_support
 from split_tractories import split_trajectories_from_df
 from concurrent.futures import ProcessPoolExecutor
 
@@ -203,7 +203,7 @@ def write_trajectories_to_original_folder(gdf: gpd.GeoDataFrame):
         write_trajectories(file_path, sub_trajectories)     
         
 def write_trajectories(file_path:str, sub_trajectory: gpd.GeoDataFrame):
-    sub_trajectory[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].reset_index(drop=True).to_csv(file_path, sep=',', index=True, header=True, mode='w')
+    sub_trajectory[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'navigational_status']].reset_index(drop=True).to_csv(file_path, sep=',', index=True, header=True, mode='w')
 
 def get_trajectory_df_from_txt(file_path:str) -> gpd.GeoDataFrame:
     """
