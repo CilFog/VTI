@@ -190,7 +190,7 @@ def write_trajectories_to_original_folder(gdf: gpd.GeoDataFrame):
             continue
         
         datetime_object = dt.datetime.fromtimestamp(sub_trajectories.iloc[0].timestamp, tz=dt.timezone.utc)
-        str_datetime = datetime_object.strftime('%d/%m/%Y %H:%M:%S').replace('/', '-').replace(' ', '_')
+        str_datetime = datetime_object.strftime('%d/%m/%Y %H:%M:%S').replace('/', '-').replace(' ', '_').replace(':', '-') 
         folder_name = str(sub_trajectories.iloc[0].mmsi)
         file_name = f'{folder_name}_{str_datetime}.txt'
         
@@ -311,13 +311,15 @@ def filter_original_trajectories(sog_threshold: float):
                 # only sog updated
                 if not some_null_draught and not len(filtered_df) == len(trajectory_df):
                     datetime_object = dt.datetime.fromtimestamp(filtered_df.iloc[0].timestamp, tz=dt.timezone.utc)
-                    str_datetime = datetime_object.strftime('%d/%m/%Y %H:%M:%S').replace('/', '-').replace(' ', '_')            
+                    str_datetime = datetime_object.strftime('%d/%m/%Y %H:%M:%S').replace('/', '-').replace(' ', '_').replace(':', '-')            
                     file_name = f'{mmsi}_{str_datetime}.txt'
                     new_file_path = os.path.join(new_folder_path, file_name)
                     filtered_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].reset_index(drop=True).to_csv(new_file_path, sep=',', index=True, header=True, mode='w')
                 
                 # nothing to update
                 elif not some_null_draught and len(filtered_df) == len(trajectory_df):
+                    file_name = file_name.replace('/', '-').replace(' ', '_').replace(':', '-') 
+                    
                     new_file_path = os.path.join(new_folder_path, file_name)
                     filtered_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].reset_index(drop=True).to_csv(new_file_path, sep=',', index=True, header=True, mode='w')
                 
@@ -335,11 +337,13 @@ def filter_original_trajectories(sog_threshold: float):
                     
                     # fix name, and remove old file
                     datetime_object = dt.datetime.fromtimestamp(filtered_df.iloc[0].timestamp, tz=dt.timezone.utc)
-                    str_datetime = datetime_object.strftime('%d/%m/%Y %H:%M:%S').replace('/', '-').replace(' ', '_')            
+                    str_datetime = datetime_object.strftime('%d/%m/%Y %H:%M:%S').replace('/', '-').replace(' ', '_').replace(':', '-')             
                     file_name = f'{mmsi}_{str_datetime}.txt'
                     new_file_path = os.path.join(new_folder_path, file_name)
                     filtered_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].reset_index(drop=True).to_csv(new_file_path, sep=',', index=True, header=True, mode='w')
 
+                
+                
                 #remove file
                 os.remove(file_path)
                 if not any(os.scandir(root)):
@@ -761,4 +765,4 @@ def check_empty_directories(root_dir):
 
     print(total_files)
 
-write_trajectories_for_area()    
+filter_original_trajectories(0.0)
