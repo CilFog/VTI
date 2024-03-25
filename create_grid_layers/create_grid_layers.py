@@ -240,5 +240,5 @@ def create_grid_layer(cell_size_km):
 
     return grid_gdf
 
-extract_depth_map()
-#create_and_insert_grid_into_db(1.6)
+#extract_depth_map()
+create_and_insert_grid_into_db(1.6)
