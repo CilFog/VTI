@@ -102,7 +102,7 @@ def cleanse_csv_file_and_convert_to_df(file_path: str):
     
     subset_columns = ['MMSI', 'Latitude', 'Longitude', '# Timestamp']  # Adjust these based on your actual columns
     df = df.drop_duplicates(subset=subset_columns, keep='first')
-
+    
     # We round the lat and longs as we do not need 15 decimals of precision
     # This will save some computation time later.
     # We also round rot, sog and cog, as we do not need a lot of decimal precision here
@@ -176,7 +176,7 @@ def write_trajectories_to_original_folder(gdf: gpd.GeoDataFrame):
             continue
         
         datetime_object = dt.datetime.utcfromtimestamp(sub_trajectories.iloc[0].timestamp)
-        str_datetime = datetime_object.strftime('%d/%m/%Y %H:%M:%S').replace('/', '-').replace(' ', '_')
+        str_datetime = datetime_object.strftime('%d/%m/%Y %H:%M:%S').replace('/', '-').replace(' ', '_').replace(':', '-')
         folder_name = str(sub_trajectories.iloc[0].mmsi)
         file_name = f'{folder_name}_{str_datetime}.txt'
         
@@ -290,7 +290,7 @@ def filter_original_trajectories(sog_threshold: float):
                 # only sog updated
                 if not some_null_draught and not len(filtered_df) == len(trajectory_df):
                     datetime_object = dt.datetime.utcfromtimestamp(filtered_df.iloc[0].timestamp)
-                    str_datetime = datetime_object.strftime('%d/%m/%Y %H:%M:%S').replace('/', '-').replace(' ', '_')            
+                    str_datetime = datetime_object.strftime('%d/%m/%Y %H:%M:%S').replace('/', '-').replace(' ', '_').replace(':', '-')            
                     file_name = f'{mmsi}_{str_datetime}.txt'
                     new_file_path = os.path.join(new_folder_path, file_name)
                     filtered_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].reset_index(drop=True).to_csv(new_file_path, sep=',', index=True, header=True, mode='w')
@@ -314,7 +314,7 @@ def filter_original_trajectories(sog_threshold: float):
                     
                     # fix name, and remove old file
                     datetime_object = dt.datetime.utcfromtimestamp(filtered_df.iloc[0].timestamp)
-                    str_datetime = datetime_object.strftime('%d/%m/%Y %H:%M:%S').replace('/', '-').replace(' ', '_')            
+                    str_datetime = datetime_object.strftime('%d/%m/%Y %H:%M:%S').replace('/', '-').replace(' ', '_').replace(':', '-')            
                     file_name = f'{mmsi}_{str_datetime}.txt'
                     new_file_path = os.path.join(new_folder_path, file_name)
                     filtered_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].reset_index(drop=True).to_csv(new_file_path, sep=',', index=True, header=True, mode='w')
@@ -396,7 +396,7 @@ def filter_original_trajectories_windows(sog_threshold: float):
                 
                 file_name = file.split('/')[-1]
                 vessel_folder = trajectory_df.iloc[0].ship_type.replace('/', '_')
-                mmsi = root.split('/')[-1]
+                mmsi = root.split('\\')[-1]
                 new_folder_path = f'{ORIGINAL_FOLDER}/{vessel_folder}/{mmsi}'
                 os.makedirs(new_folder_path, exist_ok=True)  # Create the folder if it doesn't exist
 

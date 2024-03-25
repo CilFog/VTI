@@ -9,36 +9,87 @@ from shapely.geometry import Point, box
 import geopandas as gpd
 import geoalchemy2
 import sqlalchemy
-from sqlalchemy import create_engine, ForeignKey
+from sqlalchemy import create_engine, Column, Float, Integer, ForeignKey
 from config import load_config
 from connect import connect
+import warnings
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker
+from geoalchemy2.shape import from_shape
 
 DEPTH_MAP = 'C:/Users/alexf/Desktop/ddm_50m.dybde.tiff'
 #DEPTH_MAP = '/srv/P-10/ddm_50m.dybde.tiff'
 
+# Assuming load_config is a function you've defined to load your database configuration
+config = load_config()
+
+# Database setup
+engine_url = f"postgresql://{config['user']}:{config['password']}@{config['host']}:{config['port']}/{config['database']}"
+engine = create_engine(engine_url)
+Base = declarative_base()
+
+
+class DepthPoint(Base):
+    __tablename__ = 'depth_points'
+    id = Column(Integer, primary_key=True)
+    geometry = Column(geoalchemy2.Geometry('POINT', srid=4326))
+    depth = Column(Float)
+
+class Grid_1600(Base):
+    __tablename__ = 'grid_1600'
+    id = Column(Integer, primary_key=True)
+    geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
+
+# class Grid_800(Base):
+#     __tablename__ = 'grid_800'
+#     id = Column(Integer, primary_key=True)
+#     geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
+#     grid_1600_id = Column(Integer, ForeignKey('grid_1600.id'))
+
+# class Grid_400(Base):
+#     __tablename__ = 'grid_400'
+#     id = Column(Integer, primary_key=True)
+#     geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
+#     grid_800_id = Column(Integer, ForeignKey('grid_800.id'))
+
+# class Grid_200(Base):
+#     __tablename__ = 'grid_200'
+#     id = Column(Integer, primary_key=True)
+#     geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
+#     grid_400_id = Column(Integer, ForeignKey('grid_400.id'))
+
+# class Grid_100(Base):
+#     __tablename__ = 'grid_100'
+#     id = Column(Integer, primary_key=True)
+#     geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
+#     Grid_200_id = Column(Integer, ForeignKey('Grid_200.id'))
+
+# class Grid_50(Base):
+#     __tablename__ = 'grid_50'
+#     id = Column(Integer, primary_key=True)
+#     geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
+#     grid_100_id = Column(Integer, ForeignKey('grid_100.id'))
+
+# Create the tables in the database
+Base.metadata.create_all(engine)
+
+
 def extract_depth_map():
-    points = []
     processed_pixels = 0
-    pixels_to_reach = 1000000
+    batch_size = 100000
 
     print("Starting depth map extraction")
 
     with rasterio.open(DEPTH_MAP, crs="3034") as dataset:
-        
-        # Select only pixels with value:
         msk = dataset.read_masks(1)
-
-        # Get geotransform information
         transform = dataset.transform
-
-        # Get image size
         width = dataset.width
         height = dataset.height
-
-        # Read the depth values
-        depths = dataset.read(1)
-
+        depth_values = dataset.read(1)
         transformer = Transformer.from_crs(CRS.from_epsg(3034), CRS.from_epsg(4326))
+
+        points = []
+        depths = []
 
         # Iterate through all pixels and print their corresponding latitudes and longitudes
         for row in range(height):
@@ -46,166 +97,121 @@ def extract_depth_map():
                 if msk[row, col] > 0:
                     # Calculate latitude and longitude for each pixel
                     lat, lon = transform * (col + 0.5, row + 0.5)
-                
                     lon_trans, lat_trans = transformer.transform(lon, lat)
 
-                    depth_value = depths[row, col]
+                    # Append to temporary lists
+                    points.append(Point(lat_trans, lon_trans))
+                    depths.append(depth_values[row, col])
 
-                    point = Point(lat_trans, lon_trans)
-                    points.append((point, depth_value))
                     processed_pixels += 1
 
-                    if processed_pixels % pixels_to_reach == 0:
-                        print(f"Reached {processed_pixels} processed pixels.")
+                    # Check if the batch size is reached
+                    if len(points) == batch_size:
+                        # Convert to GeoDataFrame and insert
+                        gdf = gpd.GeoDataFrame({'geometry': points, 'depth': depths}, crs="EPSG:4326")
+                        insert_data_into_db_gdf(gdf)
+                        
+                        # Clear the lists for the next batch
+                        points.clear()
+                        depths.clear()
 
-                if processed_pixels == 10000:
-                        break
-            if processed_pixels == 10000:
-                break
-
-    gdf = gpd.GeoDataFrame(geometry=[point for point, _ in points], crs="EPSG:4326")
-    gdf['depth'] = [depth for _, depth in points]
-
-
-    create_and_insert_grid_into_db(gdf, 1.6, '1600')
-    create_and_insert_grid_into_db_with_relation(gdf, 0.8, '800', 'grid_1600')
-    #create_and_insert_grid_into_db_with_relation(gdf, 0.4, '400', 'grid_800')
-    #create_and_insert_grid_into_db_with_relation(gdf, 0.2, '200', 'grid_400')
-    #create_and_insert_grid_into_db_with_relation(gdf, 0.1, '100', 'grid_200')
-    #create_and_insert_grid_into_db_with_relation(gdf, 0.05, '50', 'grid_100')
-    #create_and_insert_grid_into_db_with_relation(gdf, 0.025, '25', 'grid_50')
+        # Insert any remaining points after looping through all pixels
+        if points:
+            gdf = gpd.GeoDataFrame({'geometry': points, 'depth': depths}, crs="EPSG:4326")
+            insert_data_into_db_gdf(gdf)
 
 
-def create_and_insert_grid_into_db(gdf, cell_size_km, table_name):
+def insert_data_into_db_gdf(gdf):
+    Session = sessionmaker(bind=engine)
+    session = Session()
 
+    for index, row in gdf.iterrows():
+        wkt_element = geoalchemy2.WKTElement(row['geometry'].wkt, srid=4326)
+        depth_point = DepthPoint(geometry=wkt_element, depth=row['depth'])
+        session.add(depth_point)
+    
+    session.commit()
+    session.close()
+
+    print(f"Inserted batch of {len(gdf)} points into the database.")
+
+
+def create_and_insert_grid_into_db(cell_size_km):
+
+    print("Creating grid layer")
     grid_gdf = create_grid_layer(cell_size_km)
 
-    # Spatial join
-    joined = gpd.sjoin(gdf, grid_gdf, how='right', op='within')
-    valid_joined = joined.dropna(subset=['index_left', 'depth'])
-    grouped_joined = valid_joined.groupby('geometry')['depth'].mean().reset_index()
-    grouped_joined = gpd.GeoDataFrame(grouped_joined, geometry='geometry')
-
-    grid_gdf = grouped_joined
+    Session = sessionmaker(bind=engine)
+    session = Session()
 
     try:
-        # Load configuration from the config file
-        config = load_config()
-
-        engine = create_engine('postgresql://'+config['user']+':'+config['password']+'@'+config['host']+':'+config['port']+'/'+config['database']+'')
-
-        # Connect to the PostgreSQL database
-        conn = connect(config)
-
-        # Create a cursor object using the connection
-        cursor = conn.cursor()
-
-        try:
-            print("Inserting into db")
-
-            # Convert geometries to WKT
-            grid_gdf['geometry_wkt'] = grid_gdf['geometry'].apply(lambda geom: geom.wkt)
-            grid_gdf = grid_gdf.drop(columns=['geometry'])
-
-            grid_gdf[['geometry_wkt', 'depth']].reset_index(drop=True).to_sql(
-                f'grid_{table_name}', 
-                engine, 
-                index=True, 
-                if_exists='replace', 
-                dtype={
-                'geometry_wkt': geoalchemy2.Geometry('POLYGON', srid=4326),
-                'depth': sqlalchemy.types.Float(),
-            })
-
-        except psycopg2.Error as e:
-            print("Error executing SQL command:", e)
-
-        finally:
-            print("Inserting into db was succesfully")
-            cursor.close()
+        for _, row in grid_gdf.iterrows():
+            # Convert the GeoDataFrame geometry to a GeoAlchemy shape
+            geom = from_shape(row['geometry'], srid=4326)  # Ensure SRID matches your data
+            
+            # Create an instance of the Grid_1600 class for each row
+            grid_entry = Grid_1600(geometry=geom)
+            
+            # Add the instance to the session
+            session.add(grid_entry)
         
-
+        # Commit the session to insert the records into the database
+        session.commit()
+        print("Grid data insertion was successful.")
     except Exception as e:
-        print(e)
-
+        print(f"An error occurred during grid data insertion: {e}")
+        session.rollback()  # Roll back the session in case of error
     finally:
-        cursor.close()
-        conn.close()
+        session.close()
 
-def create_and_insert_grid_into_db_with_relation(gdf, cell_size_km, table_name, parent_grid):
 
+
+
+
+
+
+def create_child_grids_and_insert_grid_into_db(cell_size_km):
+
+    print("Creating grid layer")
     grid_gdf = create_grid_layer(cell_size_km)
 
-    # Spatial join
-    joined = gpd.sjoin(gdf, grid_gdf, how='right', op='within')
-    valid_joined = joined.dropna(subset=['index_left', 'depth'])
-    grouped_joined = valid_joined.groupby('geometry')['depth'].mean().reset_index()
-    grouped_joined = gpd.GeoDataFrame(grouped_joined, geometry='geometry')
+    Session = sessionmaker(bind=engine)
+    session = Session()
 
-    grid_gdf = grouped_joined
+    parent_grid_id = f"SELECT * FROM grid_1600"
+    parent_grid_id_gdf = gpd.read_postgis(parent_grid_id, engine, geom_col='geometry')
+
+    # Create a new column 'parent_grid_id' in grid_gdf and populate with parent_grid_id if it is contianed within it
+    grid_gdf['grid_1600_id'] = None
+    grid_gdf['grid_1600_id'] = grid_gdf.apply(lambda row: find_parent_grid(row['geometry'], parent_grid_id_gdf), axis=1)
 
     try:
-        # Load configuration from the config file
-        config = load_config()
-
-        engine = create_engine('postgresql://'+config['user']+':'+config['password']+'@'+config['host']+':'+config['port']+'/'+config['database']+'')
-
-        # Connect to the PostgreSQL database
-        conn = connect(config)
-
-        # Create a cursor object using the connection
-        cursor = conn.cursor()
-
-        try:
-            print("Creating key constraint between grids, and inserting into db")
-
-            # Retrieve the existing grid_1000 data from the database
-            parent_grid_id = f"SELECT * FROM {parent_grid}"
-            parent_grid_id_gdf = gpd.read_postgis(parent_grid_id, engine, geom_col='geometry_wkt')
-
-            # Create a new column 'parent_grid_id' in grid_gdf and populate with parent_grid_id if it is contianed within it
-            grid_gdf['parent_grid_id'] = None
-            grid_gdf['parent_grid_id'] = grid_gdf.apply(lambda row: find_parent_grid(row['geometry'], parent_grid_id_gdf), axis=1)
-
-
-            # Convert geometries to WKT
-            grid_gdf['geometry_wkt'] = grid_gdf['geometry'].apply(lambda geom: geom.wkt)
-            grid_gdf = grid_gdf.drop(columns=['geometry'])
-
-            # Write to the database with the foreign key constraint
-            grid_gdf[['geometry_wkt', 'depth', 'parent_grid_id']].reset_index(drop=True).to_sql(
-                f'grid_{table_name}', 
-                engine,
-                index=True,  
-                if_exists='replace',
-                dtype={
-                    'geometry_wkt': geoalchemy2.Geometry('POLYGON', srid=4326),
-                    'depth': sqlalchemy.types.Float(),
-                    'parent_grid_id': sqlalchemy.types.Integer(),
-                },
-            )
-
-        except psycopg2.Error as e:
-            print("Error executing SQL command:", e)
-
-        finally:
-            print("Inserting into db was succesfully")
-            cursor.close()
+        for _, row in grid_gdf.iterrows():
+            # Convert the GeoDataFrame geometry to a GeoAlchemy shape
+            geom = from_shape(row['geometry'], srid=4326)  # Ensure SRID matches your data
+            
+            # Create an instance of the Grid_800 class for each row
+            grid_entry = Grid_800(geometry=geom, grid_1600_id=row['grid_1600_id'])
+            
+            # Add the instance to the session
+            session.add(grid_entry)
         
-
+        # Commit the session to insert the records into the database
+        session.commit()
+        print("Grid data insertion was successful.")
     except Exception as e:
-        print(e)
-
+        print(f"An error occurred during grid data insertion: {e}")
+        session.rollback()  # Roll back the session in case of error
     finally:
-        cursor.close()
-        conn.close()
+        session.close()
+
 
 def find_parent_grid(geometry, parent_grid):
     centroid = geometry.centroid
-    intersecting_grid = parent_grid[parent_grid['geometry_wkt'].intersects(centroid)]
+    intersecting_grid = parent_grid[parent_grid['geometry'].intersects(centroid)]
     
     if not intersecting_grid.empty:
-        return intersecting_grid['index'].values[0]
+        return intersecting_grid['id'].values[0]
     else:
         return None
 
@@ -235,3 +241,4 @@ def create_grid_layer(cell_size_km):
     return grid_gdf
 
 extract_depth_map()
+#create_and_insert_grid_into_db(1.6)
