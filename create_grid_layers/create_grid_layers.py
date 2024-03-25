@@ -17,8 +17,8 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from geoalchemy2.shape import from_shape
 
-DEPTH_MAP = 'C:/Users/alexf/Desktop/ddm_50m.dybde.tiff'
-#DEPTH_MAP = '/srv/P-10/ddm_50m.dybde.tiff'
+#DEPTH_MAP = 'C:/Users/alexf/Desktop/ddm_50m.dybde.tiff'
+DEPTH_MAP = '/srv/P-10/ddm_50m.dybde.tiff'
 
 # Assuming load_config is a function you've defined to load your database configuration
 config = load_config()
