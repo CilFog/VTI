@@ -44,7 +44,7 @@ def extract_trajectories_from_csv_files():
                 
     logging.info('Finished creating trajecatories. Terminating')
 
-def cleanse_csv_file_and_convert_to_df(file_path: str):
+def cleanse_csv_file_and_convert_to_df(file_path: str) -> tuple[gpd.GeoDataFrame, int]:
     """
     Takes a .csv file and cleanses it according to the set predicates.
     :param file_name: File name to cleanse. Example: 'aisdk-2022-01-01.csv'
@@ -76,7 +76,9 @@ def cleanse_csv_file_and_convert_to_df(file_path: str):
     # errors='ignore' is sat because older ais data files may not contain these columns.
     df = df.drop(['A','B','C','D','ETA','Cargo type','Data source type', 'Destination', 'Type of position fixing device',
                   'Callsign'],axis=1, errors='ignore')
-           
+    
+    ship_types = ['fishing', 'tanker', 'tug', 'cargo', 'passenger', 'dredging', 'law enforcement', 'anti-pollution', 'pilot', 'pleasure', 'towing', 'port tender', 'diving', 'towing long/wide', ''] 
+   
     # Remove all the rows which does not satisfy our conditions
     df = df[
             (df["Type of mobile"] != "Class B") &
@@ -85,7 +87,8 @@ def cleanse_csv_file_and_convert_to_df(file_path: str):
             (df['# Timestamp'].notnull()) &
             (df['Latitude'] >=53.5) & (df['Latitude'] <=58.5) &
             (df['Longitude'] >= 3.2) & (df['Longitude'] <=16.5) &
-            (df['SOG'] <=102)
+            (df['SOG'] <=102) & 
+            (df['Ship_type'].isin(ship_types))
     ].reset_index()
     
     subset_columns = ['MMSI', 'Latitude', 'Longitude', '# Timestamp']  # Adjust these based on your actual columns
@@ -120,7 +123,7 @@ def cleanse_csv_file_and_convert_to_df(file_path: str):
     # Grouping by the columns 'imo', 'name', 'length', 'width', and 'ship_type'
     # and filling missing values within each group with the first non-null value
     df[['imo', 'name', 'length', 'width', 'ship_type']] = df.groupby('mmsi')[['imo', 'name', 'length', 'width', 'ship_type']].transform(lambda x: x.ffill())
-
+    df.infer_objects(copy=False)
     # Filling any remaining missing values with the last non-null value
     df[['imo', 'name', 'length', 'width', 'ship_type']] = df.groupby('mmsi')[['imo', 'name', 'length', 'width', 'ship_type']].transform(lambda x: x.bfill())
     

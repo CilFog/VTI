@@ -13,6 +13,11 @@ DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 AIS_CSV_FOLDER = os.path.join(DATA_FOLDER, 'ais_csv')
 ETL_LOG = 'etl_log.txt'
 
+global num_points_before_filtering
+global num_points_after_filtering
+global after_splitting
+
+
 logging = setup_logger(name=ETL_LOG, log_file=ETL_LOG)
 
 def get_csv_files_in_interval(interval: str):
@@ -42,6 +47,9 @@ def get_csv_files_in_interval(interval: str):
     logging.info('Began extracting csv files')
     
     try:
+        num_points_before_filtering = 0
+        
+        
         for file in files_to_download:
             logging.info(f'Extracting {file}')
             extract_csv_file(file_name=file)
@@ -89,7 +97,7 @@ def extract_csv_file(file_name: str) -> gpd.GeoDataFrame:
         csv_file_path = os.path.join(AIS_CSV_FOLDER, file_name)
         
         logging.info(f'Cleansing {file_name}')
-        df = cleanse_csv_file_and_convert_to_df(file_path=csv_file_path)
+        (df, removed) = cleanse_csv_file_and_convert_to_df(file_path=csv_file_path)
         create_trajectories_files(df)
         logging.info(f'Finished creating trajectories for {file_name}')
         os.remove(csv_file_path)
