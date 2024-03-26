@@ -180,7 +180,4 @@ data/meta_trajectories/
 
 data/original/
 
-data/input_graph/
-*.py
-
 .vscode/
