@@ -116,7 +116,7 @@ def cleanse_csv_file_and_convert_to_df(file_path: str):
     
     subset_columns = ['MMSI', 'Latitude', 'Longitude', '# Timestamp']  # Adjust these based on your actual columns
     df = df.drop_duplicates(subset=subset_columns, keep='first')
-
+    
     # We round the lat and longs as we do not need 15 decimals of precision
     # This will save some computation time later.
     # We also round rot, sog and cog, as we do not need a lot of decimal precision here
