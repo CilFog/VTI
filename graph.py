@@ -258,6 +258,16 @@ def create_edges():
     export_edges_coordinates(edges_coordinates, 'edges.txt')
 
 def impute_trajectory():
+    """
+    Input:
+        Sparse trajectory
+        List of nodes
+        List of edges
+
+    Output:
+        Dense trajectory 
+
+    """
     print("Imputation")    
 
     # TO-DO (Imputation):
@@ -268,7 +278,8 @@ def impute_trajectory():
             # it decides which edge to take based on:
                 # the depth value of the trajectory considered for imputation
 
-create_edges()
+#create_edges()
+impute_trajectory()
 
 
     
