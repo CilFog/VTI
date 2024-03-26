@@ -1,22 +1,23 @@
 import os
 import numpy as np
 import pandas as pd
-import geopandas as gpd
-from sklearn.metrics.pairwise import pairwise_distances
-from sklearn.cluster import DBSCAN
-from scipy.spatial import cKDTree
-import matplotlib.pyplot as plt
-from data.logs.logging import setup_logger
 import networkx as nx
-from math import radians, sin, cos, sqrt, atan2, degrees
-from utils import calculate_initial_compass_bearing, get_haversine_dist_df_in_meters, get_radian_and_radian_diff_columns
-from config import load_config
-from connect import connect
+import geopandas as gpd
+import matplotlib.pyplot as plt
+from scipy.spatial import cKDTree
+from sklearn.cluster import DBSCAN
 from sqlalchemy import create_engine
+from data.logs.logging import setup_logger
+from create_grid_layers.connect import connect
+from create_grid_layers.config import load_config
+from sklearn.metrics.pairwise import pairwise_distances
+from math import radians, sin, cos, sqrt, atan2, degrees
+from .utils import calculate_initial_compass_bearing, get_haversine_dist_df_in_meters, get_radian_and_radian_diff_columns
 
 LOG_PATH = 'graph_log.txt'
-INPUT_FOLDER_PATH = os.path.join(os.path.dirname(__file__), 'data/original')
-META_TRAJECTORIES_PATH = os.path.join(os.path.dirname(__file__), 'data/meta_trajectories')
+DATA_FOLDER = os.path.join(os.path.dirname(__file__), 'data')
+INPUT_FOLDER_PATH = os.path.join(DATA_FOLDER, 'original')
+META_TRAJECTORIES_PATH = os.path.join(DATA_FOLDER, 'data/meta_trajectories')
 RADIUS_METER_THRESHOLD = 50
 RADIUS_DEGREE_THRESHOLD = RADIUS_METER_THRESHOLD * 10e-6
 
@@ -24,7 +25,7 @@ RADIUS_DEGREE_THRESHOLD = RADIUS_METER_THRESHOLD * 10e-6
 if not os.path.exists(META_TRAJECTORIES_PATH):
     os.makedirs(META_TRAJECTORIES_PATH)
 
-logging = setup_logger(LOG_PATH)
+logging = setup_logger(name=LOG_PATH, log_file=LOG_PATH)
 
 def get_trajectory_df(file_path) -> gpd.GeoDataFrame:
     """

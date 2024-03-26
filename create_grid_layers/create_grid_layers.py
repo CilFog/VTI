@@ -1,11 +1,11 @@
 import os
-from matplotlib import pyplot as plt
+import warnings
+import rasterio
+import psycopg2
+import sqlalchemy
+import geoalchemy2
 import numpy as np
 import pandas as pd
-import psycopg2
-import rasterio
-from pyproj import Transformer, CRS
-from shapely.geometry import Point, box
 import geopandas as gpd
 import geoalchemy2
 import sqlalchemy
@@ -15,7 +15,10 @@ from connect import connect
 import warnings
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from shapely.geometry import Point, box
 from geoalchemy2.shape import from_shape
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import create_engine, Column, Float, Integer, ForeignKey
 
 #DEPTH_MAP = 'C:/Users/alexf/Desktop/ddm_50m.dybde.tiff'
 DEPTH_MAP = '/srv/P-10/ddm_50m.dybde.tiff'
