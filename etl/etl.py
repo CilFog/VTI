@@ -100,7 +100,7 @@ def extract_csv_file(file_name: str) -> gpd.GeoDataFrame:
         (df, removed) = cleanse_csv_file_and_convert_to_df(file_path=csv_file_path)
         create_trajectories_files(df)
         logging.info(f'Finished creating trajectories for {file_name}')
-        os.remove(csv_file_path)
+        #os.remove(csv_file_path)
         
     except Exception as e:
         logging.error(f'Failed to extract file {file_name} with error message: {repr(e)}')
@@ -141,4 +141,4 @@ def download_file_from_ais_web_server(file_name: str):
         logging.exception(f'Failed with error: {e}')
         quit()
 
-get_csv_files_in_interval("2023-03-24::2024-03-24")
+get_csv_files_in_interval("2023-03-24::2024-03-25")

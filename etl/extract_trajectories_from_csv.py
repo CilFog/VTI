@@ -79,6 +79,8 @@ def cleanse_csv_file_and_convert_to_df(file_path: str) -> tuple[gpd.GeoDataFrame
     
     ship_types = ['fishing', 'tanker', 'tug', 'cargo', 'passenger', 'dredging', 'law enforcement', 'anti-pollution', 'pilot', 'pleasure', 'towing', 'port tender', 'diving', 'towing long/wide', ''] 
    
+    points_before_filtration = len(df)
+   
     # Remove all the rows which does not satisfy our conditions
     df = df[
             (df["Type of mobile"] != "Class B") &
@@ -123,7 +125,7 @@ def cleanse_csv_file_and_convert_to_df(file_path: str) -> tuple[gpd.GeoDataFrame
     # Grouping by the columns 'imo', 'name', 'length', 'width', and 'ship_type'
     # and filling missing values within each group with the first non-null value
     df[['imo', 'name', 'length', 'width', 'ship_type']] = df.groupby('mmsi')[['imo', 'name', 'length', 'width', 'ship_type']].transform(lambda x: x.ffill())
-    df.infer_objects(copy=False)
+
     # Filling any remaining missing values with the last non-null value
     df[['imo', 'name', 'length', 'width', 'ship_type']] = df.groupby('mmsi')[['imo', 'name', 'length', 'width', 'ship_type']].transform(lambda x: x.bfill())
     
@@ -131,7 +133,9 @@ def cleanse_csv_file_and_convert_to_df(file_path: str) -> tuple[gpd.GeoDataFrame
     df = df.drop(columns=['index'], errors='ignore')
     df = df.to_crs(epsg="3857") # to calculate in meters
     
-    return df
+    removed = points_before_filtration - len(df)
+    
+    return (df, removed)
        
 def create_trajectories_files(gdf: gpd.GeoDataFrame):
     if (gdf.empty):
