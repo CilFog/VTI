@@ -2,55 +2,71 @@ import os
 import time as t
 import numpy as np
 import pandas as pd
-import geopandas as gpd
 import datetime as dt
+import geopandas as gpd
 from shapely import wkb
+from data.stats.stats_manager import stats
 from data.logs.logging import setup_logger
 from .split_tractories import split_trajectories_from_df
+from utils import get_radian_and_radian_diff_columns, calculate_initial_compass_bearing, get_haversine_dist_df_in_meters
 
 DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 HARBORS_FILE = os.path.join(DATA_FOLDER, 'harbors.csv')
 AIS_CSV_FOLDER = os.path.join(DATA_FOLDER, 'ais_csv')
 ORIGINAL_FOLDER = os.path.join(DATA_FOLDER, 'original')
+STATISTIC_FOLDER = os.path.join(DATA_FOLDER, 'stats')
+STATISTIC_FILE = os.path.join(STATISTIC_FOLDER, 'stats.json')
 CSV_EXTRACT_FILE_LOG = 'ais_extraction_log.txt'
-
-
+SOG_STANDSTILL = 0.0
 logging = setup_logger(name=CSV_EXTRACT_FILE_LOG, log_file=CSV_EXTRACT_FILE_LOG)
 
 def extract_trajectories_from_csv_files():
-    #create_csv_file_for_mmsis(file_path=os.path.join(AIS_CSV_FOLDER,'aisdk-2024-02-11.csv')) #specify in method which mmsi
-    #file_names = os.listdir(TEST_DATA_FOLDER)
-    file_names = os.listdir(AIS_CSV_FOLDER)
+    filenames = os.listdir(AIS_CSV_FOLDER)
     completed:int = 0
     
-    logging.info(f'Began extracting trajectories from {len(file_names)} csv files')
-    
-    for file_index in range(len(file_names)):
-        file_name = file_names[file_index]
-        #file_path = os.path.join(TEST_DATA_FOLDER, file_name)
-        file_path = os.path.join(AIS_CSV_FOLDER, file_name)
+    logging.info(f'Began extracting trajectories from {len(filenames)} csv files')
+    try:
+        for file_index in range(len(filenames)):
+            filename = filenames[file_index]
+            filepath = os.path.join(AIS_CSV_FOLDER, filename)
 
-        logging.info(f'Currently extracting file: {file_name} (Completed ({completed}/{len(file_names)}) csv files)')        
-        df:gpd.GeoDataFrame = cleanse_csv_file_and_convert_to_df(file_path)
-        completed +=1
+            logging.info(f'Currently extracting file: {filename} (Completed ({completed}/{len(filenames)}) csv files)')        
+            df = get_csv_as_df(filepath=filepath)
+            completed +=1
+                    
+            initial_row_count = len(df)
+            stats.filepath.append(filepath)
+            stats.initial_rows.append(initial_row_count)
+            
+            # Step 2: Cleanse CSV
+            logging.info(f'Cleansing csv {filename}')
+            df = cleanse_df(gdf=df)
+            filtered_row_count = len(df)
+            
+            stats.filtered_rows.append(filtered_row_count)
+            
+            logging.info(f'Finished extracting file: {filename} (Completed ({completed}/{len(filenames)}) csv files)')        
+            logging.info(f'Began crating trajectories for file: {filename}')
+
+            if (not df.empty):
+                create_trajectories_files(gdf=df, filename=filename)
+            else:
+                logging.warning(f'No data was extracted from {filename}')
         
-        logging.info(f'Finished extracting file: {file_name} (Completed ({completed}/{len(file_names)}) csv files)')        
-        logging.info(f'Began crating trajectories for file: {file_name}')
-
-        if (not df.empty):
-            create_trajectories_files(gdf=df)
-        else:
-            logging.warning(f'No data was extracted from {file_name}')
+        stats.save_to_file(STATISTIC_FILE)
                 
-    logging.info('Finished creating trajecatories. Terminating')
+        logging.info('Finished creating trajecatories. Terminating')
+    except Exception as e:
+        logging.error(f'Failed extracting traectories with {repr(e)}')
+        quit()
 
-def cleanse_csv_file_and_convert_to_df(file_path: str):
+def get_csv_as_df(filepath:str) -> gpd.GeoDataFrame:
     """
-    Takes a .csv file and cleanses it according to the set predicates.
-    :param file_name: File name to cleanse. Example: 'aisdk-2022-01-01.csv'
-    :return: A cleansed geodataframe, sorted by timestamp (ascending)
+    Takes a .csv file and returns df
+    :param file_path: path to file
+    :return: A df
     """
-
+    
     types = {
         '# Timestamp': str,
         'Type of mobile': str,
@@ -70,41 +86,54 @@ def cleanse_csv_file_and_convert_to_df(file_path: str):
         'Data source type': str
     }
     
-    df = pd.read_csv(file_path, na_values=['Unknown','Undefined'], dtype=types)#, nrows=1000000)    
+    df = pd.read_csv(filepath, na_values=['Unknown','Undefined'], dtype=types)#, nrows=1000000)    
 
     # Remove unwanted columns containing data we do not need. This saves a little bit of memory.
     # errors='ignore' is sat because older ais data files may not contain these columns.
     df = df.drop(['A','B','C','D','ETA','Cargo type','Data source type', 'Destination', 'Type of position fixing device',
                   'Callsign'],axis=1, errors='ignore')
-           
+    
+    return df
+    
+def cleanse_df(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """
+    Takes a df and cleanses it according to the set predicates.
+    :param df: df to cleanse'
+    :return: A cleansed geodataframe, sorted by timestamp (ascending)
+    """
+    
+    # df['Ship type'] = df['Ship type'].str.lower().replace(' ', '_').replace('/', '_')
+    ship_types = ['fishing', 'tanker', 'tug', 'cargo', 'passenger', 'dredging', 'law enforcement', 'anti-pollution', 'pilot', 'pleasure', 'towing', 'port tender', 'diving', 'towing long/wide', ''] 
+      
     # Remove all the rows which does not satisfy our conditions
-    df = df[
-            (df["Type of mobile"] != "Class B") &
-            (df["MMSI"].notna()) &
-            (df["MMSI"].notnull()) &
-            (df['# Timestamp'].notnull()) &
-            (df['Latitude'] >=53.5) & (df['Latitude'] <=58.5) &
-            (df['Longitude'] >= 3.2) & (df['Longitude'] <=16.5) &
-            (df['SOG'] <=102)
+    gdf = gdf[
+            (gdf["Type of mobile"] != "Class B") &
+            (gdf["MMSI"].notna()) &
+            (gdf["MMSI"].notnull()) &
+            (gdf['# Timestamp'].notnull()) &
+            (gdf['Latitude'] >=53.5) & (gdf['Latitude'] <=58.5) &
+            (gdf['Longitude'] >= 3.2) & (gdf['Longitude'] <=16.5) &
+            (gdf['SOG'] <=102) & 
+            (gdf['Ship type'].str.lower().isin(ship_types))
     ].reset_index()
     
     subset_columns = ['MMSI', 'Latitude', 'Longitude', '# Timestamp']  # Adjust these based on your actual columns
-    df = df.drop_duplicates(subset=subset_columns, keep='first')
+    gdf = gdf.drop_duplicates(subset=subset_columns, keep='first')
     
     # We round the lat and longs as we do not need 15 decimals of precision
     # This will save some computation time later.
     # We also round rot, sog and cog, as we do not need a lot of decimal precision here
-    df['Latitude'] = np.round(df['Latitude'], decimals=6)
-    df['Longitude'] = np.round(df['Longitude'], decimals=6)
-    df['ROT'] = np.round(df['ROT'], decimals=2)
-    df['SOG'] = np.round(df['SOG'], decimals=2)
-    df['COG'] = np.round(df['COG'], decimals=2)
-    df['# Timestamp'] = pd.to_datetime(df['# Timestamp'], format="%d/%m/%Y %H:%M:%S").sort_values()
-    df['# Timestamp'].astype('int64')//1e9
-    df['# Timestamp'] = (df['# Timestamp'] - dt.datetime(1970,1,1)).dt.total_seconds()    
+    gdf['Latitude'] = np.round(gdf['Latitude'], decimals=6)
+    gdf['Longitude'] = np.round(gdf['Longitude'], decimals=6)
+    gdf['ROT'] = np.round(gdf['ROT'], decimals=2)
+    gdf['SOG'] = np.round(gdf['SOG'], decimals=2)
+    gdf['COG'] = np.round(gdf['COG'], decimals=2)
+    gdf['# Timestamp'] = pd.to_datetime(gdf['# Timestamp'], format="%d/%m/%Y %H:%M:%S").sort_values()
+    gdf['# Timestamp'].astype('int64')//1e9
+    gdf['# Timestamp'] = (gdf['# Timestamp'] - dt.datetime(1970,1,1)).dt.total_seconds()    
 
     # Rename the columns
-    df = df.rename(columns={
+    gdf = gdf.rename(columns={
             '# Timestamp':'timestamp',
             'Type of mobile':'type_of_mobile',
             'Navigational status':'navigational_status',
@@ -113,38 +142,97 @@ def cleanse_csv_file_and_convert_to_df(file_path: str):
         })
 
     # lower case names in the columns
-    df.columns = map(str.lower, df.columns)
+    gdf.columns = map(str.lower, gdf.columns)
     
-    if (df.empty):
-        return df
-    # Grouping by the columns 'imo', 'name', 'length', 'width', and 'ship_type'
-    # and filling missing values within each group with the first non-null value
-    df[['imo', 'name', 'length', 'width', 'ship_type']] = df.groupby('mmsi')[['imo', 'name', 'length', 'width', 'ship_type']].transform(lambda x: x.ffill())
-
-    # Filling any remaining missing values with the last non-null value
-    df[['imo', 'name', 'length', 'width', 'ship_type']] = df.groupby('mmsi')[['imo', 'name', 'length', 'width', 'ship_type']].transform(lambda x: x.bfill())
-    
-    df = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df['longitude'], df['latitude']), crs="EPSG:4326")
-    df = df.drop(columns=['index'], errors='ignore')
-    df = df.to_crs(epsg="3857") # to calculate in meters
-    
-    return df
-       
-def create_trajectories_files(gdf: gpd.GeoDataFrame):
     if (gdf.empty):
         return gdf
     
-    harbors_df = extract_harbors_df()
+    # Grouping by the columns 'imo', 'name', 'length', 'width', and 'ship_type'
+    # and filling missing values within each group with the first non-null value and afterwars last non-value
+    gdf[['imo', 'name', 'length', 'width', 'ship_type']] = gdf.groupby('mmsi')[['imo', 'name', 'length', 'width', 'ship_type']].transform(lambda x: x.ffill().bfill()).infer_objects()
     
-    trajectories_df = gdf.sort_values('timestamp').groupby('mmsi')
-    
-    logging.info(f'Began creating trajectories for {trajectories_df.ngroups} mmsi')
-    
-    for mmsi, trajectory_df in trajectories_df:                
-        sub_trajectories_df = split_trajectories_from_df(harbors_df=harbors_df, trajectory_df=trajectory_df) 
+    gdf = gpd.GeoDataFrame(gdf, geometry=gpd.points_from_xy(gdf['longitude'], gdf['latitude']), crs="EPSG:4326")
+    gdf = gdf.drop(columns=['index'], errors='ignore')
+    gdf = gdf.to_crs(epsg="3857") # to calculate in meters
         
-        if not sub_trajectories_df.empty:
-            write_trajectories_to_original_folder(sub_trajectories_df)
+    return gdf     
+   
+def create_trajectories_files(gdf: gpd.GeoDataFrame):
+    """Given a nonempty dataframe, splits trajectories and creates txt files. Further creates static file"""
+    try:
+        
+        if (gdf.empty):
+            return gdf    
+
+        harbors_df = extract_harbors_df()
+        
+        trajectories_df = gdf.sort_values('timestamp').groupby('mmsi')
+        
+        logging.info(f'Began creating trajectories for {trajectories_df.ngroups} mmsi')
+        
+        removed_due_to_draught_before_split = 0
+        removed_due_to_length = 0 
+        removed_due_to_draught_after_split = 0
+        total_trajectories_after_split = 0
+        rows_per_trajectory_after_split = []
+        lengths = []
+            
+        for mmsi, trajectory_df in trajectories_df:
+            if trajectory_df.draught.isnull().all() or trajectory_df.draught.isna().all():
+                removed_due_to_draught_before_split += 1
+                continue
+             
+            sub_trajectories_df = split_trajectories_from_df(harbors_df=harbors_df, trajectory_df=trajectory_df) 
+                    
+            if sub_trajectories_df is not None and not sub_trajectories_df.empty:
+                for _, sub_trajectory_df in sub_trajectories_df.groupby('sub_trajectory_id'):
+                    if sub_trajectory_df is None or sub_trajectory_df.empty:
+                        continue
+                    
+                    if len(sub_trajectory_df) < 2:
+                        removed_due_to_length += 1
+                        continue
+                    
+                    # issue with draught
+                    if sub_trajectory_df.draught.isnull().all() or sub_trajectory_df.draught.isna().all():
+                        removed_due_to_draught_after_split += 1
+                        continue
+                    
+                    filtered_sub_trajectory = sub_trajectory_df.copy()
+                    
+                    if sub_trajectory_df.draught.isnull().any() or sub_trajectory_df.draught.isna().any():
+                        max_draught = sub_trajectory_df['draught'].max()
+                        filtered_sub_trajectory['draught'] = sub_trajectory_df['draught'].fillna(max_draught)
+
+                    # filter away trajectory running in circles
+                    # Create a boolean mask to identify rows where the next row has different latitude or longitude
+                    mask = (sub_trajectory_df['latitude'] != sub_trajectory_df['latitude'].shift(-1)) | (sub_trajectory_df['longitude'] != sub_trajectory_df['longitude'].shift(-1))
+
+                    # Apply the mask to keep only the rows where the next row has different latitude or longitude
+                    filtered_sub_trajectory = sub_trajectory_df[mask]    
+
+                    if len(filtered_sub_trajectory) < 2:
+                        removed_due_to_length += 1
+                        continue
+                    
+                    total_trajectories_after_split += 1
+                    trajectory_rows = len(filtered_sub_trajectory)
+                    rows_per_trajectory_after_split.append(trajectory_rows)
+                    distance_travelled = calculate_distance_travelled(trajectory_df=filtered_sub_trajectory)
+                    lengths.append(distance_travelled)
+                                    
+                    write_trajectory_to_original_folder(filtered_sub_trajectory)
+        
+        stats.trajectory_counts.append(len(trajectories_df))    
+        stats.rows_per_trajectory.extend(trajectories_df.apply(len))
+        stats.trajectory_removed_due_to_draught.append(removed_due_to_draught_before_split)
+        stats.trajectory_removed_due_to_draught_after_split.append(removed_due_to_draught_after_split)
+        stats.trajectory_counts_after_split.append(total_trajectories_after_split)
+        stats.rows_per_trajectory_after_split.extend(rows_per_trajectory_after_split)
+        stats.distance_travelled_m_per_trajectory_after_split.extend(lengths)
+    except Exception as e:
+        print(f'Error occurred with error: {repr(e)}')
+        return
 
 def extract_harbors_df() -> gpd.GeoDataFrame:    
     df = pd.read_csv(HARBORS_FILE, na_values=['Unknown','Undefined']) 
@@ -153,30 +241,33 @@ def extract_harbors_df() -> gpd.GeoDataFrame:
     gdf = gdf.drop(columns=['index'], errors='ignore')
     gdf = gdf.to_crs(epsg="3857") # to calculate in meters
     
-    return gdf
-
-def write_trajectories_to_original_folder(gdf: gpd.GeoDataFrame):
-    if (gdf.empty):
-            return
-        
-    for _, sub_trajectories in gdf.groupby('sub_trajectory_id'):
-        if len(sub_trajectories) < 2:
-            continue
-        
-        datetime_object = dt.datetime.fromtimestamp(sub_trajectories.iloc[0].timestamp, tz=dt.timezone.utc)
-        str_datetime = datetime_object.strftime('%d/%m/%Y %H:%M:%S').replace('/', '-').replace(' ', '_').replace(':', '-') 
-        folder_name = str(sub_trajectories.iloc[0].mmsi)
-        file_name = f'{folder_name}_{str_datetime}.txt'
-        
-        folder_path = os.path.join(ORIGINAL_FOLDER, folder_name)
-        
-        os.makedirs(folder_path, exist_ok=True)  # Create the folder if it doesn't exist
-       
-        file_path = os.path.join(folder_path, file_name)
-       
-        write_trajectories(file_path, sub_trajectories)     
-        
-def write_trajectories(file_path:str, sub_trajectory: gpd.GeoDataFrame):
-    sub_trajectory[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'navigational_status']].reset_index(drop=True).to_csv(file_path, sep=',', index=True, header=True, mode='w')
+    return gdf  
     
-extract_trajectories_from_csv_files()
+def calculate_distance_travelled(trajectory_df: gpd.GeoDataFrame) -> float:
+    gdf_next = trajectory_df.shift(-1)
+    trajectory_df, gdf_next = get_radian_and_radian_diff_columns(trajectory_df, gdf_next)
+    
+    bearing_df = calculate_initial_compass_bearing(df_curr=trajectory_df, df_next=gdf_next)
+    trajectory_df['cog'] = trajectory_df['cog'].fillna(bearing_df)
+
+    trajectory_df['dist'] = get_haversine_dist_df_in_meters(df_curr=trajectory_df, df_next=gdf_next).fillna(0)
+    distance_travelled = trajectory_df['dist'].sum()
+
+    return distance_travelled
+
+def write_trajectory_to_original_folder(sub_trajectory_df: gpd.GeoDataFrame):
+    if (sub_trajectory_df.empty):
+        return
+        
+    datetime_object = dt.datetime.fromtimestamp(sub_trajectory_df.iloc[0].timestamp, tz=dt.timezone.utc)
+    str_datetime = datetime_object.strftime('%d/%m/%Y %H:%M:%S').replace('/', '-').replace(' ', '_').replace(':', '-') 
+    foldername = str(sub_trajectory_df.iloc[0].mmsi)
+    filename = f'{foldername}_{str_datetime}.txt'
+    vessel_folder = sub_trajectory_df.iloc[0].ship_type
+    folderpath = os.path.join(ORIGINAL_FOLDER, vessel_folder, foldername)
+        
+    os.makedirs(folderpath, exist_ok=True)  # Create the folder if it doesn't exist
+    
+    file_path = os.path.join(folderpath, filename)
+    
+    sub_trajectory_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'navigational_status']].reset_index(drop=True).to_csv(file_path, sep=',', index=True, header=True, mode='w')

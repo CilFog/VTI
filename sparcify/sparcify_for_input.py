@@ -16,7 +16,7 @@ from utils import get_radian_and_radian_diff_columns, calculate_initial_compass_
 
 
 DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
-ORIGINAL_FOLDER = os.path.join(DATA_FOLDER, 'original')
+ORIGINAL_FOLDER = os.path.join(DATA_FOLDER, 'original_old')
 INPUT_FOLDER = os.path.join(DATA_FOLDER, 'input')
 INPUT_ALL_FOLDER = os.path.join(INPUT_FOLDER, 'all')
 INPUT_ALL_VALIDATION_FOLDER = os.path.join(INPUT_ALL_FOLDER, 'validation')
@@ -62,8 +62,10 @@ def filter_original_trajectories(sog_threshold: float):
     initial_num = 0
     try:
         initial_time = t.perf_counter()
-        logging.info('Began filtering original trajectories')   
+        logging.info('Began filtering original trajectories')
+        os_path_split = ''   
         for root, folder, files in os.walk(ORIGINAL_FOLDER):
+            os_path_split = '/' if '/' in root else '\\'
             for file in files:
                 file_path = os.path.join(root, file)
                 trajectory_df:gpd.GeoDataFrame = get_trajectory_df_from_txt(file_path=file_path)
@@ -125,10 +127,10 @@ def filter_original_trajectories(sog_threshold: float):
                 
                 some_null_draught = filtered_df.draught.isnull().any() or filtered_df.draught.isna().any()
                 
-                file_name = file.split('/')[-1]
+                file_name = file.split(os_path_split)[-1]
                 vessel_folder = trajectory_df.iloc[0].ship_type.replace('/', '_').replace(' ', '_')
-                mmsi = root.split('\\')[-1] if root.contains('\\') else root.split('/')[-1]
-                new_folder_path = f'{ORIGINAL_FOLDER}/{vessel_folder}/{mmsi}'
+                mmsi = root.split(os_path_split)[-1]
+                new_folder_path = os.path.join(ORIGINAL_FOLDER, vessel_folder, mmsi)
                 os.makedirs(new_folder_path, exist_ok=True)  # Create the folder if it doesn't exist
             
                 # only sog updated
@@ -137,21 +139,21 @@ def filter_original_trajectories(sog_threshold: float):
                     str_datetime = datetime_object.strftime('%d/%m/%Y %H:%M:%S').replace('/', '-').replace(' ', '_').replace(':', '-')            
                     file_name = f'{mmsi}_{str_datetime}.txt'
                     new_file_path = os.path.join(new_folder_path, file_name)
-                    filtered_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].reset_index(drop=True).to_csv(new_file_path, sep=',', index=True, header=True, mode='w')
+                    filtered_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'navigational_status']].reset_index(drop=True).to_csv(new_file_path, sep=',', index=True, header=True, mode='w')
                 
                 # nothing to update
                 elif not some_null_draught and len(filtered_df) == len(trajectory_df):
                     file_name = file_name.replace('/', '-').replace(' ', '_').replace(':', '-') 
                     
                     new_file_path = os.path.join(new_folder_path, file_name)
-                    filtered_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].reset_index(drop=True).to_csv(new_file_path, sep=',', index=True, header=True, mode='w')
+                    filtered_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'navigational_status']].reset_index(drop=True).to_csv(new_file_path, sep=',', index=True, header=True, mode='w')
                 
                 # only druaght updated
                 elif some_null_draught and len(filtered_df) == len(trajectory_df):
                     max_draught = filtered_df['draught'].max()
                     filtered_df['draught'] = filtered_df['draught'].fillna(max_draught)
                     new_file_path = os.path.join(new_folder_path, file_name)
-                    filtered_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].reset_index(drop=True).to_csv(new_file_path, sep=',', index=True, header=True, mode='w')
+                    filtered_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'navigational_status']].reset_index(drop=True).to_csv(new_file_path, sep=',', index=True, header=True, mode='w')
                     
                 # both updated
                 else:
@@ -163,7 +165,7 @@ def filter_original_trajectories(sog_threshold: float):
                     str_datetime = datetime_object.strftime('%d/%m/%Y %H:%M:%S').replace('/', '-').replace(' ', '_').replace(':', '-')             
                     file_name = f'{mmsi}_{str_datetime}.txt'
                     new_file_path = os.path.join(new_folder_path, file_name)
-                    filtered_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].reset_index(drop=True).to_csv(new_file_path, sep=',', index=True, header=True, mode='w')
+                    filtered_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'navigational_status']].reset_index(drop=True).to_csv(new_file_path, sep=',', index=True, header=True, mode='w')
 
                 
                 
@@ -244,7 +246,7 @@ def sparcify_trajectories_randomly_using_threshold(file_path:str, folder_path: s
         
         os.makedirs(vessel_folder_path, exist_ok=True)  # Create the folder if it doesn't exist
 
-        sparse_trajectory[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'speed_mps', 'speed_knots']].reset_index(drop=True).to_csv(new_file_path, sep=',', index=True, header=True, mode='w')
+        sparse_trajectory[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'navigational_status', 'speed_mps', 'speed_knots']].reset_index(drop=True).to_csv(new_file_path, sep=',', index=True, header=True, mode='w')
 
         reduced_points = len(trajectory_filtered) - len(sparse_trajectory)    
         
@@ -303,33 +305,52 @@ def sparcify_realisticly_trajectories(file_path:str, folder_path: str, threshold
             # Convert relevant columns to numpy arrays for faster access
             timestamps = trajectory_filtered_df['timestamp'].to_numpy()
             speed_knots = trajectory_filtered_df['speed_knots'].to_numpy()
-
+            navigation_status = trajectory_filtered_df['navigation_status'].to_numpy()
+            cogs = trajectory_filtered_df['navigation_status'].to_numpy()
+        
             # Pre-allocate a boolean array to mark points to keep
             keep = np.full(shape=len(trajectory_filtered_df), fill_value=False, dtype=bool)
+            stationed_navigation_status = ['anchored', 'moored']
             
             # Loop over points starting from the second one
             last_kept_index = 0
             for i in range(1, len(trajectory_filtered_df)):
                 time_diff = timestamps[i] - timestamps[last_kept_index]
                 speed_last_kept = speed_knots[last_kept_index]
+                navigation_last_kept = navigation_status[last_kept_index]
+                cog_last_kept = cogs[last_kept_index]
+                
                 speed_curr = speed_knots[i]
-                keep_condition = (speed_last_kept >= 3 and speed_curr >= 3 and time_diff > 10) or \
-                                (speed_last_kept >= 3  and (speed_curr < 3 or time_diff > 10)) or \
-                                (speed_last_kept < 3 and speed_curr < 3 and time_diff > 180) or \
-                                (speed_last_kept < 3 and (speed_curr >= 3 or time_diff > 180))
+                navigation_curr = navigation_status[i]
+                cog_curr = cogs[i]
+                    
+                keep_conditions = (navigation_last_kept in stationed_navigation_status and navigation_curr in stationed_navigation_status and time_diff > 180) or \
+                                (navigation_last_kept in stationed_navigation_status and time_diff > 180) or \
+                                (0 < speed_last_kept <= 14 and 0 <= speed_curr <= 14 and time_diff > 10) or \
+                                (0 < speed_last_kept <= 14 and 0 <= speed_curr <= 14 and cog_last_kept != cog_curr and time_diff > 3.33) or \
+                                (14 < speed_last_kept <= 23 and 14 < speed_curr <= 23 and time_diff > 6) or \
+                                (14 < speed_last_kept <= 23 and 14 < speed_curr <= 23 and time_diff > 6 and cog_last_kept != cog_curr and time_diff > 2) or \
+                                (speed_last_kept > 23 and speed_curr > 23 and time_diff > 2) or \
+                                (speed_last_kept > 23 and speed_curr > 23 and cog_last_kept != cog_curr and time_diff > 2) or \
+                                (0 < speed_last_kept <= 14 and cog_last_kept != cog_curr and time_diff > 3.33 and time_diff > 3.33) or \
+                                (0 < speed_last_kept <= 14 and time_diff > 10) or \
+                                (14 < speed_last_kept <= 23 and cog_last_kept != cog_curr and time_diff > 2) or \
+                                (14 < speed_last_kept <= 23 and time_diff > 6) or \
+                                (speed_last_kept > 23 and time_diff > 2)
 
+                
                 # If the condition is false, mark the current point to be kept
-                if keep_condition:
+                if keep_conditions:
                     keep[i] = True
                     last_kept_index = i
             
             keep[0] = keep[-1] = True # keep first and last
 
             sparse_trajectory_df = trajectory_filtered_df[keep]
-            sparse_trajectory_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'speed_mps', 'speed_knots']].reset_index(drop=True).to_csv(new_file_path, sep=',', index=True, header=True, mode='w')                
+            sparse_trajectory_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'navigational_status', 'speed_mps', 'speed_knots']].reset_index(drop=True).to_csv(new_file_path, sep=',', index=True, header=True, mode='w')                
             reduced_points = len(trajectory_filtered_df) - len(sparse_trajectory_df)
         else:
-            trajectory_filtered_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'speed_mps', 'speed_knots']].to_csv(new_file_path, sep=',', index=True, header=True, mode='w')     
+            trajectory_filtered_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'navigational_status', 'speed_mps', 'speed_knots']].to_csv(new_file_path, sep=',', index=True, header=True, mode='w')     
     
         return SparsifyResult(reduced_points=reduced_points, number_of_points=number_of_points, trajectory_was_used=True)  
     except Exception as e:
@@ -384,23 +405,35 @@ def sparcify_realisticly_strict_trajectories(file_path:str, folder_path: str, th
             # Convert relevant columns to numpy arrays for faster access
             timestamps = trajectory_filtered_df['timestamp'].to_numpy()
             speed_knots = trajectory_filtered_df['speed_knots'].to_numpy()
+            navigation_status = trajectory_filtered_df['navigation_status'].to_numpy()
+            cogs = trajectory_filtered_df['navigation_status'].to_numpy()
 
             # Pre-allocate a boolean array to mark points to keep
             keep = np.full(shape=len(trajectory_filtered_df), fill_value=False, dtype=bool)
+            stationed_navigation_status = ['anchored', 'moored']
             
             # Loop over points starting from the second one
             last_kept_index = 0
             for i in range(1, len(trajectory_filtered_df)):
                 time_diff = timestamps[i] - timestamps[last_kept_index]
                 speed_last_kept = speed_knots[last_kept_index]
+                navigation_last_kept = navigation_status[last_kept_index]
+                cog_last_kept = cogs[last_kept_index]
+                
                 speed_curr = speed_knots[i]
-                keep_condition = (speed_last_kept >= 3 and speed_curr >= 3 and time_diff > 10) or \
-                                (speed_last_kept >= 3 and time_diff > 10) or \
-                                (speed_last_kept < 3 and speed_curr < 3 and time_diff > 180) or \
-                                (speed_last_kept < 3 and time_diff > 180)
+                navigation_curr = navigation_status[i]
+                cog_curr = cogs[i]
+                
+                keep_conditions = (navigation_last_kept in stationed_navigation_status and navigation_curr in stationed_navigation_status and time_diff > 180) or \
+                                (0 < speed_last_kept <= 14 and 0 <= speed_curr <= 14 and time_diff > 10) or \
+                                (0 < speed_last_kept <= 14 and 0 <= speed_curr <= 14 and cog_last_kept != cog_curr and time_diff > 3.33) or \
+                                (14 < speed_last_kept <= 23 and 14 < speed_curr <= 23 and time_diff > 6) or \
+                                (14 < speed_last_kept <= 23 and 14 < speed_curr <= 23 and time_diff > 6 and cog_last_kept != cog_curr and time_diff > 2) or \
+                                (speed_last_kept > 23 and speed_curr > 23 and time_diff > 2) or \
+                                (speed_last_kept > 23 and speed_curr > 23 and cog_last_kept != cog_curr and time_diff > 2) 
 
                 # If the condition is false, mark the current point to be kept
-                if keep_condition:
+                if keep_conditions:
                     keep[i] = True
                     last_kept_index = i
             
@@ -409,11 +442,11 @@ def sparcify_realisticly_strict_trajectories(file_path:str, folder_path: str, th
             sparse_trajectory_df = trajectory_filtered_df[keep]
             
             # Drop the rows identified by the indices in the list            
-            sparse_trajectory_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'speed_mps', 'speed_knots']].reset_index(drop=True).to_csv(new_file_path, sep=',', index=True, header=True, mode='w')        
+            sparse_trajectory_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'navigational_status', 'speed_mps', 'speed_knots']].reset_index(drop=True).to_csv(new_file_path, sep=',', index=True, header=True, mode='w')        
             reduced_points = len(trajectory_filtered_df) - len(sparse_trajectory_df)
         else:
             if number_of_points == 2:
-                trajectory_filtered_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'speed_mps', 'speed_knots']].to_csv(new_file_path, sep=',', index=True, header=True, mode='w')     
+                trajectory_filtered_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'navigational_status', 'speed_mps', 'speed_knots']].to_csv(new_file_path, sep=',', index=True, header=True, mode='w')     
                 
         return SparsifyResult(reduced_points=reduced_points, number_of_points=number_of_points, trajectory_was_used=True)  
     except Exception as e:
@@ -430,7 +463,7 @@ def sparcify_large_time_gap_with_threshold_percentage(file_path:str, folder_path
         vessel_folder_path = os.path.join(folder_path, vessel_folder)
         new_file_path = os.path.join(vessel_folder_path, file_name)
         
-        trajectory_df:gpd.GeoDataFrame = add_meta_data(trajectory_df=trajectory_df)
+        trajectory_df = add_meta_data(trajectory_df=trajectory_df)
         trajectory_df['group'] = 0
         
         if boundary_box:
@@ -487,7 +520,7 @@ def sparcify_large_time_gap_with_threshold_percentage(file_path:str, folder_path
         os.makedirs(vessel_folder_path, exist_ok=True)  # Create the folder if it doesn't exist
 
         # Save the sparsified trajectory as before
-        sparse_trajectory_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'speed_mps', 'speed_knots']].reset_index(drop=True).to_csv(new_file_path, sep=',', index=True, header=True, mode='w')
+        sparse_trajectory_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'navigational_status', 'speed_mps', 'speed_knots']].reset_index(drop=True).to_csv(new_file_path, sep=',', index=True, header=True, mode='w')
 
         reduced_points = len(trajectory_filtered) - len(sparse_trajectory_df)
         return SparsifyResult(reduced_points=reduced_points, number_of_points=number_of_points, trajectory_was_used=True)  
@@ -623,13 +656,13 @@ def check_empty_directories(root_dir):
 
     print(total_files)
 
-if __name__ == '__main__':
-    freeze_support()
+# if __name__ == '__main__':
+#     freeze_support()
 
-    # Assuming all necessary imports are already done
-    #sparcify_trajectories_with_action_for_folder(strfolder_path=INPUT_ALL_TEST_FOLDER + '/realistic_strict', action=sparcify_realisticly_strict_trajectories, threshold=0.0, boundary_box=None)
-    #sparcify_trajectories_with_action_for_folder(folder_path=INPUT_ALL_TEST_FOLDER + '/realistic', action=sparcify_realisticly_trajectories, threshold=0.0, boundary_box=None)
-    #sparcify_trajectories_with_action_for_folder(folder_path=INPUT_ALL_TEST_FOLDER + '/large_gap_0_5', action=sparcify_large_time_gap_with_threshold_percentage, threshold=0.5, boundary_box=None)
-    #sparcify_trajectories_with_action_for_folder(folder_path=INPUT_ALL_TEST_FOLDER + '/random_0_5', action=sparcify_trajectories_randomly_using_threshold, threshold=0.5, boundary_box=None)
-    
-    filter_original_trajectories(0.0)
+#     # Assuming all necessary imports are already done
+#     sparcify_trajectories_with_action_for_folder(strfolder_path=INPUT_ALL_TEST_FOLDER + '/realistic_strict', action=sparcify_realisticly_strict_trajectories, threshold=0.0, boundary_box=None)
+#     sparcify_trajectories_with_action_for_folder(folder_path=INPUT_ALL_TEST_FOLDER + '/realistic', action=sparcify_realisticly_trajectories, threshold=0.0, boundary_box=None)
+#     sparcify_trajectories_with_action_for_folder(folder_path=INPUT_ALL_TEST_FOLDER + '/large_gap_0_5', action=sparcify_large_time_gap_with_threshold_percentage, threshold=0.5, boundary_box=None)
+#     sparcify_trajectories_with_action_for_folder(folder_path=INPUT_ALL_TEST_FOLDER + '/random_0_5', action=sparcify_trajectories_randomly_using_threshold, threshold=0.5, boundary_box=None)
+
+filter_original_trajectories(sog_threshold=0.0)

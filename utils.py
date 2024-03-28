@@ -56,6 +56,10 @@ def get_haversine_dist_df_in_meters(df_curr:gpd.GeoDataFrame, df_next:gpd.GeoDat
     return dist
 
 def get_radian_and_radian_diff_columns(df_curr:gpd.GeoDataFrame, df_next:gpd.GeoDataFrame) -> tuple[gpd.GeoDataFrame,gpd.GeoDataFrame]:
+    # Explicitly mark df_curr and df_next as copies to avoid SettingWithCopyWarning
+    df_curr = df_curr.copy()
+    df_next = df_next.copy()
+    
     # Convert to radians
     df_curr['lat_rad'] = np.radians(df_curr['latitude'])
     df_curr['lon_rad'] = np.radians(df_curr['longitude'])
@@ -66,7 +70,8 @@ def get_radian_and_radian_diff_columns(df_curr:gpd.GeoDataFrame, df_next:gpd.Geo
     df_curr['diff_lon'] = df_curr['lon_rad'] - df_next['lon_rad']
     df_curr['diff_lat'] = df_curr['lat_rad'] - df_next['lat_rad']
     
-    return (df_curr.fillna(0), df_next)
+    
+    return (df_curr.fillna(0).infer_objects(), df_next)
 
 # Function to calculate distance and adjust based on COG
 def adjusted_distance(x, y):
