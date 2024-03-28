@@ -181,3 +181,4 @@ data/meta_trajectories/
 data/original/
 
 .vscode/
+db_connection/database.ini

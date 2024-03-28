@@ -1,20 +1,12 @@
-import os
-import warnings
-
 from pyproj import CRS, Transformer
 import rasterio
-import psycopg2
-import sqlalchemy
-import geoalchemy2
 import numpy as np
 import pandas as pd
 import geopandas as gpd
 import geoalchemy2
 import sqlalchemy
 from sqlalchemy import create_engine, Column, Float, Integer, ForeignKey, text
-from .config import load_config
-from .connect import connect
-import warnings
+from db_connection.config import load_config
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from shapely.geometry import Point, box
@@ -209,27 +201,23 @@ def create_child_grids_and_insert_grid_into_db(cell_size_km, parent_grid):
 
     print("Insert into DB")
     try:
+
+        grid_gdf = grid_gdf.dropna(subset=[f'{parent_grid}_id'])
+
+        grid_entries = []
+
         for _, row in grid_gdf.iterrows():
-            if pd.isna(row[f'{parent_grid}_id']):
-                continue
-
-            grid_gdf = grid_gdf.dropna(subset=[f'{parent_grid}_id'])
-
-            # Convert the GeoDataFrame geometry to a GeoAlchemy shape
-            geom = from_shape(row['geometry'], srid=4326)  # Ensure SRID matches your data
+            geom = from_shape(row['geometry'], srid=4326)
             
-            # Create an instance of the Grid_800 class for each row
             if parent_grid == 'grid_1600':
                 grid_entry = Grid_800_tmp(geometry=geom, grid_1600_id=row[f'{parent_grid}_id'])
             if parent_grid == 'grid_800':
                 grid_entry = Grid_400_tmp(geometry=geom, grid_800_id=row[f'{parent_grid}_id'])
-            # if parent_grid == 'grid_400':
-            #     grid_entry = Grid_200_tmp(geometry=geom, grid_400_id=row[f'{parent_grid}_id'])
+
             
-            # Add the instance to the session
-            session.add(grid_entry)
+            grid_entries.append(grid_entry)
         
-        # Commit the session to insert the records into the database
+        session.bulk_save_objects(grid_entries)
         session.commit()
         print("Grid data insertion was successful.")
     except Exception as e:

@@ -5,28 +5,21 @@ import numpy as np
 import pandas as pd
 import networkx as nx
 import geopandas as gpd
-import matplotlib.pyplot as plt
 from scipy.spatial import cKDTree
-from sklearn.cluster import DBSCAN
 from sqlalchemy import create_engine
 from data.logs.logging import setup_logger
-from create_grid_layers.connect import connect
-from create_grid_layers.config import load_config
-from sklearn.metrics.pairwise import pairwise_distances
 from math import radians, sin, cos, sqrt, atan2, degrees
-from create_grid_layers.config import load_config
-#from .utils import calculate_initial_compass_bearing, get_haversine_dist_df_in_meters, get_radian_and_radian_diff_columns
+from db_connection.config import load_config
 
 LOG_PATH = 'graph_log.txt'
-DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'VTI\data')
+DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
+OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'graph_construction_module')
 INPUT_FOLDER_PATH = os.path.join(DATA_FOLDER, 'original/Passenger')
-META_TRAJECTORIES_PATH = os.path.join(DATA_FOLDER, 'meta_trajectories')
-RADIUS_METER_THRESHOLD = 50
-RADIUS_DEGREE_THRESHOLD = RADIUS_METER_THRESHOLD * 10e-6
+OUTPUT_FOLDER_PATH = os.path.join(OUTPUT_FOLDER, 'output')
 
 # Check if the directory exists, if not, create it
-if not os.path.exists(META_TRAJECTORIES_PATH):
-    os.makedirs(META_TRAJECTORIES_PATH)
+if not os.path.exists(OUTPUT_FOLDER_PATH):
+    os.makedirs(OUTPUT_FOLDER_PATH)
 
 logging = setup_logger(name=LOG_PATH, log_file=LOG_PATH)
 
@@ -160,7 +153,7 @@ def calculate_bearing(point1, point2):
     return bearing
 
 def export_edges_coordinates(edges_coordinates, output_file):
-    output_file_path = os.path.join(META_TRAJECTORIES_PATH, output_file)
+    output_file_path = os.path.join(OUTPUT_FOLDER_PATH, output_file)
     with open(output_file_path, 'w') as f:
         # Write header
         f.write('start_latitude,start_longitude,end_latitude,end_longitude\n')
@@ -170,7 +163,7 @@ def export_edges_coordinates(edges_coordinates, output_file):
             f.write(f"{start[0]},{start[1]},{end[0]},{end[1]}\n")
 
 def create_edges():
-    bearing_tolerance = 15  # Define tolerance for bearing difference in degrees
+    bearing_tolerance = 30  # Define tolerance for bearing difference in degrees
 
     G = perform_geometric_sampling_and_create_nodes()
 
@@ -262,41 +255,115 @@ def export_graph_to_geojson(G, nodes_file_path, edges_file_path):
     with open(edges_file_path, 'w') as f:
         json.dump(edges_geojson, f)
 
+def nodes_to_geojson(nodes, file_path):
+    features = []
+    for node in nodes:
+        feature = {
+            "type": "Feature",
+            "geometry": {
+                "type": "Point",
+                "coordinates": [node[1], node[0]]
+            },
+            "properties": {}
+        }
+        features.append(feature)
+    
+    geojson = {
+        "type": "FeatureCollection",
+        "features": features
+    }
+    
+    with open(file_path, 'w') as f:
+        json.dump(geojson, f)
+
+def edges_to_geojson(edges, file_path):
+    features = []
+    for edge in edges:
+        feature = {
+            "type": "Feature",
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [[edge[0][1], edge[0][0]], [edge[1][1], edge[1][0]]]
+            },
+            "properties": {}
+        }
+        features.append(feature)
+    
+    geojson = {
+        "type": "FeatureCollection",
+        "features": features
+    }
+    
+    with open(file_path, 'w') as f:
+        json.dump(geojson, f)
+
+
 def impute_trajectory():
 
     G = create_edges()
 
-    start_point = (float('56.708913'), float('9.174883')) 
-    end_point = (float('56.700597'), float('9.191901'))
+    trajectory_points = [(56.708913, 9.174883),
+                         (56.70362, 9.19052),
+                         (56.70474, 9.18772),
+                         (56.70669, 9.18585),
+                         (56.70812, 9.17996),
+                         (56.70841, 9.17677),
+                         (56.700597, 9.191901)]
 
-    # Ensure start and end points are in the graph
-    if not G.has_node(start_point):
-        G.add_node(start_point)
-    if not G.has_node(end_point):
-        G.add_node(end_point)
+    imputed_paths = []  # List to store paths between consecutive points
+    
+    # Iterate through pairs of consecutive points
+    for i in range(len(trajectory_points) - 1):
+        start_point = trajectory_points[i]
+        end_point = trajectory_points[i + 1]
+        
+        # Ensure start and end points are nodes in the graph
+        if start_point not in G:
+            G.add_node(start_point)
+        if end_point not in G:
+            G.add_node(end_point)
 
-    # Connect start and end points to existing nodes within a given radius
-    for node in nodes_within_radius(G, start_point, 0.06):
-        if node != start_point:  # Avoid self-connections
-            G.add_edge(start_point, node)
-    for node in nodes_within_radius(G, end_point, 0.06):
-        if node != end_point:  # Avoid self-connections
-            G.add_edge(end_point, node)
-
-    try:
+        # Connect start and end points to existing nodes within a given radius
+        for node in nodes_within_radius(G, start_point, 0.06):
+            if node != start_point:  # Avoid self-connections
+                G.add_edge(start_point, node)
+        for node in nodes_within_radius(G, end_point, 0.06):
+            if node != end_point:  # Avoid self-connections
+                G.add_edge(end_point, node)
+        
         # Attempt to find a path using A* algorithm
-        path = nx.astar_path(G, start_point, end_point, heuristic=haversine)
-        print("Path found:", path)
-    except nx.NetworkXNoPath:
-        print("No path between the specified nodes.")
-
+        try:
+            path = nx.astar_path(G, start_point, end_point, heuristic=haversine)
+            imputed_paths.append(path)
+            print(f"Path found between point {i} and {i+1}: {path}")
+        except nx.NetworkXNoPath:
+            print(f"No path between points {i} and {i+1}.")
+            imputed_paths.append([])  # Append an empty path to indicate no path found
+    
     # Optionally, export the graph to GeoJSON for visualization
-    nodes_file_path = os.path.join(META_TRAJECTORIES_PATH, 'nodes.geojson')
-    edges_file_path = os.path.join(META_TRAJECTORIES_PATH, 'edges.geojson')
+    nodes_file_path = os.path.join(OUTPUT_FOLDER_PATH, 'nodes.geojson')
+    edges_file_path = os.path.join(OUTPUT_FOLDER_PATH, 'edges.geojson')
 
     export_graph_to_geojson(G, nodes_file_path, edges_file_path)
 
-    return
+    unique_nodes = set()
+    edges = []
+
+    for path in imputed_paths:
+        for node in path:
+            unique_nodes.add(node)  # Add each node to a set of unique nodes
+        for i in range(len(path)-1):
+            edges.append((path[i], path[i+1]))
+
+
+    imputed_nodes_file_path = os.path.join(OUTPUT_FOLDER_PATH, 'i-nodes.geojson')
+    imputed_edges_file_path = os.path.join(OUTPUT_FOLDER_PATH, 'i-edges.geojson')
+
+    # Using the functions to create GeoJSON files
+    nodes_to_geojson(unique_nodes, imputed_nodes_file_path)
+    edges_to_geojson(edges, imputed_edges_file_path)
+
+    return imputed_paths
 
     # TO-DO (Imputation):
         # Given a trajectory, it should traverse the graph
