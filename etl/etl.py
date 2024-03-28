@@ -2,21 +2,22 @@ import os
 import tarfile
 import zipfile
 import requests
+from sys import stdout
 from bs4 import BeautifulSoup
 from urllib.request import urlopen
-from sys import stdout
+from data.stats.stats_manager import stats
 from data.logs.logging import setup_logger
-from geopandas import gpd
-from .extract_trajectories_from_csv import cleanse_csv_file_and_convert_to_df, create_trajectories_files
+from .extract_trajectories_from_csv import get_csv_as_df, cleanse_df, create_trajectories_files
 
 DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 AIS_CSV_FOLDER = os.path.join(DATA_FOLDER, 'ais_csv')
+STATISTIC_FOLDER = os.path.join(DATA_FOLDER, 'stats')
+STATISTIC_FILE = os.path.join(STATISTIC_FOLDER, 'stats.json')
 ETL_LOG = 'etl_log.txt'
 
 global num_points_before_filtering
 global num_points_after_filtering
 global after_splitting
-
 
 logging = setup_logger(name=ETL_LOG, log_file=ETL_LOG)
 
@@ -47,9 +48,6 @@ def get_csv_files_in_interval(interval: str):
     logging.info('Began extracting csv files')
     
     try:
-        num_points_before_filtering = 0
-        
-        
         for file in files_to_download:
             logging.info(f'Extracting {file}')
             extract_csv_file(file_name=file)
@@ -81,29 +79,48 @@ def connect_to_to_ais_web_server_and_get_data():
     except Exception as e:
         logging.error('Fetching AIS data failed with: %s', repr(e))
 
-def extract_csv_file(file_name: str) -> gpd.GeoDataFrame: 
+def extract_csv_file(file_name: str):
     """
     Downloads the given file, runs it through the pipeline and adds the file to the log.
     :param file_name: The file to be downloaded, cleansed and inserted
     """
-    download_file_from_ais_web_server(file_name)
+    #download_file_from_ais_web_server(file_name)
 
     try:
-        if ".zip" in file_name: 
-            file_name = file_name.replace('.zip', '.csv')
-        else:
-            file_name = file_name.replace('.rar', '.csv')
+        # if ".zip" in file_name: 
+        #     file_name = file_name.replace('.zip', '.csv')
+        # else:
+        #     file_name = file_name.replace('.rar', '.csv')
         
-        csv_file_path = os.path.join(AIS_CSV_FOLDER, file_name)
+        #csv_file_path = os.path.join(AIS_CSV_FOLDER, file_name)
+        csv_file_path = '/Users/cecil/Documents/Kandidat Speciale/VTI/data/ais_csv/aisdk-2023-03-01.csv'
+        stats.filepath.append(csv_file_path)
+
+        # Step 1: Read CSV
+        logging.info(f'Read csv {file_name}')
         
-        logging.info(f'Cleansing {file_name}')
-        (df, removed) = cleanse_csv_file_and_convert_to_df(file_path=csv_file_path)
+        df = get_csv_as_df(filepath=csv_file_path) 
+        
+        initial_row_count = len(df)
+        stats.initial_rows.append(initial_row_count)
+        
+        # Step 2: Cleanse CSV
+        logging.info(f'Cleansing csv {file_name}')
+        df = cleanse_df(gdf=df)
+        filtered_row_count = len(df)
+        stats.filtered_rows.append(filtered_row_count)
+        
+        # Step 3: Create trajectories
         create_trajectories_files(df)
+        stats.add_to_file(STATISTIC_FILE)
+
         logging.info(f'Finished creating trajectories for {file_name}')
         #os.remove(csv_file_path)
-        
+                
     except Exception as e:
+        stats.remove_latest_entry(csv_file_path)
         logging.error(f'Failed to extract file {file_name} with error message: {repr(e)}')
+        quit()
 
 def download_file_from_ais_web_server(file_name: str):
     """
@@ -141,4 +158,5 @@ def download_file_from_ais_web_server(file_name: str):
         logging.exception(f'Failed with error: {e}')
         quit()
 
-get_csv_files_in_interval("2023-03-24::2024-03-25")
+#get_csv_files_in_interval("2023-12-01::2024-03-25")
+extract_csv_file('u mom')

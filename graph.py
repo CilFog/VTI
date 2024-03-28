@@ -15,9 +15,9 @@ from math import radians, sin, cos, sqrt, atan2, degrees
 from .utils import calculate_initial_compass_bearing, get_haversine_dist_df_in_meters, get_radian_and_radian_diff_columns
 
 LOG_PATH = 'graph_log.txt'
-DATA_FOLDER = os.path.join(os.path.dirname(__file__), 'data')
+DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 INPUT_FOLDER_PATH = os.path.join(DATA_FOLDER, 'original')
-META_TRAJECTORIES_PATH = os.path.join(DATA_FOLDER, 'data/meta_trajectories')
+META_TRAJECTORIES_PATH = os.path.join(DATA_FOLDER, 'meta_trajectories')
 RADIUS_METER_THRESHOLD = 50
 RADIUS_DEGREE_THRESHOLD = RADIUS_METER_THRESHOLD * 10e-6
 

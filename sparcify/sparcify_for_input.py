@@ -16,7 +16,7 @@ from utils import get_radian_and_radian_diff_columns, calculate_initial_compass_
 
 
 DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
-ORIGINAL_FOLDER = os.path.join(DATA_FOLDER, 'original')
+ORIGINAL_FOLDER = os.path.join(DATA_FOLDER, 'original_old')
 INPUT_FOLDER = os.path.join(DATA_FOLDER, 'input')
 INPUT_ALL_FOLDER = os.path.join(INPUT_FOLDER, 'all')
 INPUT_ALL_VALIDATION_FOLDER = os.path.join(INPUT_ALL_FOLDER, 'validation')
@@ -62,8 +62,10 @@ def filter_original_trajectories(sog_threshold: float):
     initial_num = 0
     try:
         initial_time = t.perf_counter()
-        logging.info('Began filtering original trajectories')   
+        logging.info('Began filtering original trajectories')
+        os_path_split = ''   
         for root, folder, files in os.walk(ORIGINAL_FOLDER):
+            os_path_split = '/' if '/' in root else '\\'
             for file in files:
                 file_path = os.path.join(root, file)
                 trajectory_df:gpd.GeoDataFrame = get_trajectory_df_from_txt(file_path=file_path)
@@ -125,10 +127,10 @@ def filter_original_trajectories(sog_threshold: float):
                 
                 some_null_draught = filtered_df.draught.isnull().any() or filtered_df.draught.isna().any()
                 
-                file_name = file.split('/')[-1]
+                file_name = file.split(os_path_split)[-1]
                 vessel_folder = trajectory_df.iloc[0].ship_type.replace('/', '_').replace(' ', '_')
-                mmsi = root.split('/')[-1]
-                new_folder_path = f'{ORIGINAL_FOLDER}/{vessel_folder}/{mmsi}'
+                mmsi = root.split(os_path_split)[-1]
+                new_folder_path = os.path.join(ORIGINAL_FOLDER, vessel_folder, mmsi)
                 os.makedirs(new_folder_path, exist_ok=True)  # Create the folder if it doesn't exist
             
                 # only sog updated
@@ -461,7 +463,7 @@ def sparcify_large_time_gap_with_threshold_percentage(file_path:str, folder_path
         vessel_folder_path = os.path.join(folder_path, vessel_folder)
         new_file_path = os.path.join(vessel_folder_path, file_name)
         
-        trajectory_df:gpd.GeoDataFrame = add_meta_data(trajectory_df=trajectory_df)
+        trajectory_df = add_meta_data(trajectory_df=trajectory_df)
         trajectory_df['group'] = 0
         
         if boundary_box:
@@ -654,11 +656,13 @@ def check_empty_directories(root_dir):
 
     print(total_files)
 
-if __name__ == '__main__':
-    freeze_support()
+# if __name__ == '__main__':
+#     freeze_support()
 
-    # Assuming all necessary imports are already done
-    sparcify_trajectories_with_action_for_folder(strfolder_path=INPUT_ALL_TEST_FOLDER + '/realistic_strict', action=sparcify_realisticly_strict_trajectories, threshold=0.0, boundary_box=None)
-    sparcify_trajectories_with_action_for_folder(folder_path=INPUT_ALL_TEST_FOLDER + '/realistic', action=sparcify_realisticly_trajectories, threshold=0.0, boundary_box=None)
-    sparcify_trajectories_with_action_for_folder(folder_path=INPUT_ALL_TEST_FOLDER + '/large_gap_0_5', action=sparcify_large_time_gap_with_threshold_percentage, threshold=0.5, boundary_box=None)
-    sparcify_trajectories_with_action_for_folder(folder_path=INPUT_ALL_TEST_FOLDER + '/random_0_5', action=sparcify_trajectories_randomly_using_threshold, threshold=0.5, boundary_box=None)
+#     # Assuming all necessary imports are already done
+#     sparcify_trajectories_with_action_for_folder(strfolder_path=INPUT_ALL_TEST_FOLDER + '/realistic_strict', action=sparcify_realisticly_strict_trajectories, threshold=0.0, boundary_box=None)
+#     sparcify_trajectories_with_action_for_folder(folder_path=INPUT_ALL_TEST_FOLDER + '/realistic', action=sparcify_realisticly_trajectories, threshold=0.0, boundary_box=None)
+#     sparcify_trajectories_with_action_for_folder(folder_path=INPUT_ALL_TEST_FOLDER + '/large_gap_0_5', action=sparcify_large_time_gap_with_threshold_percentage, threshold=0.5, boundary_box=None)
+#     sparcify_trajectories_with_action_for_folder(folder_path=INPUT_ALL_TEST_FOLDER + '/random_0_5', action=sparcify_trajectories_randomly_using_threshold, threshold=0.5, boundary_box=None)
+
+filter_original_trajectories(sog_threshold=0.0)

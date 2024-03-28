@@ -29,11 +29,16 @@ def order_by_diff_vessels(sorted_locations_df: gpd.GeoDataFrame):
     return sorted_locations_df
 
 def split_to_sub_trajectories_using_harbor(harbors_df: gpd.GeoDataFrame, trajectories_df: gpd.GeoDataFrame):
-    trajectories_df = add_in_harbor_column(trajectories_df, harbors_df)
-    
-    sub_trajectories = []
-    
     try:
+        trajectories_df = add_in_harbor_column(trajectories_df, harbors_df)
+        
+        if (trajectories_df.empty):
+            logging.warning('A trajectory was empty...')
+        
+        if (trajectories_df.in_harbor.all()):
+            return pd.DataFrame()
+        
+        sub_trajectories = []
         for _, positions_df in trajectories_df.groupby('vessel_id'):
             trajectory_in_harbor = []
             current_sub_trajectory = []
@@ -90,7 +95,6 @@ def split_to_sub_trajectories_using_harbor(harbors_df: gpd.GeoDataFrame, traject
 
                 if current_sub_trajectory:
                     sub_trajectories.append(current_sub_trajectory)
-                
         
         # Flatten the list of lists
         flattened_sub_trajectories = [
@@ -101,8 +105,13 @@ def split_to_sub_trajectories_using_harbor(harbors_df: gpd.GeoDataFrame, traject
             
         # Convert to DataFrame
         sub_trajectories_df = pd.DataFrame(flattened_sub_trajectories)
-
-        return sub_trajectories_df
+        
+        if (sub_trajectories_df.empty):
+            return sub_trajectories_df
+        
+        sog_filtered_sub_trajectories = sub_trajectories_df[sub_trajectories_df['sog'] > 0.0]
+        
+        return sog_filtered_sub_trajectories
     
     except Exception as e:
         logging.error(f'Failed to create trajectories with error {repr(e)}')        
