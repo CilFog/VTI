@@ -1,7 +1,9 @@
 import numpy as np
+import pandas as pd
 import geopandas as gpd
 from geopy.distance import geodesic
 
+pd.set_option('future.no_silent_downcasting', True)
 THETA_ANGLE_PENALTY = 50
 
 def calculate_initial_compass_bearing(df_curr:gpd.GeoDataFrame, df_next:gpd.GeoDataFrame) -> gpd.GeoDataFrame:
