@@ -1,5 +1,7 @@
 import os
 import warnings
+
+from pyproj import CRS, Transformer
 import rasterio
 import psycopg2
 import sqlalchemy
@@ -10,8 +12,8 @@ import geopandas as gpd
 import geoalchemy2
 import sqlalchemy
 from sqlalchemy import create_engine, Column, Float, Integer, ForeignKey, text
-from config import load_config
-from connect import connect
+from .config import load_config
+from .connect import connect
 import warnings
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -62,18 +64,18 @@ class Grid_800(Base):
     grid_1600_id = Column(Integer, ForeignKey('grid_1600.id'))
     avg_depth = Column(Float)
 
-# class Grid_400_tmp(Base):
-#     __tablename__ = 'grid_400_tmp'
-#     id = Column(Integer, primary_key=True)
-#     geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
-#     grid_800_id = Column(Integer, ForeignKey('grid_800.id'))
+class Grid_400_tmp(Base):
+    __tablename__ = 'grid_400_tmp'
+    id = Column(Integer, primary_key=True)
+    geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
+    grid_800_id = Column(Integer, ForeignKey('grid_800.id'))
     
-# class Grid_400(Base):
-#     __tablename__ = 'grid_400'
-#     id = Column(Integer, primary_key=True)
-#     geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
-#     grid_800_id = Column(Integer, ForeignKey('grid_800.id'))
-#     avg_depth = Column(Float)
+class Grid_400(Base):
+    __tablename__ = 'grid_400'
+    id = Column(Integer, primary_key=True)
+    geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
+    grid_800_id = Column(Integer, ForeignKey('grid_800.id'))
+    avg_depth = Column(Float)
 
 # class Grid_200(Base):
 #     __tablename__ = 'grid_200'
@@ -173,7 +175,7 @@ def create_and_insert_grid_into_db(cell_size_km):
             geom = from_shape(row['geometry'], srid=4326)  # Ensure SRID matches your data
             
             # Create an instance of the Grid_1600 class for each row
-            grid_entry = Grid_1600(geometry=geom)
+            grid_entry = Grid_1600_tmp(geometry=geom)
             
             # Add the instance to the session
             session.add(grid_entry)
@@ -189,7 +191,7 @@ def create_and_insert_grid_into_db(cell_size_km):
 
 
 
-def create_child_grids_and_insert_grid_into_db(cell_size_km):
+def create_child_grids_and_insert_grid_into_db(cell_size_km, parent_grid):
 
     print("Creating grid layer")
     grid_gdf = create_grid_layer(cell_size_km)
@@ -197,27 +199,32 @@ def create_child_grids_and_insert_grid_into_db(cell_size_km):
     Session = sessionmaker(bind=engine)
     session = Session()
 
-    parent_grid_id = f"SELECT * FROM grid_1600"
+    parent_grid_id = f"SELECT * FROM {parent_grid}"
     parent_grid_id_gdf = gpd.read_postgis(parent_grid_id, engine, geom_col='geometry')
 
     print("Create foreign_key for grid cells")
     # Create a new column 'parent_grid_id' in grid_gdf and populate with parent_grid_id if it is contianed within it
-    grid_gdf['grid_1600_id'] = None
-    grid_gdf['grid_1600_id'] = grid_gdf.apply(lambda row: find_parent_grid(row['geometry'], parent_grid_id_gdf), axis=1)
+    grid_gdf[f'{parent_grid}_id'] = None
+    grid_gdf[f'{parent_grid}_id'] = grid_gdf.apply(lambda row: find_parent_grid(row['geometry'], parent_grid_id_gdf), axis=1)
 
     print("Insert into DB")
     try:
         for _, row in grid_gdf.iterrows():
-            if pd.isna(row['grid_1600_id']):
+            if pd.isna(row[f'{parent_grid}_id']):
                 continue
 
-            grid_gdf = grid_gdf.dropna(subset=['grid_1600_id'])
+            grid_gdf = grid_gdf.dropna(subset=[f'{parent_grid}_id'])
 
             # Convert the GeoDataFrame geometry to a GeoAlchemy shape
             geom = from_shape(row['geometry'], srid=4326)  # Ensure SRID matches your data
             
             # Create an instance of the Grid_800 class for each row
-            grid_entry = Grid_800_tmp(geometry=geom, grid_1600_id=row['grid_1600_id'])
+            if parent_grid == 'grid_1600':
+                grid_entry = Grid_800_tmp(geometry=geom, grid_1600_id=row[f'{parent_grid}_id'])
+            if parent_grid == 'grid_800':
+                grid_entry = Grid_400_tmp(geometry=geom, grid_800_id=row[f'{parent_grid}_id'])
+            # if parent_grid == 'grid_400':
+            #     grid_entry = Grid_200_tmp(geometry=geom, grid_400_id=row[f'{parent_grid}_id'])
             
             # Add the instance to the session
             session.add(grid_entry)
@@ -273,7 +280,7 @@ def create_grid_layer(cell_size_km):
 
     return grid_gdf
 
-def create_and_populate_grid_1600_final(engine):
+def create_and_populate_grid_1600(engine):
     # SQL command to create the table and insert data
     sql_command = text("""
     INSERT INTO public.grid_1600 (id, geometry, avg_depth)
@@ -306,7 +313,7 @@ def create_and_populate_grid_1600_final(engine):
                 print(f"An error occurred: {e}")
 
 
-def create_and_populate_grid_800_final(engine):
+def create_and_populate_grid_800(engine):
     # SQL command to create the table and insert data
     sql_command = text("""
     INSERT INTO public.grid_800 (id, geometry, grid_1600_id, avg_depth)
@@ -339,8 +346,43 @@ def create_and_populate_grid_800_final(engine):
                 transaction.rollback()  # Roll back on error
                 print(f"An error occurred: {e}")
 
+def create_and_populate_grid_400(engine):
+    # SQL command to create the table and insert data
+    sql_command = text("""
+    INSERT INTO public.grid_400 (id, geometry, grid_800_id, avg_depth)
+    
+    SELECT
+        g.id,
+        g.geometry,
+        g.grid_800_id,
+        AVG(p.depth) AS avg_depth
+    FROM
+        grid_400_tmp AS g
+    JOIN
+        depth_points p ON ST_DWithin(g.geometry, p.geometry, 0)
+    WHERE
+        ST_Intersects(g.geometry, p.geometry)
+    GROUP BY
+        g.id
+    ORDER BY
+        g.id;
+    """)
+    
+    with engine.connect() as connection:
+        # Using transaction ensures that all or nothing is committed to the database
+        with connection.begin() as transaction:
+            try:
+                connection.execute(sql_command)
+                transaction.commit()  # Commit if all is well
+                print("grid_400 table created and populated successfully.")
+            except Exception as e:
+                transaction.rollback()  # Roll back on error
+                print(f"An error occurred: {e}")
+
 #extract_depth_map()
 #create_and_insert_grid_into_db(1.6)
-#create_and_populate_grid_1600_final(engine)                
-create_child_grids_and_insert_grid_into_db(0.8)
-create_and_populate_grid_800_final(engine)  
+#create_and_populate_grid_1600(engine)                
+#create_child_grids_and_insert_grid_into_db(0.8, 'grid_1600')
+#create_and_populate_grid_800(engine)
+create_child_grids_and_insert_grid_into_db(0.4, 'grid_800')
+create_and_populate_grid_400(engine)    

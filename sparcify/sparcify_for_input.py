@@ -127,7 +127,7 @@ def filter_original_trajectories(sog_threshold: float):
                 
                 file_name = file.split('/')[-1]
                 vessel_folder = trajectory_df.iloc[0].ship_type.replace('/', '_').replace(' ', '_')
-                mmsi = root.split('/')[-1]
+                mmsi = root.split('\\')[-1] if root.contains('\\') else root.split('/')[-1]
                 new_folder_path = f'{ORIGINAL_FOLDER}/{vessel_folder}/{mmsi}'
                 os.makedirs(new_folder_path, exist_ok=True)  # Create the folder if it doesn't exist
             
@@ -627,7 +627,9 @@ if __name__ == '__main__':
     freeze_support()
 
     # Assuming all necessary imports are already done
-    sparcify_trajectories_with_action_for_folder(strfolder_path=INPUT_ALL_TEST_FOLDER + '/realistic_strict', action=sparcify_realisticly_strict_trajectories, threshold=0.0, boundary_box=None)
-    sparcify_trajectories_with_action_for_folder(folder_path=INPUT_ALL_TEST_FOLDER + '/realistic', action=sparcify_realisticly_trajectories, threshold=0.0, boundary_box=None)
-    sparcify_trajectories_with_action_for_folder(folder_path=INPUT_ALL_TEST_FOLDER + '/large_gap_0_5', action=sparcify_large_time_gap_with_threshold_percentage, threshold=0.5, boundary_box=None)
-    sparcify_trajectories_with_action_for_folder(folder_path=INPUT_ALL_TEST_FOLDER + '/random_0_5', action=sparcify_trajectories_randomly_using_threshold, threshold=0.5, boundary_box=None)
+    #sparcify_trajectories_with_action_for_folder(strfolder_path=INPUT_ALL_TEST_FOLDER + '/realistic_strict', action=sparcify_realisticly_strict_trajectories, threshold=0.0, boundary_box=None)
+    #sparcify_trajectories_with_action_for_folder(folder_path=INPUT_ALL_TEST_FOLDER + '/realistic', action=sparcify_realisticly_trajectories, threshold=0.0, boundary_box=None)
+    #sparcify_trajectories_with_action_for_folder(folder_path=INPUT_ALL_TEST_FOLDER + '/large_gap_0_5', action=sparcify_large_time_gap_with_threshold_percentage, threshold=0.5, boundary_box=None)
+    #sparcify_trajectories_with_action_for_folder(folder_path=INPUT_ALL_TEST_FOLDER + '/random_0_5', action=sparcify_trajectories_randomly_using_threshold, threshold=0.5, boundary_box=None)
+    
+    filter_original_trajectories(0.0)
