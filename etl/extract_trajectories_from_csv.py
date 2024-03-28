@@ -13,15 +13,19 @@ from utils import get_radian_and_radian_diff_columns, calculate_initial_compass_
 DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 HARBORS_FILE = os.path.join(DATA_FOLDER, 'harbors.csv')
 AIS_CSV_FOLDER = os.path.join(DATA_FOLDER, 'ais_csv')
-ORIGINAL_FOLDER = os.path.join(DATA_FOLDER, 'original')
+GRAPH_INPUT_FOLDER = os.path.join(DATA_FOLDER, 'graph_input')
 STATISTIC_FOLDER = os.path.join(DATA_FOLDER, 'stats')
 STATISTIC_FILE = os.path.join(STATISTIC_FOLDER, 'stats.json')
 CSV_EXTRACT_FILE_LOG = 'ais_extraction_log.txt'
 SOG_STANDSTILL = 0.0
+
+pd.set_option('future.no_silent_downcasting', True)
+
 logging = setup_logger(name=CSV_EXTRACT_FILE_LOG, log_file=CSV_EXTRACT_FILE_LOG)
 
 def extract_trajectories_from_csv_files():
     filenames = os.listdir(AIS_CSV_FOLDER)
+    current_filepath = ''
     completed:int = 0
     
     logging.info(f'Began extracting trajectories from {len(filenames)} csv files')
@@ -29,6 +33,7 @@ def extract_trajectories_from_csv_files():
         for file_index in range(len(filenames)):
             filename = filenames[file_index]
             filepath = os.path.join(AIS_CSV_FOLDER, filename)
+            current_filepath = filepath
 
             logging.info(f'Currently extracting file: {filename} (Completed ({completed}/{len(filenames)}) csv files)')        
             df = get_csv_as_df(filepath=filepath)
@@ -53,10 +58,12 @@ def extract_trajectories_from_csv_files():
             else:
                 logging.warning(f'No data was extracted from {filename}')
         
-        stats.save_to_file(STATISTIC_FILE)
-                
+        stats.add_to_file(STATISTIC_FILE)        
         logging.info('Finished creating trajecatories. Terminating')
     except Exception as e:
+        if (current_filepath != ''):
+            stats.remove_latest_entry(filepath=current_filepath)
+            stats.add_to_file(STATISTIC_FILE)
         logging.error(f'Failed extracting traectories with {repr(e)}')
         quit()
 
@@ -263,8 +270,8 @@ def write_trajectory_to_original_folder(sub_trajectory_df: gpd.GeoDataFrame):
     str_datetime = datetime_object.strftime('%d/%m/%Y %H:%M:%S').replace('/', '-').replace(' ', '_').replace(':', '-') 
     foldername = str(sub_trajectory_df.iloc[0].mmsi)
     filename = f'{foldername}_{str_datetime}.txt'
-    vessel_folder = sub_trajectory_df.iloc[0].ship_type
-    folderpath = os.path.join(ORIGINAL_FOLDER, vessel_folder, foldername)
+    vessel_folder = sub_trajectory_df.iloc[0].ship_type.replace(' ', '_').replace('/', '_')
+    folderpath = os.path.join(GRAPH_INPUT_FOLDER, vessel_folder, foldername)
         
     os.makedirs(folderpath, exist_ok=True)  # Create the folder if it doesn't exist
     

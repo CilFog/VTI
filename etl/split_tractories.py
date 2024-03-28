@@ -33,10 +33,7 @@ def split_to_sub_trajectories_using_harbor(harbors_df: gpd.GeoDataFrame, traject
         trajectories_df = add_in_harbor_column(trajectories_df, harbors_df)
         
         if (trajectories_df.empty):
-            logging.warning('A trajectory was empty...')
-        
-        if (trajectories_df.in_harbor.all()):
-            return pd.DataFrame()
+            logging.warning('A trajectory was empty...')    
         
         sub_trajectories = []
         for _, positions_df in trajectories_df.groupby('vessel_id'):

@@ -1,4 +1,10 @@
+import os
 from typing import List, Dict, Any
+import pandas as pd
+
+DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
+STATISTIC_FOLDER = os.path.join(DATA_FOLDER, 'stats')
+TRAJECTORY_STATISTIC_FILE = os.path.join(STATISTIC_FOLDER, 'trajectory_creation_stats.txt')
 
 class Statistics:
     def __init__(self):
@@ -77,3 +83,11 @@ class Statistics:
         import os
 
         return Statistics()
+    
+    
+
+def make_trajectory_creation_statistic_file():
+    df = pd.read_json(TRAJECTORY_STATISTIC_FILE)
+    
+    if (df.empty):
+        print('No stats found')

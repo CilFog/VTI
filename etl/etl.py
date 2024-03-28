@@ -50,7 +50,7 @@ def get_csv_files_in_interval(interval: str):
     try:
         for file in files_to_download:
             logging.info(f'Extracting {file}')
-            extract_csv_file(file_name=file)
+            extract_csv_file(filename=file)
             downloaded += 1
             stdout.write(f'\rDownloaded {file}.  Completed ({downloaded}/{len(files_to_download)})')
             stdout.flush()
@@ -79,7 +79,7 @@ def connect_to_to_ais_web_server_and_get_data():
     except Exception as e:
         logging.error('Fetching AIS data failed with: %s', repr(e))
 
-def extract_csv_file(file_name: str):
+def extract_csv_file(filename: str):
     """
     Downloads the given file, runs it through the pipeline and adds the file to the log.
     :param file_name: The file to be downloaded, cleansed and inserted
@@ -93,19 +93,19 @@ def extract_csv_file(file_name: str):
         #     file_name = file_name.replace('.rar', '.csv')
         
         #csv_file_path = os.path.join(AIS_CSV_FOLDER, file_name)
-        csv_file_path = '/Users/cecil/Documents/Kandidat Speciale/VTI/data/ais_csv/aisdk-2023-03-01.csv'
-        stats.filepath.append(csv_file_path)
+        csv_filepath = '/Users/cecil/Documents/Kandidat Speciale/VTI/data/ais_csv/aisdk-2023-03-01.csv'
+        stats.filepath.append(csv_filepath)
 
         # Step 1: Read CSV
-        logging.info(f'Read csv {file_name}')
+        logging.info(f'Read csv {filename}')
         
-        df = get_csv_as_df(filepath=csv_file_path) 
+        df = get_csv_as_df(filepath=csv_filepath) 
         
         initial_row_count = len(df)
         stats.initial_rows.append(initial_row_count)
         
         # Step 2: Cleanse CSV
-        logging.info(f'Cleansing csv {file_name}')
+        logging.info(f'Cleansing csv {filename}')
         df = cleanse_df(gdf=df)
         filtered_row_count = len(df)
         stats.filtered_rows.append(filtered_row_count)
@@ -114,24 +114,25 @@ def extract_csv_file(file_name: str):
         create_trajectories_files(df)
         stats.add_to_file(STATISTIC_FILE)
 
-        logging.info(f'Finished creating trajectories for {file_name}')
+        logging.info(f'Finished creating trajectories for {filename}')
         #os.remove(csv_file_path)
                 
     except Exception as e:
-        stats.remove_latest_entry(csv_file_path)
-        logging.error(f'Failed to extract file {file_name} with error message: {repr(e)}')
+        stats.remove_latest_entry(csv_filepath)
+        stats.add_to_file(STATISTIC_FILE)
+        logging.error(f'Failed to extract file {filename} with error message: {repr(e)}')
         quit()
 
-def download_file_from_ais_web_server(file_name: str):
+def download_file_from_ais_web_server(filename: str):
     """
     Downloads a specified file from the webserver into the CSV_FILES_FOLDER.
     It will also unzip it, as well as delete the compressed file afterwards.
     :param file_name: The file to be downloaded. Example 'aisdk-2022-01-01.zip'
     """
-    download_result = requests.get('https://web.ais.dk/aisdata/' + file_name, allow_redirects=True)
+    download_result = requests.get('https://web.ais.dk/aisdata/' + filename, allow_redirects=True)
     download_result.raise_for_status()
 
-    path_to_compressed_file = AIS_CSV_FOLDER + file_name
+    path_to_compressed_file = AIS_CSV_FOLDER + filename
     os.makedirs(AIS_CSV_FOLDER, exist_ok=True)
 
     try:
@@ -150,7 +151,7 @@ def download_file_from_ais_web_server(file_name: str):
             with tarfile.RarFile(path_to_compressed_file) as rar_ref:
                 rar_ref.extractall(path=AIS_CSV_FOLDER)
         else:
-            logging.error(f'File {file_name} must either be of type .zip or .rar. Not extracted')
+            logging.error(f'File {filename} must either be of type .zip or .rar. Not extracted')
             
         os.remove(path_to_compressed_file)
 
