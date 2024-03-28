@@ -1,9 +1,7 @@
-from .statistics import Statistics
+from .statistics import Statistics, DATA_FOLDER, STATISTIC_FOLDER
 import os
 
-DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
-STATISTIC_FOLDER = os.path.join(DATA_FOLDER, 'stats')
-STATISTIC_FILE = os.path.join(STATISTIC_FOLDER, 'stats.json')
+STATISTIC_FILE = os.path.join(STATISTIC_FOLDER, 'stats.ndjson')
 
 
 

@@ -16,8 +16,8 @@ from utils import get_radian_and_radian_diff_columns, calculate_initial_compass_
 
 
 DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
-ORIGINAL_FOLDER = os.path.join(DATA_FOLDER, 'original_old')
-INPUT_FOLDER = os.path.join(DATA_FOLDER, 'input')
+ORIGINAL_FOLDER = os.path.join(DATA_FOLDER, 'input_graph')
+INPUT_FOLDER = os.path.join(DATA_FOLDER, 'input_imputation')
 INPUT_ALL_FOLDER = os.path.join(INPUT_FOLDER, 'all')
 INPUT_ALL_VALIDATION_FOLDER = os.path.join(INPUT_ALL_FOLDER, 'validation')
 INPUT_ALL_TEST_FOLDER = os.path.join(INPUT_ALL_FOLDER, 'test')
@@ -185,15 +185,17 @@ def filter_original_trajectories(sog_threshold: float):
     finished_time = t.perf_counter() - initial_time
     logging.info(f'\nRemoved_due_to_ship: {removed_ship_type}\nRemoved_due_to_sog: {removed_sog}\nRemoved_due_to_draught: {removed_draught}\nRemoved_due_to_duplicate: {removed_duplicate}\nTotal removed: ({removed}/{initial_num})\nTotal moved to new location: ({moved}/{initial_num})\nElapsed time: {finished_time:0.4f} seconds"')   
 
-def sparcify_trajectories_randomly_using_threshold(file_path:str, folder_path: str, threshold:float = 0.0, boundary_box:Polygon = None) -> SparsifyResult:
+def sparcify_trajectories_randomly_using_threshold(filepath:str, folderpath: str, threshold:float = 0.0, boundary_box:Polygon = None) -> SparsifyResult:
     try:
         reduced_points:int = 0
         number_of_points:int = 0
                 
-        trajectory_df:gpd.GeoDataFrame = get_trajectory_df_from_txt(file_path=file_path)
-        file_name = os.path.basename(file_path)
-        vessel_folder = trajectory_df.iloc[0].ship_type.replace('/', '_')
-        vessel_folder_path = os.path.join(folder_path, vessel_folder)
+        os_split = '/' if '/' in filepath else '\\'       
+                
+        trajectory_df:gpd.GeoDataFrame = get_trajectory_df_from_txt(file_path=filepath)
+        file_name = os.path.basename(filepath)
+        vessel_folder = filepath.split(os_split)[-3]
+        vessel_folder_path = os.path.join(folderpath, vessel_folder)
         new_file_path = os.path.join(vessel_folder_path, file_name)
         
         trajectory_df:gpd.GeoDataFrame = add_meta_data(trajectory_df=trajectory_df)
@@ -252,17 +254,21 @@ def sparcify_trajectories_randomly_using_threshold(file_path:str, folder_path: s
         
         return SparsifyResult(reduced_points=reduced_points, number_of_points=number_of_points, trajectory_was_used=True)  
     except Exception as e:
+        print(e)
         logging.error(f'Error occurred with: {repr(e)}')
     
-def sparcify_realisticly_trajectories(file_path:str, folder_path: str, threshold:float = 0.0, boundary_box:Polygon = None) -> SparsifyResult:
+def sparcify_realisticly_trajectories(filepath:str, folderpath: str, threshold:float = 0.0, boundary_box:Polygon = None) -> SparsifyResult:
     try:    
         reduced_points:int = 0
         number_of_points:int = 0
+           
+        os_split = '/' if '/' in filepath else '\\'
+   
                 
-        trajectory_df:gpd.GeoDataFrame = get_trajectory_df_from_txt(file_path=file_path)
-        file_name = os.path.basename(file_path)
-        vessel_folder = trajectory_df.iloc[0].ship_type.replace('/', '_')
-        vessel_folder_path = os.path.join(folder_path, vessel_folder)
+        trajectory_df:gpd.GeoDataFrame = get_trajectory_df_from_txt(file_path=filepath)
+        file_name = os.path.basename(filepath)
+        vessel_folder = filepath.split(os_split)[-3]
+        vessel_folder_path = os.path.join(folderpath, vessel_folder)
         new_file_path = os.path.join(vessel_folder_path, file_name)
         
         trajectory_df:gpd.GeoDataFrame = add_meta_data(trajectory_df=trajectory_df)
@@ -305,27 +311,27 @@ def sparcify_realisticly_trajectories(file_path:str, folder_path: str, threshold
             # Convert relevant columns to numpy arrays for faster access
             timestamps = trajectory_filtered_df['timestamp'].to_numpy()
             speed_knots = trajectory_filtered_df['speed_knots'].to_numpy()
-            navigation_status = trajectory_filtered_df['navigation_status'].to_numpy()
-            cogs = trajectory_filtered_df['navigation_status'].to_numpy()
+            navigational_status = trajectory_filtered_df['navigational_status'].to_numpy()
+            cogs = trajectory_filtered_df['navigational_status'].to_numpy()
         
             # Pre-allocate a boolean array to mark points to keep
             keep = np.full(shape=len(trajectory_filtered_df), fill_value=False, dtype=bool)
-            stationed_navigation_status = ['anchored', 'moored']
+            stationed_navigational_status = ['anchored', 'moored']
             
             # Loop over points starting from the second one
             last_kept_index = 0
             for i in range(1, len(trajectory_filtered_df)):
                 time_diff = timestamps[i] - timestamps[last_kept_index]
                 speed_last_kept = speed_knots[last_kept_index]
-                navigation_last_kept = navigation_status[last_kept_index]
+                navigation_last_kept = navigational_status[last_kept_index]
                 cog_last_kept = cogs[last_kept_index]
                 
                 speed_curr = speed_knots[i]
-                navigation_curr = navigation_status[i]
+                navigation_curr = navigational_status[i]
                 cog_curr = cogs[i]
                     
-                keep_conditions = (navigation_last_kept in stationed_navigation_status and navigation_curr in stationed_navigation_status and time_diff > 180) or \
-                                (navigation_last_kept in stationed_navigation_status and time_diff > 180) or \
+                keep_conditions = (navigation_last_kept in stationed_navigational_status and navigation_curr in stationed_navigational_status and time_diff > 180) or \
+                                (navigation_last_kept in stationed_navigational_status and time_diff > 180) or \
                                 (0 < speed_last_kept <= 14 and 0 <= speed_curr <= 14 and time_diff > 10) or \
                                 (0 < speed_last_kept <= 14 and 0 <= speed_curr <= 14 and cog_last_kept != cog_curr and time_diff > 3.33) or \
                                 (14 < speed_last_kept <= 23 and 14 < speed_curr <= 23 and time_diff > 6) or \
@@ -354,17 +360,20 @@ def sparcify_realisticly_trajectories(file_path:str, folder_path: str, threshold
     
         return SparsifyResult(reduced_points=reduced_points, number_of_points=number_of_points, trajectory_was_used=True)  
     except Exception as e:
+        print(e)
         logging.error(f'Error occurred with: {repr(e)}')    
 
-def sparcify_realisticly_strict_trajectories(file_path:str, folder_path: str, threshold:float = 0.0, boundary_box:Polygon = None) -> SparsifyResult:
+def sparcify_realisticly_strict_trajectories(filepath:str, folderpath: str, threshold:float = 0.0, boundary_box:Polygon = None) -> SparsifyResult:
     try:
         reduced_points:int = 0
         number_of_points:int = 0
+        
+        os_split = '/' if '/' in filepath else '\\'
                 
-        trajectory_df:gpd.GeoDataFrame = get_trajectory_df_from_txt(file_path=file_path)
-        file_name = os.path.basename(file_path)
-        vessel_folder = trajectory_df.iloc[0].ship_type.replace('/', '_')
-        vessel_folder_path = os.path.join(folder_path, vessel_folder)
+        trajectory_df:gpd.GeoDataFrame = get_trajectory_df_from_txt(file_path=filepath)
+        file_name = os.path.basename(filepath)
+        vessel_folder = filepath.split(os_split)[-3]
+        vessel_folder_path = os.path.join(folderpath, vessel_folder)
         new_file_path = os.path.join(vessel_folder_path, file_name)
         
         trajectory_df:gpd.GeoDataFrame = add_meta_data(trajectory_df=trajectory_df)
@@ -405,26 +414,26 @@ def sparcify_realisticly_strict_trajectories(file_path:str, folder_path: str, th
             # Convert relevant columns to numpy arrays for faster access
             timestamps = trajectory_filtered_df['timestamp'].to_numpy()
             speed_knots = trajectory_filtered_df['speed_knots'].to_numpy()
-            navigation_status = trajectory_filtered_df['navigation_status'].to_numpy()
-            cogs = trajectory_filtered_df['navigation_status'].to_numpy()
+            navigational_status = trajectory_filtered_df['navigational_status'].to_numpy()
+            cogs = trajectory_filtered_df['navigational_status'].to_numpy()
 
             # Pre-allocate a boolean array to mark points to keep
             keep = np.full(shape=len(trajectory_filtered_df), fill_value=False, dtype=bool)
-            stationed_navigation_status = ['anchored', 'moored']
+            stationed_navigational_status = ['anchored', 'moored']
             
             # Loop over points starting from the second one
             last_kept_index = 0
             for i in range(1, len(trajectory_filtered_df)):
                 time_diff = timestamps[i] - timestamps[last_kept_index]
                 speed_last_kept = speed_knots[last_kept_index]
-                navigation_last_kept = navigation_status[last_kept_index]
+                navigation_last_kept = navigational_status[last_kept_index]
                 cog_last_kept = cogs[last_kept_index]
                 
                 speed_curr = speed_knots[i]
-                navigation_curr = navigation_status[i]
+                navigation_curr = navigational_status[i]
                 cog_curr = cogs[i]
                 
-                keep_conditions = (navigation_last_kept in stationed_navigation_status and navigation_curr in stationed_navigation_status and time_diff > 180) or \
+                keep_conditions = (navigation_last_kept in stationed_navigational_status and navigation_curr in stationed_navigational_status and time_diff > 180) or \
                                 (0 < speed_last_kept <= 14 and 0 <= speed_curr <= 14 and time_diff > 10) or \
                                 (0 < speed_last_kept <= 14 and 0 <= speed_curr <= 14 and cog_last_kept != cog_curr and time_diff > 3.33) or \
                                 (14 < speed_last_kept <= 23 and 14 < speed_curr <= 23 and time_diff > 6) or \
@@ -450,17 +459,21 @@ def sparcify_realisticly_strict_trajectories(file_path:str, folder_path: str, th
                 
         return SparsifyResult(reduced_points=reduced_points, number_of_points=number_of_points, trajectory_was_used=True)  
     except Exception as e:
+        print(e)
         logging.error(f'Error occurred with: {repr(e)}')
 
-def sparcify_large_time_gap_with_threshold_percentage(file_path:str, folder_path: str, threshold:float = 0.0, boundary_box:Polygon = None) -> SparsifyResult:
+def sparcify_large_time_gap_with_threshold_percentage(filepath:str, folderpath: str, threshold:float = 0.0, boundary_box:Polygon = None) -> SparsifyResult:
     try:
         reduced_points:int = 0
         number_of_points:int = 0
+          
+        os_split = '/' if '/' in filepath else '\\'
+
                 
-        trajectory_df:gpd.GeoDataFrame = get_trajectory_df_from_txt(file_path=file_path)
-        file_name = os.path.basename(file_path)
-        vessel_folder = trajectory_df.iloc[0].ship_type.replace('/', '_')
-        vessel_folder_path = os.path.join(folder_path, vessel_folder)
+        trajectory_df:gpd.GeoDataFrame = get_trajectory_df_from_txt(file_path=filepath)
+        file_name = os.path.basename(filepath)
+        vessel_folder = filepath.split(os_split)[-3]
+        vessel_folder_path = os.path.join(folderpath, vessel_folder)
         new_file_path = os.path.join(vessel_folder_path, file_name)
         
         trajectory_df = add_meta_data(trajectory_df=trajectory_df)
@@ -525,6 +538,7 @@ def sparcify_large_time_gap_with_threshold_percentage(file_path:str, folder_path
         reduced_points = len(trajectory_filtered) - len(sparse_trajectory_df)
         return SparsifyResult(reduced_points=reduced_points, number_of_points=number_of_points, trajectory_was_used=True)  
     except Exception as e:
+        print(e)
         logging.error(f'Error occurred with: {repr(e)}')
 
 def get_files_in_range(start_date, end_date, directory):
@@ -540,22 +554,22 @@ def get_files_in_range(start_date, end_date, directory):
     end_date = dt.datetime.strptime(end_date, '%d-%m-%Y').date()
     files_in_range = []
 
-    for filename in os.scandir(directory):
-        print(filename)
-        # Extract the date part from the filename, assuming format like '111219502_01-03-2023_11-45-51'
-        parts = filename.split('_')
-        if len(parts) < 3:
-            logging.error(f'Incorrect nameformat for {filename}')
-            quit()  # Not enough parts in the filename
-        date_str = parts[1]  # The date part is expected to be in the middle
-        print(filename)
-        try:
-            file_date = dt.datetime.strptime(date_str, '%d_%m_%Y').date()
-            if start_date <= file_date <= end_date:
-                files_in_range.append(filename)
-        except ValueError:
-            # If date parsing fails, ignore the file
-            pass
+    for dirpath, dirnames, filenames in os.walk(directory):
+        for filename in filenames:
+            # Extract the date part from the filename, assuming format like '111219502_01-03-2023_11-45-51'
+            parts = filename.split('_')
+            if len(parts) < 3:
+                logging.error(f'Incorrect nameformat for {filename}')
+                quit()  # Not enough parts in the filename
+            date_str = parts[1]  # The date part is expected to be in the middle
+            print(filename)
+            try:
+                file_date = dt.datetime.strptime(date_str, '%d-%m-%Y').date()
+                if start_date <= file_date <= end_date:
+                    files_in_range.append(filename)
+            except ValueError:
+                # If date parsing fails, ignore the file
+                pass
 
     return files_in_range
 
@@ -574,9 +588,8 @@ def sparcify_trajectories_with_action_for_folder(
 
     logging.info(f'Began sparcifying trajectories with {str(action)}')
 
-    print('gettings files')
     # file_paths = get_files_in_range(start_date=str_start_date, end_date=str_end_date, directory=ORIGINAL_FOLDER)
-    file_paths = [os.path.join(root, file) for root, _, files in os.walk(ORIGINAL_FOLDER) for file in files]
+    file_paths = get_files_in_range(str_start_date, str_end_date, ORIGINAL_FOLDER)
     # Process files in parallel
     with ProcessPoolExecutor() as executor:
         results = executor.map(action, file_paths, [folder_path] * len(file_paths), [threshold] * len(file_paths), [boundary_box] * len(file_paths))        
@@ -656,13 +669,13 @@ def check_empty_directories(root_dir):
 
     print(total_files)
 
-# if __name__ == '__main__':
-#     freeze_support()
+if __name__ == '__main__':
+    freeze_support()
 
-#     # Assuming all necessary imports are already done
-#     sparcify_trajectories_with_action_for_folder(strfolder_path=INPUT_ALL_TEST_FOLDER + '/realistic_strict', action=sparcify_realisticly_strict_trajectories, threshold=0.0, boundary_box=None)
-#     sparcify_trajectories_with_action_for_folder(folder_path=INPUT_ALL_TEST_FOLDER + '/realistic', action=sparcify_realisticly_trajectories, threshold=0.0, boundary_box=None)
-#     sparcify_trajectories_with_action_for_folder(folder_path=INPUT_ALL_TEST_FOLDER + '/large_gap_0_5', action=sparcify_large_time_gap_with_threshold_percentage, threshold=0.5, boundary_box=None)
-#     sparcify_trajectories_with_action_for_folder(folder_path=INPUT_ALL_TEST_FOLDER + '/random_0_5', action=sparcify_trajectories_randomly_using_threshold, threshold=0.5, boundary_box=None)
+    # Assuming all necessary imports are already done
+    #sparcify_trajectories_with_action_for_folder(str_start_date='22-03-2023',str_end_date='23-03-2023',folder_path=INPUT_ALL_TEST_FOLDER + '/realistic_strict', action=sparcify_realisticly_strict_trajectories, threshold=0.0, boundary_box=None)
+    #sparcify_trajectories_with_action_for_folder(str_start_date='22-03-2023',str_end_date='23-03-2023',folder_path=INPUT_ALL_TEST_FOLDER + '/realistic', action=sparcify_realisticly_trajectories, threshold=0.0, boundary_box=None)
+    #sparcify_trajectories_with_action_for_folder(str_start_date='22-03-2023',str_end_date='23-03-2023',folder_path=INPUT_ALL_TEST_FOLDER + '/large_gap_0_5', action=sparcify_large_time_gap_with_threshold_percentage, threshold=0.5, boundary_box=None)
+    sparcify_trajectories_with_action_for_folder(str_start_date='01-03-2023',str_end_date='01-03-2023',folder_path=INPUT_ALL_TEST_FOLDER + '/random_0_5', action=sparcify_trajectories_randomly_using_threshold, threshold=0.5, boundary_box=None)
 
-filter_original_trajectories(sog_threshold=0.0)
+#filter_original_trajectories(sog_threshold=0.0)
