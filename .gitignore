@@ -175,3 +175,5 @@ data/ais_csv/
 data/test_data/*.txt
 data/test_data/*.csv
 data/logs/*.txt
+
+.python-version
