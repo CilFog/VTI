@@ -82,18 +82,17 @@ def connect_to_to_ais_web_server_and_get_data():
 def extract_csv_file(filename: str):
     """
     Downloads the given file, runs it through the pipeline and adds the file to the log.
-    :param file_name: The file to be downloaded, cleansed and inserted
+    :param filename: The file to be downloaded, cleansed and inserted
     """
-    #download_file_from_ais_web_server(file_name)
+    download_file_from_ais_web_server(filename)
 
     try:
-        # if ".zip" in file_name: 
-        #     file_name = file_name.replace('.zip', '.csv')
-        # else:
-        #     file_name = file_name.replace('.rar', '.csv')
+        if ".zip" in filename: 
+            filename = filename.replace('.zip', '.csv')
+        else:
+            filename = filename.replace('.rar', '.csv')
         
-        #csv_file_path = os.path.join(AIS_CSV_FOLDER, file_name)
-        csv_filepath = '/Users/cecil/Documents/Kandidat Speciale/VTI/data/ais_csv/aisdk-2023-03-01.csv'
+        csv_filepath = os.path.join(AIS_CSV_FOLDER, filename)
         stats.filepath.append(csv_filepath)
 
         # Step 1: Read CSV
@@ -127,7 +126,7 @@ def download_file_from_ais_web_server(filename: str):
     """
     Downloads a specified file from the webserver into the CSV_FILES_FOLDER.
     It will also unzip it, as well as delete the compressed file afterwards.
-    :param file_name: The file to be downloaded. Example 'aisdk-2022-01-01.zip'
+    :param filename: The file to be downloaded. Example 'aisdk-2022-01-01.zip'
     """
     download_result = requests.get('https://web.ais.dk/aisdata/' + filename, allow_redirects=True)
     download_result.raise_for_status()
@@ -159,5 +158,4 @@ def download_file_from_ais_web_server(filename: str):
         logging.exception(f'Failed with error: {e}')
         quit()
 
-#get_csv_files_in_interval("2023-12-01::2024-03-25")
-extract_csv_file('u mom')
+get_csv_files_in_interval("2024-03-23::2024-03-25")
