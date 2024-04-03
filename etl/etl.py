@@ -12,7 +12,7 @@ from .extract_trajectories_from_csv import get_csv_as_df, cleanse_df, create_tra
 DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 AIS_CSV_FOLDER = os.path.join(DATA_FOLDER, 'ais_csv')
 STATISTIC_FOLDER = os.path.join(DATA_FOLDER, 'stats')
-STATISTIC_FILE = os.path.join(STATISTIC_FOLDER, 'stats.json')
+STATISTIC_JSON_FILE = os.path.join(STATISTIC_FOLDER, 'stats.ndjson')
 ETL_LOG = 'etl_log.txt'
 
 global num_points_before_filtering
@@ -93,32 +93,28 @@ def extract_csv_file(filename: str):
             filename = filename.replace('.rar', '.csv')
         
         csv_filepath = os.path.join(AIS_CSV_FOLDER, filename)
-        stats.filepath.append(csv_filepath)
+        stats.filepath = csv_filepath
 
         # Step 1: Read CSV
         logging.info(f'Read csv {filename}')
         
         df = get_csv_as_df(filepath=csv_filepath) 
         
-        initial_row_count = len(df)
-        stats.initial_rows.append(initial_row_count)
+        stats.initial_rows = len(df)
         
         # Step 2: Cleanse CSV
         logging.info(f'Cleansing csv {filename}')
         df = cleanse_df(gdf=df)
-        filtered_row_count = len(df)
-        stats.filtered_rows.append(filtered_row_count)
+        stats.filtered_rows = len(df)
         
         # Step 3: Create trajectories
         create_trajectories_files(df)
-        stats.add_to_file(STATISTIC_FILE)
+        stats.add_to_file(STATISTIC_JSON_FILE)
 
         logging.info(f'Finished creating trajectories for {filename}')
-        #os.remove(csv_file_path)
+        os.remove(csv_file_path)
                 
     except Exception as e:
-        stats.remove_latest_entry(csv_filepath)
-        stats.add_to_file(STATISTIC_FILE)
         logging.error(f'Failed to extract file {filename} with error message: {repr(e)}')
         quit()
 
@@ -158,4 +154,4 @@ def download_file_from_ais_web_server(filename: str):
         logging.exception(f'Failed with error: {e}')
         quit()
 
-get_csv_files_in_interval("2023-11-01::2023-11-02")
+get_csv_files_in_interval("2023-03-01::2024-04-01")
