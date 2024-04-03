@@ -158,4 +158,4 @@ def download_file_from_ais_web_server(filename: str):
         logging.exception(f'Failed with error: {e}')
         quit()
 
-get_csv_files_in_interval("2024-03-23::2024-03-25")
+get_csv_files_in_interval("2023-11-01::2023-11-02")

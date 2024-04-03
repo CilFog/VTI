@@ -182,5 +182,8 @@ data/original/
 
 .vscode/
 data/input_imputation/
+data/input_graph/
 
 .python-version
+
+data/stats/stats.json

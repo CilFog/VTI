@@ -12,12 +12,12 @@ class Statistics:
         self.initial_rows: List[int] = []
         self.filtered_rows: List[int] = []
         self.trajectory_counts: List[int] = []
-        self.rows_per_trajectory: List[int] = []
-        self.rows_per_trajectory_after_split: List[int] = []
+        self.rows_per_trajectory: List[List[int]] = []
+        self.rows_per_trajectory_after_split: List[List[int]] = []
         self.trajectory_removed_due_to_draught: List[int] = []
         self.trajectory_counts_after_split: List[int] = []
         self.trajectory_removed_due_to_draught_after_split: List[int] = []
-        self.distance_travelled_m_per_trajectory_after_split: List[float] = []  # Assuming lengths are floats
+        self.distance_travelled_m_per_trajectory_after_split: List[List[float]] = []  # Assuming lengths are floats
 
     def to_dict(self) -> Dict[str, Any]:
         """Converts the class attributes to a dictionary."""
@@ -79,9 +79,6 @@ class Statistics:
     @staticmethod
     def load_from_file(file_path: str) -> 'Statistics':
         """Loads the statistics from a file and returns an instance of Statistics."""
-        import json
-        import os
-
         return Statistics()
     
     
@@ -91,3 +88,5 @@ def make_trajectory_creation_statistic_file():
     
     if (df.empty):
         print('No stats found')
+
+    
