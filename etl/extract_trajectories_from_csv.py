@@ -13,9 +13,9 @@ from utils import get_radian_and_radian_diff_columns, calculate_initial_compass_
 DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 HARBORS_FILE = os.path.join(DATA_FOLDER, 'harbors.csv')
 AIS_CSV_FOLDER = os.path.join(DATA_FOLDER, 'ais_csv')
-GRAPH_INPUT_FOLDER = os.path.join(DATA_FOLDER, 'graph_input')
+GRAPH_INPUT_FOLDER = os.path.join(DATA_FOLDER, 'input_graph')
 STATISTIC_FOLDER = os.path.join(DATA_FOLDER, 'stats')
-STATISTIC_FILE = os.path.join(STATISTIC_FOLDER, 'stats.json')
+STATISTIC_JSON_FILE = os.path.join(STATISTIC_FOLDER, 'stats.ndjson')
 CSV_EXTRACT_FILE_LOG = 'ais_extraction_log.txt'
 SOG_STANDSTILL = 0.0
 
@@ -39,16 +39,14 @@ def extract_trajectories_from_csv_files():
             df = get_csv_as_df(filepath=filepath)
             completed +=1
                     
-            initial_row_count = len(df)
-            stats.filepath.append(filepath)
-            stats.initial_rows.append(initial_row_count)
+            stats.filepath = filepath
+            stats.initial_rows = len(df)
             
             # Step 2: Cleanse CSV
             logging.info(f'Cleansing csv {filename}')
             df = cleanse_df(gdf=df)
-            filtered_row_count = len(df)
             
-            stats.filtered_rows.append(filtered_row_count)
+            stats.filtered_rows = len(df)
             
             logging.info(f'Finished extracting file: {filename} (Completed ({completed}/{len(filenames)}) csv files)')        
             logging.info(f'Began crating trajectories for file: {filename}')
@@ -58,12 +56,9 @@ def extract_trajectories_from_csv_files():
             else:
                 logging.warning(f'No data was extracted from {filename}')
         
-        stats.add_to_file(STATISTIC_FILE)        
+        stats.add_to_file(STATISTIC_JSON_FILE)        
         logging.info('Finished creating trajecatories. Terminating')
     except Exception as e:
-        if (current_filepath != ''):
-            stats.remove_latest_entry(filepath=current_filepath)
-            stats.add_to_file(STATISTIC_FILE)
         logging.error(f'Failed extracting traectories with {repr(e)}')
         quit()
 
@@ -183,7 +178,6 @@ def create_trajectories_files(gdf: gpd.GeoDataFrame):
         total_trajectories_after_split = 0
         rows_per_trajectory_after_split = []
         lengths = []
-            
         for mmsi, trajectory_df in trajectories_df:
             if trajectory_df.draught.isnull().all() or trajectory_df.draught.isna().all():
                 removed_due_to_draught_before_split += 1
@@ -226,15 +220,16 @@ def create_trajectories_files(gdf: gpd.GeoDataFrame):
                     trajectory_rows = len(filtered_sub_trajectory)
                     rows_per_trajectory_after_split.append(trajectory_rows)
                     distance_travelled = calculate_distance_travelled(trajectory_df=filtered_sub_trajectory)
+
                     lengths.append(distance_travelled)
                                     
                     write_trajectory_to_original_folder(filtered_sub_trajectory)
         
-        stats.trajectory_counts.append(len(trajectories_df))    
+        stats.trajectory_counts = len(trajectories_df)  
         stats.rows_per_trajectory.extend(trajectories_df.apply(len))
-        stats.trajectory_removed_due_to_draught.append(removed_due_to_draught_before_split)
-        stats.trajectory_removed_due_to_draught_after_split.append(removed_due_to_draught_after_split)
-        stats.trajectory_counts_after_split.append(total_trajectories_after_split)
+        stats.trajectory_removed_due_to_draught = removed_due_to_draught_before_split
+        stats.trajectory_removed_due_to_draught_after_split = removed_due_to_draught_after_split
+        stats.trajectory_counts_after_split = total_trajectories_after_split
         stats.rows_per_trajectory_after_split.extend(rows_per_trajectory_after_split)
         stats.distance_travelled_m_per_trajectory_after_split.extend(lengths)
     except Exception as e:
