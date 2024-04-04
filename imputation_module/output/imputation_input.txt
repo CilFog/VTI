@@ -1,0 +1,7 @@
+,latitude,longitude,timestamp,sog,cog,draught,ship_type,navigational_status
+0,56.708913,9.174883,1708905811.0,8.1,108.3,5.1,Cargo,Under way using engine
+1,56.70362,9.19052,1708905821.0,8.2,108.2,5.1,Cargo,Under way using engine
+2,56.70474,9.18772,1708905832.0,8.2,107.8,5.1,Cargo,Under way using engine
+3,56.70669,9.18585,1708905842.0,8.2,108.2,5.1,Cargo,Under way using engine
+4,56.70812,9.17996,1708905852.0,8.2,108.2,5.1,Cargo,Under way using engine
+5,56.700597,9.191901,1708905862.0,8.2,107.6,5.1,Cargo,Under way using engine

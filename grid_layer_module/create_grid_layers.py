@@ -5,7 +5,7 @@ import pandas as pd
 import geopandas as gpd
 import geoalchemy2
 import sqlalchemy
-from sqlalchemy import create_engine, Column, Float, Integer, ForeignKey, text
+from sqlalchemy import create_engine, Column, Float, Integer, ForeignKey, text, Index
 from db_connection.config import load_config
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
@@ -32,60 +32,45 @@ class DepthPoint(Base):
     geometry = Column(geoalchemy2.Geometry('POINT', srid=4326))
     depth = Column(Float)
 
-class Grid_1600_tmp(Base):
-    __tablename__ = 'grid_1600_tmp'
-    id = Column(Integer, primary_key=True)
-    geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
-
-class Grid_1600(Base):
-    __tablename__ = 'grid_1600'
-    id = Column(Integer, primary_key=True)
-    geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
-    avg_depth = Column(Float)
-
-class Grid_800_tmp(Base):
-    __tablename__ = 'grid_800_tmp'
-    id = Column(Integer, primary_key=True)
-    geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
-    grid_1600_id = Column(Integer, ForeignKey('grid_1600.id'))
-
-class Grid_800(Base):
-    __tablename__ = 'grid_800'
-    id = Column(Integer, primary_key=True)
-    geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
-    grid_1600_id = Column(Integer, ForeignKey('grid_1600.id'))
-    avg_depth = Column(Float)
-
 class Grid_400_tmp(Base):
     __tablename__ = 'grid_400_tmp'
     id = Column(Integer, primary_key=True)
     geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
-    grid_800_id = Column(Integer, ForeignKey('grid_800.id'))
-    
+
 class Grid_400(Base):
     __tablename__ = 'grid_400'
     id = Column(Integer, primary_key=True)
     geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
-    grid_800_id = Column(Integer, ForeignKey('grid_800.id'))
     avg_depth = Column(Float)
 
-# class Grid_200(Base):
-#     __tablename__ = 'grid_200'
+# class Grid_800_tmp(Base):
+#     __tablename__ = 'grid_800_tmp'
 #     id = Column(Integer, primary_key=True)
 #     geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
-#     grid_400_id = Column(Integer, ForeignKey('grid_400.id'))
+#     grid_1600_id = Column(Integer, ForeignKey('grid_1600.id'))
 
-# class Grid_100(Base):
-#     __tablename__ = 'grid_100'
+# class Grid_800(Base):
+#     __tablename__ = 'grid_800'
 #     id = Column(Integer, primary_key=True)
 #     geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
-#     Grid_200_id = Column(Integer, ForeignKey('Grid_200.id'))
+#     grid_1600_id = Column(Integer, ForeignKey('grid_1600.id'))
+#     avg_depth = Column(Float)
 
-# class Grid_50(Base):
-#     __tablename__ = 'grid_50'
+# class Grid_400_tmp(Base):
+#     __tablename__ = 'grid_400_tmp'
 #     id = Column(Integer, primary_key=True)
 #     geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
-#     grid_100_id = Column(Integer, ForeignKey('grid_100.id'))
+#     grid_800_id = Column(Integer, ForeignKey('grid_800.id'))
+#     __table_args__ = (Index('idx_grid_400_tmp_grid_800_id', 'grid_800_id'),)
+
+    
+# class Grid_400(Base):
+#     __tablename__ = 'grid_400'
+#     id = Column(Integer, primary_key=True)
+#     geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
+#     grid_800_id = Column(Integer, ForeignKey('grid_800.id'))
+#     avg_depth = Column(Float)
+#     __table_args__ = (Index('idx_grid_400_grid_800_id', 'grid_800_id'),)
 
 # Create the tables in the database
 Base.metadata.create_all(engine)
@@ -167,7 +152,7 @@ def create_and_insert_grid_into_db(cell_size_km):
             geom = from_shape(row['geometry'], srid=4326)  # Ensure SRID matches your data
             
             # Create an instance of the Grid_1600 class for each row
-            grid_entry = Grid_1600_tmp(geometry=geom)
+            grid_entry = Grid_400_tmp(geometry=geom)
             
             # Add the instance to the session
             session.add(grid_entry)
@@ -271,14 +256,14 @@ def create_grid_layer(cell_size_km):
 def create_and_populate_grid_1600(engine):
     # SQL command to create the table and insert data
     sql_command = text("""
-    INSERT INTO public.grid_1600 (id, geometry, avg_depth)
+    INSERT INTO public.grid_400 (id, geometry, avg_depth)
     
     SELECT
         g.id,
         g.geometry,
         AVG(p.depth) AS avg_depth
     FROM
-        grid_1600_tmp AS g
+        grid_400_tmp AS g
     JOIN
         depth_points p ON ST_DWithin(g.geometry, p.geometry, 0)
     WHERE
@@ -369,8 +354,11 @@ def create_and_populate_grid_400(engine):
 
 #extract_depth_map()
 #create_and_insert_grid_into_db(1.6)
-#create_and_populate_grid_1600(engine)                
+#create_and_populate_grid_1600(engine)
+create_and_insert_grid_into_db(0.4)
+create_and_populate_grid_1600(engine)                  
+
 #create_child_grids_and_insert_grid_into_db(0.8, 'grid_1600')
 #create_and_populate_grid_800(engine)
-create_child_grids_and_insert_grid_into_db(0.4, 'grid_800')
-create_and_populate_grid_400(engine)    
+#create_child_grids_and_insert_grid_into_db(0.4, 'grid_800')
+#create_and_populate_grid_400(engine)    

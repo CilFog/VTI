@@ -1,5 +1,5 @@
 import json
-from math import radians, sin, cos, atan2, degrees
+from math import radians, sin, cos, atan2, degrees, sqrt
 
 def calculate_bearing_difference(bearing1, bearing2):
     diff = abs(bearing1 - bearing2) % 360
@@ -26,6 +26,22 @@ def calculate_bearing(point1, point2):
 
     return bearing
 
+def haversine_distance(lat1, lon1, lat2, lon2):
+    # Radius of the Earth in kilometers
+    R = 6371.0
+    # Convert latitude and longitude from degrees to radians
+    lat1, lon1, lat2, lon2 = map(radians, [lat1, lon1, lat2, lon2])
+    
+    # Difference in coordinates
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    
+    # Haversine formula
+    a = sin(dlat / 2)**2 + cos(lat1) * cos(lat2) * sin(dlon / 2)**2
+    c = 2 * atan2(sqrt(a), sqrt(1 - a))
+    distance = R * c
+    return distance
+
 def export_graph_to_geojson(G, nodes_file_path, edges_file_path):
     # Nodes
     nodes_features = []
@@ -50,14 +66,16 @@ def export_graph_to_geojson(G, nodes_file_path, edges_file_path):
 
     # Edges
     edges_features = []
-    for start_node, end_node in G.edges:
+    for start_node, end_node, data in G.edges(data=True):
         feature = {
             "type": "Feature",
             "geometry": {
                 "type": "LineString",
                 "coordinates": [[start_node[1], start_node[0]], [end_node[1], end_node[0]]]  # Note: GeoJSON uses [longitude, latitude]
             },
-            "properties": {}
+            "properties": {
+                "weight": data.get('weight', None)
+            }
         }
         edges_features.append(feature)
 

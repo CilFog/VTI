@@ -180,5 +180,8 @@ data/meta_trajectories/
 
 data/original/
 
+data/graph_input/
+
 .vscode/
 db_connection/database.ini
+debug.py

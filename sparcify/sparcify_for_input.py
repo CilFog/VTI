@@ -16,8 +16,8 @@ from utils import get_radian_and_radian_diff_columns, calculate_initial_compass_
 
 
 DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
-ORIGINAL_FOLDER = os.path.join(DATA_FOLDER, 'input_graph')
-INPUT_FOLDER = os.path.join(DATA_FOLDER, 'input_imputation')
+ORIGINAL_FOLDER = os.path.join(DATA_FOLDER, 'graph_input')
+INPUT_FOLDER = os.path.join(DATA_FOLDER, 'imputation_input')
 INPUT_ALL_FOLDER = os.path.join(INPUT_FOLDER, 'all')
 INPUT_ALL_VALIDATION_FOLDER = os.path.join(INPUT_ALL_FOLDER, 'validation')
 INPUT_ALL_TEST_FOLDER = os.path.join(INPUT_ALL_FOLDER, 'test')
@@ -674,8 +674,8 @@ if __name__ == '__main__':
 
     # Assuming all necessary imports are already done
     #sparcify_trajectories_with_action_for_folder(str_start_date='22-03-2023',str_end_date='23-03-2023',folder_path=INPUT_ALL_TEST_FOLDER + '/realistic_strict', action=sparcify_realisticly_strict_trajectories, threshold=0.0, boundary_box=None)
-    #sparcify_trajectories_with_action_for_folder(str_start_date='22-03-2023',str_end_date='23-03-2023',folder_path=INPUT_ALL_TEST_FOLDER + '/realistic', action=sparcify_realisticly_trajectories, threshold=0.0, boundary_box=None)
+    sparcify_trajectories_with_action_for_folder(str_start_date='22-03-2023',str_end_date='23-03-2023',folder_path=INPUT_ALL_TEST_FOLDER + '/realistic', action=sparcify_realisticly_trajectories, threshold=0.0, boundary_box=None)
     #sparcify_trajectories_with_action_for_folder(str_start_date='22-03-2023',str_end_date='23-03-2023',folder_path=INPUT_ALL_TEST_FOLDER + '/large_gap_0_5', action=sparcify_large_time_gap_with_threshold_percentage, threshold=0.5, boundary_box=None)
-    sparcify_trajectories_with_action_for_folder(str_start_date='01-03-2023',str_end_date='01-03-2023',folder_path=INPUT_ALL_TEST_FOLDER + '/random_0_5', action=sparcify_trajectories_randomly_using_threshold, threshold=0.5, boundary_box=None)
+    #sparcify_trajectories_with_action_for_folder(str_start_date='01-03-2023',str_end_date='01-03-2023',folder_path=INPUT_ALL_TEST_FOLDER + '/random_0_5', action=sparcify_trajectories_randomly_using_threshold, threshold=0.5, boundary_box=None)
 
 #filter_original_trajectories(sog_threshold=0.0)

@@ -7,12 +7,12 @@ from scipy.spatial import cKDTree
 from sqlalchemy import create_engine
 from data.logs.logging import setup_logger
 from db_connection.config import load_config
-from .functions import calculate_bearing, calculate_bearing_difference, export_graph_to_geojson
+from .functions import calculate_bearing, calculate_bearing_difference, export_graph_to_geojson, haversine_distance
 
 LOG_PATH = 'graph_log.txt'
 DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'graph_construction_module')
-INPUT_FOLDER_PATH = os.path.join(DATA_FOLDER, 'original/Passenger')
+INPUT_FOLDER_PATH = os.path.join(DATA_FOLDER, 'graph_input')
 OUTPUT_FOLDER_PATH = os.path.join(OUTPUT_FOLDER, 'output')
 
 if not os.path.exists(OUTPUT_FOLDER_PATH):
@@ -55,23 +55,18 @@ def extract_original_trajectories() -> list:
 
     return ais_points
 
-def geometric_sampling():
-    ais_points = extract_original_trajectories()
-
+def geometric_sampling(trajectories):
     print('Performing geometric sampling')
-    coordinates = np.array([point[:2] for point in ais_points])
+    coordinates = np.array([point[:2] for point in trajectories])
 
     # Create a cKDTree for efficient nearest neighbor search
     kdtree = cKDTree(coordinates)
-
-    # Define parameters for geometric sampling
-    radius = 0.002  # Radius within which points will be sampled
 
     density_values = np.zeros(len(coordinates), dtype=float)
 
     # Iterate over each point to calculate density
     for i, point in enumerate(coordinates):
-        neighbors = kdtree.query_ball_point(point, r=radius)
+        neighbors = kdtree.query_ball_point(point, 0.001)
         density_values[i] = len(neighbors)
 
     density_values += 1e-9  # Avoid division by zero
@@ -80,26 +75,24 @@ def geometric_sampling():
     sampling_probabilities = 1 - normalized_density_scores
     sampling_probabilities /= sampling_probabilities.sum()
 
-    num_samples = min(50000, len(coordinates))  # Adjust based on your dataset size
+    num_samples = min(250000, len(coordinates))  # Adjust based on your dataset size
     sampled_indices = np.random.choice(len(coordinates), size=num_samples, replace=False, p=sampling_probabilities)
-    sampled_ais_points = [ais_points[idx] for idx in sampled_indices]
+    sampled_ais_points = [trajectories[idx] for idx in sampled_indices]
 
     return sampled_ais_points
 
-def create_nodes():
-    sampled_ais_points = geometric_sampling()
-
+def create_nodes(sampled_trajectories):
     print("Creating nodes")
 
     # Convert sampled points into a GeoDataFrame
-    ais_points_gdf = gpd.GeoDataFrame(sampled_ais_points, columns=['latitude', 'longitude', 'cog', 'draught', 'ship_type', 'timestamp'])
+    ais_points_gdf = gpd.GeoDataFrame(sampled_trajectories, columns=['latitude', 'longitude', 'cog', 'draught', 'ship_type', 'timestamp'])
     ais_points_gdf['geometry'] = gpd.points_from_xy(ais_points_gdf.longitude, ais_points_gdf.latitude)
     ais_points_gdf.set_crs(epsg=4326, inplace=True)
 
     # Assign depth values
     config = load_config()
     engine = create_engine(f"postgresql://{config['user']}:{config['password']}@{config['host']}:{config['port']}/{config['database']}")
-    parent_grid_id = "SELECT * FROM grid_1600"
+    parent_grid_id = "SELECT * FROM grid_800"
     polygons_gdf = gpd.read_postgis(parent_grid_id, engine, geom_col='geometry')
     joined = gpd.sjoin(ais_points_gdf, polygons_gdf, how='left', op='within')
     ais_points_gdf['avg_depth'] = joined['avg_depth']
@@ -113,11 +106,9 @@ def create_nodes():
 
     return G
 
-def create_edges():
-    G = create_nodes()
-
+def create_edges(G, bearing_tolerance):
     print("Creating edges")
-    bearing_tolerance = 30  # Define tolerance for bearing difference in degrees
+      # Define tolerance for bearing difference in degrees
 
     node_coords_list = [(node, data) for node, data in G.nodes(data=True)]
     node_array = np.array([node for node, data in node_coords_list])
@@ -138,7 +129,8 @@ def create_edges():
                 bearing_diff = calculate_bearing_difference(node_cog, bearing)
 
                 if bearing_diff <= bearing_tolerance:
-                    G.add_edge(node, nearby_node)
+                    distance = haversine_distance(node[0], node[1], nearby_node[0], nearby_node[1])
+                    G.add_edge(node, nearby_node, weight=distance)
                     
         if i % 10000 == 0:
             print(f"Processed {i} nodes for edge creation.")
@@ -151,4 +143,8 @@ def create_edges():
     return G
 
 def create_graph():
-    return create_edges()
+    graph_trajectories = extract_original_trajectories()
+    geometric_sampled_graph_trajectories = geometric_sampling(graph_trajectories)
+    nodes = create_nodes(geometric_sampled_graph_trajectories)
+    edges = create_edges(nodes, 30) 
+    return edges

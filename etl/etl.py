@@ -50,7 +50,7 @@ def get_csv_files_in_interval(interval: str):
     try:
         for file in files_to_download:
             logging.info(f'Extracting {file}')
-            extract_csv_file(filename=file)
+            extract_csv_file(file_name=file)
             downloaded += 1
             stdout.write(f'\rDownloaded {file}.  Completed ({downloaded}/{len(files_to_download)})')
             stdout.flush()
@@ -79,33 +79,33 @@ def connect_to_to_ais_web_server_and_get_data():
     except Exception as e:
         logging.error('Fetching AIS data failed with: %s', repr(e))
 
-def extract_csv_file(filename: str):
+def extract_csv_file(file_name: str):
     """
     Downloads the given file, runs it through the pipeline and adds the file to the log.
     :param file_name: The file to be downloaded, cleansed and inserted
     """
-    #download_file_from_ais_web_server(file_name)
+    download_file_from_ais_web_server(file_name)
 
     try:
-        # if ".zip" in file_name: 
-        #     file_name = file_name.replace('.zip', '.csv')
-        # else:
-        #     file_name = file_name.replace('.rar', '.csv')
+        if ".zip" in file_name: 
+            file_name = file_name.replace('.zip', '.csv')
+        else:
+            file_name = file_name.replace('.rar', '.csv')
         
-        #csv_file_path = os.path.join(AIS_CSV_FOLDER, file_name)
-        csv_filepath = '/Users/cecil/Documents/Kandidat Speciale/VTI/data/ais_csv/aisdk-2023-03-01.csv'
-        stats.filepath.append(csv_filepath)
+        csv_file_path = os.path.join(AIS_CSV_FOLDER, file_name)
+        #csv_file_path = '/Users/cecil/Documents/Kandidat Speciale/VTI/data/ais_csv/aisdk-2023-03-01.csv'
+        stats.filepath.append(csv_file_path)
 
         # Step 1: Read CSV
-        logging.info(f'Read csv {filename}')
+        logging.info(f'Read csv {file_name}')
         
-        df = get_csv_as_df(filepath=csv_filepath) 
+        df = get_csv_as_df(filepath=csv_file_path) 
         
         initial_row_count = len(df)
         stats.initial_rows.append(initial_row_count)
         
         # Step 2: Cleanse CSV
-        logging.info(f'Cleansing csv {filename}')
+        logging.info(f'Cleansing csv {file_name}')
         df = cleanse_df(gdf=df)
         filtered_row_count = len(df)
         stats.filtered_rows.append(filtered_row_count)
@@ -114,13 +114,13 @@ def extract_csv_file(filename: str):
         create_trajectories_files(df)
         stats.add_to_file(STATISTIC_FILE)
 
-        logging.info(f'Finished creating trajectories for {filename}')
+        logging.info(f'Finished creating trajectories for {file_name}')
         #os.remove(csv_file_path)
                 
     except Exception as e:
-        stats.remove_latest_entry(csv_filepath)
+        stats.remove_latest_entry(csv_file_path)
         stats.add_to_file(STATISTIC_FILE)
-        logging.error(f'Failed to extract file {filename} with error message: {repr(e)}')
+        logging.error(f'Failed to extract file {file_name} with error message: {repr(e)}')
         quit()
 
 def download_file_from_ais_web_server(filename: str):
@@ -159,5 +159,5 @@ def download_file_from_ais_web_server(filename: str):
         logging.exception(f'Failed with error: {e}')
         quit()
 
-#get_csv_files_in_interval("2023-12-01::2024-03-25")
-extract_csv_file('u mom')
+get_csv_files_in_interval("2024-02-26::2024-02-26")
+#extract_csv_file('u mom')
