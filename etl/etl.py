@@ -112,7 +112,7 @@ def extract_csv_file(filename: str):
         stats.add_to_file(STATISTIC_JSON_FILE)
 
         logging.info(f'Finished creating trajectories for {filename}')
-        os.remove(csv_file_path)
+        os.remove(csv_filepath)
                 
     except Exception as e:
         logging.error(f'Failed to extract file {filename} with error message: {repr(e)}')
