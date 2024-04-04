@@ -8,7 +8,8 @@ from .heuristics import heuristics
 
 OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'imputation_module')
 OUTPUT_FOLDER_PATH = os.path.join(OUTPUT_FOLDER, 'output')
-INPUT_FOLDER_PATH = os.path.join(OUTPUT_FOLDER, 'output/imputation_input.txt')
+INPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
+INPUT_FOLDER_PATH = os.path.join(INPUT_FOLDER, 'input_imputation/all/test/realistic/Passenger/209392000_15-01-2024_08-31-42.txt')
 
 if not os.path.exists(OUTPUT_FOLDER_PATH):
     os.makedirs(OUTPUT_FOLDER_PATH)
@@ -88,13 +89,13 @@ def impute_trajectory():
             G.add_node(end_point, **end_props)
 
         # Connect start and end points to existing nodes within a given radius
-        for node in nodes_within_radius(G, start_point, 200):
+        for node in nodes_within_radius(G, start_point, 0.02):
             if node != start_point:  # Avoid self-connections
                 distance = haversine_distance(start_point[0], start_point[1], node[0], node[1])
                 G.add_edge(start_point, node, weight=distance)
                 G.add_edge(node, start_point, weight=distance)
 
-        for node in nodes_within_radius(G, end_point, 200):
+        for node in nodes_within_radius(G, end_point, 0.02):
             if node != end_point:  # Avoid self-connections
                 distance = haversine_distance(end_point[0], end_point[1], node[0], node[1])
                 G.add_edge(end_point, node, weight=distance)

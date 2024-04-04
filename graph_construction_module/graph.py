@@ -12,13 +12,13 @@ from .functions import calculate_bearing, calculate_bearing_difference, export_g
 LOG_PATH = 'graph_log.txt'
 DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'graph_construction_module')
-INPUT_FOLDER_PATH = os.path.join(DATA_FOLDER, 'input_graph/Cargo')
+INPUT_FOLDER_PATH = os.path.join(DATA_FOLDER, 'input_graph/Passenger')
 OUTPUT_FOLDER_PATH = os.path.join(OUTPUT_FOLDER, 'output')
 
-BEARING_THRESHOLD = 30
-NUMBER_OF_GRAPH_POINTS = 500000
+BEARING_THRESHOLD = 45
+NUMBER_OF_GRAPH_POINTS = 200000
 SAMPLING_RADIUS_THRESHOLD = 0.0005 # approx 55 meters
-EDGE_RADIUS_THRESHOLD = 0.003 # approx 333 meters
+EDGE_RADIUS_THRESHOLD = 0.001 # approx 111 meters
 
 if not os.path.exists(OUTPUT_FOLDER_PATH):
     os.makedirs(OUTPUT_FOLDER_PATH)
@@ -62,9 +62,9 @@ def extract_original_trajectories() -> list:
 
 def geometric_sampling(trajectories):
     """
-        Iteratres over a collection of AIS points and assigns a density score to each point
-        based on how many neighbourings AIS points is within a specified radius threshold.
-        When each point has been assigned a desnity score, we define how many points we want
+        Iterates over a collection of AIS points and assigns a density score to each point
+        based on how many neighboring AIS points is within a specified radius threshold.
+        When each point has been assigned a density score, we define how many points we want
         in total. It then randomly exclude points based on the density score, the higher the
         score the greater the change of exclusion is.
     """
@@ -95,8 +95,8 @@ def geometric_sampling(trajectories):
 
 def create_nodes(sampled_trajectories):
     """
-        Recives the geometricly sampled AIS points, assigns them with a avg_depth
-        by intersecting with a grid layer. The fucntion then returns the a graph
+        Receives the geometrically sampled AIS points, assigns them with a avg_depth
+        by intersecting with a grid layer. The function then returns the a graph
         containing the nodes with relevant attributes. 
     """
     print("Creating nodes")
