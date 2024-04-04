@@ -12,7 +12,7 @@ from .extract_trajectories_from_csv import get_csv_as_df, cleanse_df, create_tra
 DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 AIS_CSV_FOLDER = os.path.join(DATA_FOLDER, 'ais_csv')
 STATISTIC_FOLDER = os.path.join(DATA_FOLDER, 'stats')
-STATISTIC_FILE = os.path.join(STATISTIC_FOLDER, 'stats.json')
+STATISTIC_JSON_FILE = os.path.join(STATISTIC_FOLDER, 'stats.ndjson')
 ETL_LOG = 'etl_log.txt'
 
 global num_points_before_filtering
@@ -82,52 +82,47 @@ def connect_to_to_ais_web_server_and_get_data():
 def extract_csv_file(file_name: str):
     """
     Downloads the given file, runs it through the pipeline and adds the file to the log.
-    :param file_name: The file to be downloaded, cleansed and inserted
+    :param filename: The file to be downloaded, cleansed and inserted
     """
-    download_file_from_ais_web_server(file_name)
+    download_file_from_ais_web_server(filename)
 
     try:
-        if ".zip" in file_name: 
-            file_name = file_name.replace('.zip', '.csv')
+        if ".zip" in filename: 
+            filename = filename.replace('.zip', '.csv')
         else:
-            file_name = file_name.replace('.rar', '.csv')
+            filename = filename.replace('.rar', '.csv')
         
-        csv_file_path = os.path.join(AIS_CSV_FOLDER, file_name)
-        #csv_file_path = '/Users/cecil/Documents/Kandidat Speciale/VTI/data/ais_csv/aisdk-2023-03-01.csv'
-        stats.filepath.append(csv_file_path)
+        csv_filepath = os.path.join(AIS_CSV_FOLDER, filename)
+        stats.filepath = csv_filepath
 
         # Step 1: Read CSV
         logging.info(f'Read csv {file_name}')
         
         df = get_csv_as_df(filepath=csv_file_path) 
         
-        initial_row_count = len(df)
-        stats.initial_rows.append(initial_row_count)
+        stats.initial_rows = len(df)
         
         # Step 2: Cleanse CSV
         logging.info(f'Cleansing csv {file_name}')
         df = cleanse_df(gdf=df)
-        filtered_row_count = len(df)
-        stats.filtered_rows.append(filtered_row_count)
+        stats.filtered_rows = len(df)
         
         # Step 3: Create trajectories
         create_trajectories_files(df)
-        stats.add_to_file(STATISTIC_FILE)
+        stats.add_to_file(STATISTIC_JSON_FILE)
 
-        logging.info(f'Finished creating trajectories for {file_name}')
-        #os.remove(csv_file_path)
+        logging.info(f'Finished creating trajectories for {filename}')
+        os.remove(csv_file_path)
                 
     except Exception as e:
-        stats.remove_latest_entry(csv_file_path)
-        stats.add_to_file(STATISTIC_FILE)
-        logging.error(f'Failed to extract file {file_name} with error message: {repr(e)}')
+        logging.error(f'Failed to extract file {filename} with error message: {repr(e)}')
         quit()
 
 def download_file_from_ais_web_server(filename: str):
     """
     Downloads a specified file from the webserver into the CSV_FILES_FOLDER.
     It will also unzip it, as well as delete the compressed file afterwards.
-    :param file_name: The file to be downloaded. Example 'aisdk-2022-01-01.zip'
+    :param filename: The file to be downloaded. Example 'aisdk-2022-01-01.zip'
     """
     download_result = requests.get('https://web.ais.dk/aisdata/' + filename, allow_redirects=True)
     download_result.raise_for_status()
@@ -159,5 +154,4 @@ def download_file_from_ais_web_server(filename: str):
         logging.exception(f'Failed with error: {e}')
         quit()
 
-get_csv_files_in_interval("2024-02-26::2024-02-26")
-#extract_csv_file('u mom')
+get_csv_files_in_interval("2023-03-01::2024-04-01")

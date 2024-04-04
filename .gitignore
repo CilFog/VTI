@@ -185,3 +185,13 @@ data/graph_input/
 .vscode/
 db_connection/database.ini
 debug.py
+data/input_imputation/
+data/input_graph/
+
+.python-version
+
+data/stats/stats.json
+
+data/stats/stats_final.csv
+
+data/stats/stats.ndjson
