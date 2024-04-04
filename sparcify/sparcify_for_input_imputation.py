@@ -689,7 +689,7 @@ def move_random_files_to_original_imputation(percentage=0.1):
     except Exception as e:
         logging.error(f'Error was thrown with {repr(e)}')
 
-filter_original_trajectories(0.0)
+# filter_original_trajectories(0.0)
 
 # if __name__ == '__main__':
 #     freeze_support()
@@ -700,4 +700,4 @@ filter_original_trajectories(0.0)
 #     sparcify_trajectories_with_action_for_folder(str_start_date='01-11-2023',str_end_date='01-11-2023',folder_path=INPUT_ALL_TEST_FOLDER + '/large_gap_0_5', action=sparcify_large_time_gap_with_threshold_percentage, threshold=0.5, boundary_box=None)
 #     sparcify_trajectories_with_action_for_folder(str_start_date='01-11-2023',str_end_date='01-11-2023',folder_path=INPUT_ALL_TEST_FOLDER + '/random_0_5', action=sparcify_trajectories_randomly_using_threshold, threshold=0.5, boundary_box=None)
 
-#move_random_files_to_original_imputation()
+move_random_files_to_original_imputation()
