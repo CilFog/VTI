@@ -3,7 +3,7 @@ import heapq
 import os
 import networkx as nx
 from graph_construction_module.graph import create_graph
-from .functions import haversine_distance, nodes_within_radius, nodes_to_geojson, edges_to_geojson, export_graph_to_geojson
+from .functions import haversine_distance, nodes_within_radius, nodes_to_geojson, edges_to_geojson
 from .heuristics import heuristics 
 
 OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'imputation_module')
@@ -88,13 +88,13 @@ def impute_trajectory():
             G.add_node(end_point, **end_props)
 
         # Connect start and end points to existing nodes within a given radius
-        for node in nodes_within_radius(G, start_point, 0.03):
+        for node in nodes_within_radius(G, start_point, 200):
             if node != start_point:  # Avoid self-connections
                 distance = haversine_distance(start_point[0], start_point[1], node[0], node[1])
                 G.add_edge(start_point, node, weight=distance)
                 G.add_edge(node, start_point, weight=distance)
 
-        for node in nodes_within_radius(G, end_point, 0.03):
+        for node in nodes_within_radius(G, end_point, 200):
             if node != end_point:  # Avoid self-connections
                 distance = haversine_distance(end_point[0], end_point[1], node[0], node[1])
                 G.add_edge(end_point, node, weight=distance)
@@ -123,8 +123,8 @@ def impute_trajectory():
         for i in range(len(path)-1):
             edges.append((path[i], path[i+1]))
 
-    imputed_nodes_file_path = os.path.join(OUTPUT_FOLDER_PATH, 'ii-nodes.geojson')
-    imputed_edges_file_path = os.path.join(OUTPUT_FOLDER_PATH, 'ii-edges.geojson')
+    imputed_nodes_file_path = os.path.join(OUTPUT_FOLDER_PATH, 'i-nodes.geojson')
+    imputed_edges_file_path = os.path.join(OUTPUT_FOLDER_PATH, 'i-edges.geojson')
 
     nodes_to_geojson(G_temp, unique_nodes, imputed_nodes_file_path)
     edges_to_geojson(G_temp, edges, imputed_edges_file_path)
@@ -132,11 +132,3 @@ def impute_trajectory():
     return imputed_paths
 
 impute_trajectory()
-
-# TO-DO (Imputation):
-    # Given a trajectory, it should traverse the graph
-        # No node in the graph has a timestamp, it should therefore be calculated
-            # based on the timestamp of the input trajectory
-            # based on the speed of the input trajectory
-        # it decides which edge to take based on:
-            # the depth value of the trajectory considered for imputation
