@@ -16,8 +16,8 @@ from utils import get_radian_and_radian_diff_columns, calculate_initial_compass_
 
 
 DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
-# ORIGINAL_FOLDER = os.path.join(DATA_FOLDER, 'original')
-ORIGINAL_FOLDER = os.path.join(DATA_FOLDER, 'input_graph')
+ORIGINAL_FOLDER = os.path.join(DATA_FOLDER, 'original')
+INPUT_GRAPH_FOLDER = os.path.join(DATA_FOLDER, 'input_graph')
 INPUT_IMPUTATION_FOLDER = os.path.join(DATA_FOLDER, 'input_imputation')
 INPUT_ALL_FOLDER = os.path.join(INPUT_IMPUTATION_FOLDER, 'all')
 INPUT_ALL_VALIDATION_FOLDER = os.path.join(INPUT_ALL_FOLDER, 'validation')
