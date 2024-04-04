@@ -71,13 +71,13 @@ def filter_original_trajectories(sog_threshold: float):
             os_path_split = '/' if '/' in root else '\\'
             for file in files:
                 file_path = os.path.join(root, file)
-                print(file_path)
                 
                 trajectory_df:gpd.GeoDataFrame = get_trajectory_df_from_txt(file_path=file_path)
-
+                
                 if trajectory_df is None:
-                    os.remove(file_path)
-
+                    # os.remove(file_path)
+                    print(':()')
+                continue
                 initial_num += 1
                 only_null_ship_type = trajectory_df.ship_type.isnull().all() or trajectory_df.ship_type.isna().all()
                 
@@ -692,5 +692,7 @@ def move_random_files_to_original_imputation(percentage=0.1):
 
 write_trajectories_for_area()
 write_trajectories_for_all()
+
+# filter_original_trajectories(0.0)
 
 #move_random_files_to_original_imputation()
