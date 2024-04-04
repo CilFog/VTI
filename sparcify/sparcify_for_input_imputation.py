@@ -132,6 +132,10 @@ def filter_original_trajectories(sog_threshold: float):
                 
                 file_name = file.split(os_path_split)[-1]
                 vessel_folder = trajectory_df.iloc[0].ship_type.replace('/', '_').replace(' ', '_')
+
+                if (vessel_folder in root):
+                    continue
+
                 mmsi = root.split(os_path_split)[-1]
                 new_folder_path = os.path.join(ORIGINAL_FOLDER, vessel_folder, mmsi)
                 os.makedirs(new_folder_path, exist_ok=True)  # Create the folder if it doesn't exist
@@ -169,8 +173,6 @@ def filter_original_trajectories(sog_threshold: float):
                     file_name = f'{mmsi}_{str_datetime}.txt'
                     new_file_path = os.path.join(new_folder_path, file_name)
                     filtered_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'navigational_status']].reset_index(drop=True).to_csv(new_file_path, sep=',', index=True, header=True, mode='w')
-
-                
                 
                 #remove file
                 os.remove(file_path)
@@ -689,4 +691,6 @@ def move_random_files_to_original_imputation(percentage=0.1):
     #sparcify_trajectories_with_action_for_folder(str_start_date='22-03-2023',str_end_date='23-03-2023',folder_path=INPUT_ALL_TEST_FOLDER + '/large_gap_0_5', action=sparcify_large_time_gap_with_threshold_percentage, threshold=0.5, boundary_box=None)
     # sparcify_trajectories_with_action_for_folder(str_start_date='01-03-2023',str_end_date='01-03-2023',folder_path=INPUT_ALL_TEST_FOLDER + '/random_0_5', action=sparcify_trajectories_randomly_using_threshold, threshold=0.5, boundary_box=None)
 
-move_random_files_to_original_imputation()
+filter_original_trajectories(0.0)
+
+#move_random_files_to_original_imputation()

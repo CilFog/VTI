@@ -50,7 +50,7 @@ def extract_trajectories_from_csv_files():
             logging.info(f'Began crating trajectories for file: {filename}')
 
             if (not df.empty):
-                create_trajectories_files(gdf=df, filename=filename)
+                create_trajectories_files(gdf=df)
             else:
                 logging.warning(f'No data was extracted from {filename}')
         

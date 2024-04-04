@@ -15,10 +15,6 @@ STATISTIC_FOLDER = os.path.join(DATA_FOLDER, 'stats')
 STATISTIC_JSON_FILE = os.path.join(STATISTIC_FOLDER, 'stats.ndjson')
 ETL_LOG = 'etl_log.txt'
 
-global num_points_before_filtering
-global num_points_after_filtering
-global after_splitting
-
 logging = setup_logger(name=ETL_LOG, log_file=ETL_LOG)
 
 def get_csv_files_in_interval(interval: str):
