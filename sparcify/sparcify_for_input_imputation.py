@@ -75,9 +75,8 @@ def filter_original_trajectories(sog_threshold: float):
                 trajectory_df:gpd.GeoDataFrame = get_trajectory_df_from_txt(file_path=file_path)
                 
                 if trajectory_df is None:
-                    # os.remove(file_path)
-                    print(':()')
-                continue
+                    os.remove(file_path)
+                
                 initial_num += 1
                 only_null_ship_type = trajectory_df.ship_type.isnull().all() or trajectory_df.ship_type.isna().all()
                 
