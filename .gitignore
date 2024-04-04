@@ -163,7 +163,7 @@ cython_debug/
 #.idea/
 
 data/input/
-
+data/original/*.txt
 data/output/
 
 data/csv/
@@ -175,3 +175,17 @@ data/ais_csv/
 data/test_data/*.txt
 data/test_data/*.csv
 data/logs/*.txt
+
+data/meta_trajectories/
+
+data/original/
+
+.vscode/
+data/input_imputation/
+data/input_graph/
+
+.python-version
+
+data/stats/stats.json
+data/stats/stats_final.csv
+data/stats/stats.ndjson

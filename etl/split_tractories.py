@@ -2,9 +2,10 @@ import pandas as pd
 import geopandas as gpd
 from collections import namedtuple
 from enum import Enum
-from logs.logging import setup_logger
+from data.logs.logging import setup_logger
 
-logging = setup_logger('trajectory_creation_log.txt')
+SPLIT_TRAJECTORIES_LOG = 'split_trajectories_log.txt'
+logging = setup_logger(name=SPLIT_TRAJECTORIES_LOG, log_file=SPLIT_TRAJECTORIES_LOG)
 
 class HarborState(Enum):
     STOPPING = 0
@@ -12,13 +13,13 @@ class HarborState(Enum):
     AT_ANCHOR = 2
     PASSING_THROUGH = 3
 
-def create_trajectories_from_df(harbors_df:gpd.GeoDataFrame, trajectory_df:gpd.GeoDataFrame):
+def split_trajectories_from_df(harbors_df:gpd.GeoDataFrame, trajectory_df:gpd.GeoDataFrame):
     trajectory_df = trajectory_df.reset_index(drop=True)
     trajectories_df = order_by_diff_vessels(trajectory_df)
     trajectories_df = trajectories_df.drop_duplicates(subset=['vessel_id', 'timestamp'], keep='first')
 
     trajectories_df = trajectories_df.reset_index(drop=True) # to ensure indexes are still fine
-    sub_trajectories_df = make_subtrajectories_split_from_harbor(harbors_df, trajectories_df)
+    sub_trajectories_df = split_to_sub_trajectories_using_harbor(harbors_df, trajectories_df)
     
     return sub_trajectories_df
 
@@ -27,12 +28,14 @@ def order_by_diff_vessels(sorted_locations_df: gpd.GeoDataFrame):
     sorted_locations_df['vessel_id'] = sorted_locations_df.groupby(['imo', 'ship_type', 'width', 'length']).ngroup() 
     return sorted_locations_df
 
-def make_subtrajectories_split_from_harbor(harbors_df: gpd.GeoDataFrame, trajectories_df: gpd.GeoDataFrame):
-    trajectories_df = add_in_harbor_column(trajectories_df, harbors_df)
-    
-    sub_trajectories = []
-    
+def split_to_sub_trajectories_using_harbor(harbors_df: gpd.GeoDataFrame, trajectories_df: gpd.GeoDataFrame):
     try:
+        trajectories_df = add_in_harbor_column(trajectories_df, harbors_df)
+        
+        if (trajectories_df.empty):
+            logging.warning('A trajectory was empty...')    
+        
+        sub_trajectories = []
         for _, positions_df in trajectories_df.groupby('vessel_id'):
             trajectory_in_harbor = []
             current_sub_trajectory = []
@@ -89,7 +92,6 @@ def make_subtrajectories_split_from_harbor(harbors_df: gpd.GeoDataFrame, traject
 
                 if current_sub_trajectory:
                     sub_trajectories.append(current_sub_trajectory)
-                
         
         # Flatten the list of lists
         flattened_sub_trajectories = [
@@ -99,8 +101,14 @@ def make_subtrajectories_split_from_harbor(harbors_df: gpd.GeoDataFrame, traject
         ]
             
         # Convert to DataFrame
-        sub_trajectory_df = pd.DataFrame(flattened_sub_trajectories)
-        return sub_trajectory_df
+        sub_trajectories_df = pd.DataFrame(flattened_sub_trajectories)
+        
+        if (sub_trajectories_df.empty):
+            return sub_trajectories_df
+        
+        sog_filtered_sub_trajectories = sub_trajectories_df[sub_trajectories_df['sog'] > 0.0]
+        
+        return sog_filtered_sub_trajectories
     
     except Exception as e:
         logging.error(f'Failed to create trajectories with error {repr(e)}')        
@@ -157,8 +165,6 @@ def handle_stationary_at_sea(current_sub_trajectory, current_position, is_statio
 
     stationary_trajectory.append(current_position)
     return (current_sub_trajectory, prev_position, stationary_trajectory)
-
-    
 
 def handle_from_sea_left_harbor(sub_trajectories, current_sub_trajectory, trajectory_in_harbor, current_position, from_harbor, from_sea):
     (state, to_current_sub_trajectory, for_next_sub_trajectory) = get_harbor_state_when_entering_harbor(trajectory_in_harbor)              
@@ -323,19 +329,3 @@ def get_leaving_harbor_positions(harbor_positions:list) -> tuple[HarborState, li
         return LeavingTuple(harbor_state=HarborState.LEAVING, to_current_sub_trajectory=leaving_positions)
     else:
         return LeavingTuple(harbor_state=HarborState.AT_ANCHOR, to_current_sub_trajectory=[])
-    
-
-# def calculate_speed(p1:gpd.GeoDataFrame, p2:gpd.GeoDataFrame) -> float:
-#     distance_in_meters = p2.geometry.distance(p1.geometry)
-#     distance_in_kilometers = distance_in_meters/1000
-    
-#     time_in_seconds = p2.timestamp - p1.timestamp 
-#     time_in_hours = time_in_seconds/60/60
-     
-#     if time_in_seconds == 0:
-#         return max(p1.sog, p2.sog)
-
-#     kilometers_pr_hour = distance_in_kilometers/time_in_hours
-#     knot_pr_hour = kilometers_pr_hour/1.85
-        
-#     return knot_pr_hour
