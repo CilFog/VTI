@@ -25,7 +25,6 @@ logging = setup_logger(name=CSV_EXTRACT_FILE_LOG, log_file=CSV_EXTRACT_FILE_LOG)
 
 def extract_trajectories_from_csv_files():
     filenames = os.listdir(AIS_CSV_FOLDER)
-    current_filepath = ''
     completed:int = 0
     
     logging.info(f'Began extracting trajectories from {len(filenames)} csv files')
@@ -33,7 +32,6 @@ def extract_trajectories_from_csv_files():
         for file_index in range(len(filenames)):
             filename = filenames[file_index]
             filepath = os.path.join(AIS_CSV_FOLDER, filename)
-            current_filepath = filepath
 
             logging.info(f'Currently extracting file: {filename} (Completed ({completed}/{len(filenames)}) csv files)')        
             df = get_csv_as_df(filepath=filepath)
@@ -52,7 +50,7 @@ def extract_trajectories_from_csv_files():
             logging.info(f'Began crating trajectories for file: {filename}')
 
             if (not df.empty):
-                create_trajectories_files(gdf=df, filename=filename)
+                create_trajectories_files(gdf=df)
             else:
                 logging.warning(f'No data was extracted from {filename}')
         
@@ -273,3 +271,5 @@ def write_trajectory_to_original_folder(sub_trajectory_df: gpd.GeoDataFrame):
     file_path = os.path.join(folderpath, filename)
     
     sub_trajectory_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'navigational_status']].reset_index(drop=True).to_csv(file_path, sep=',', index=True, header=True, mode='w')
+
+extract_trajectories_from_csv_files()

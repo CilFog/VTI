@@ -1,10 +1,11 @@
 import os
 import sys
 import random
-import datetime as dt
+import shutil
 import time as t
 import numpy as np
 import pandas as pd
+import datetime as dt
 import geopandas as gpd
 from typing import Callable
 from .classes import SparsifyResult
@@ -16,9 +17,10 @@ from utils import get_radian_and_radian_diff_columns, calculate_initial_compass_
 
 
 DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
-# ORIGINAL_FOLDER = os.path.join(DATA_FOLDER, 'original')
-ORIGINAL_FOLDER = os.path.join(DATA_FOLDER, 'input_graph')
+ORIGINAL_FOLDER = os.path.join(DATA_FOLDER, 'original')
+INPUT_GRAPH_FOLDER = os.path.join(DATA_FOLDER, 'input_graph')
 INPUT_IMPUTATION_FOLDER = os.path.join(DATA_FOLDER, 'input_imputation')
+INPUT_IMPUTATION_ORIGINAL_FOLDER = os.path.join(INPUT_IMPUTATION_FOLDER, 'original')
 INPUT_ALL_FOLDER = os.path.join(INPUT_IMPUTATION_FOLDER, 'all')
 INPUT_ALL_VALIDATION_FOLDER = os.path.join(INPUT_ALL_FOLDER, 'validation')
 INPUT_ALL_TEST_FOLDER = os.path.join(INPUT_ALL_FOLDER, 'test')
@@ -130,6 +132,10 @@ def filter_original_trajectories(sog_threshold: float):
                 
                 file_name = file.split(os_path_split)[-1]
                 vessel_folder = trajectory_df.iloc[0].ship_type.replace('/', '_').replace(' ', '_')
+
+                if (vessel_folder in root):
+                    continue
+
                 mmsi = root.split(os_path_split)[-1]
                 new_folder_path = os.path.join(ORIGINAL_FOLDER, vessel_folder, mmsi)
                 os.makedirs(new_folder_path, exist_ok=True)  # Create the folder if it doesn't exist
@@ -167,8 +173,6 @@ def filter_original_trajectories(sog_threshold: float):
                     file_name = f'{mmsi}_{str_datetime}.txt'
                     new_file_path = os.path.join(new_folder_path, file_name)
                     filtered_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'navigational_status']].reset_index(drop=True).to_csv(new_file_path, sep=',', index=True, header=True, mode='w')
-
-                
                 
                 #remove file
                 os.remove(file_path)
@@ -555,7 +559,7 @@ def get_files_in_range(start_date, end_date, directory):
     end_date = dt.datetime.strptime(end_date, '%d-%m-%Y').date()
     files_in_range = []
 
-    for dirpath, dirnames, filenames in os.walk(directory):
+    for path, dirnames, filenames in os.walk(directory):
         for filename in filenames:
             # Extract the date part from the filename, assuming format like '111219502_01-03-2023_11-45-51'
             parts = filename.split('_')
@@ -563,11 +567,11 @@ def get_files_in_range(start_date, end_date, directory):
                 logging.error(f'Incorrect nameformat for {filename}')
                 quit()  # Not enough parts in the filename
             date_str = parts[1]  # The date part is expected to be in the middle
-            print(filename)
             try:
                 file_date = dt.datetime.strptime(date_str, '%d-%m-%Y').date()
                 if start_date <= file_date <= end_date:
-                    files_in_range.append(filename)
+                    filepath = os.path.join(path, filename)
+                    files_in_range.append(filepath)
             except ValueError:
                 # If date parsing fails, ignore the file
                 pass
@@ -590,7 +594,7 @@ def sparcify_trajectories_with_action_for_folder(
     logging.info(f'Began sparcifying trajectories with {str(action)}')
 
     # file_paths = get_files_in_range(start_date=str_start_date, end_date=str_end_date, directory=ORIGINAL_FOLDER)
-    file_paths = get_files_in_range(str_start_date, str_end_date, ORIGINAL_FOLDER)
+    file_paths = get_files_in_range(str_start_date, str_end_date, INPUT_IMPUTATION_ORIGINAL_FOLDER)
     # Process files in parallel
     with ProcessPoolExecutor() as executor:
         results = executor.map(action, file_paths, [folder_path] * len(file_paths), [threshold] * len(file_paths), [boundary_box] * len(file_paths))        
@@ -649,34 +653,42 @@ def write_trajectories_for_all():
         sparcify_trajectories_with_action_for_folder(folder_path=INPUT_ALL_TEST_FOLDER + '/large_gap_0_5', action=sparcify_large_time_gap_with_threshold_percentage, threshold=0.5, boundary_box=None)
         sparcify_trajectories_with_action_for_folder(folder_path=INPUT_ALL_TEST_FOLDER + '/random_0_5', action=sparcify_trajectories_randomly_using_threshold, threshold=0.5, boundary_box=None)
 
-def is_directory_empty(directory):
-    # Check if the directory is empty
-    return not any(True for _ in os.listdir(directory))
+def move_random_files_to_original_imputation(percentage=0.1):
+    all_files = []
+    # Walk through the directory
+    for root, dirs, files in os.walk(INPUT_GRAPH_FOLDER):
+        for file in files:
+            all_files.append(os.path.join(root, file))
+    
+    # Calculate the number of files to move
+    num_files_to_move = int(len(all_files) * percentage)
+    
+    # Randomly select the files
+    files_to_move = random.sample(all_files, num_files_to_move)
+    
+    os.makedirs(INPUT_IMPUTATION_ORIGINAL_FOLDER, exist_ok=True)  # Create the folder if it doesn't exist
 
-def count_files(directory):
-    # Count the number of files in the directory
-    num_files = sum(1 for _ in os.listdir(directory) if os.path.isfile(os.path.join(directory, _)))
-    return num_files
+    try:
+        logging.info('Began moving files')
+        # Move the files
+        for i, file_path in enumerate(files_to_move, start=1):
+            # Move the file
+            shutil.move(file_path, INPUT_IMPUTATION_ORIGINAL_FOLDER)
+            sys.stdout.write(f"\rMoved {i}/{num_files_to_move}")
+            sys.stdout.flush()
+        
+        logging.info(f'Finished moving {num_files_to_move} files')
+    except Exception as e:
+        logging.error(f'Error was thrown with {repr(e)}')
 
-def check_empty_directories(root_dir):
-    # Walk through the directory tree
-    total_files = 0
-    for dirpath, dirnames, filenames in os.walk(root_dir):
-        # Check if the current directory is empty
-        if is_directory_empty(dirpath):
-            print("Empty directory:", dirpath)
-        else:
-            total_files += count_files(dirpath)
-
-    print(total_files)
 
 if __name__ == '__main__':
     freeze_support()
 
     # Assuming all necessary imports are already done
-    #sparcify_trajectories_with_action_for_folder(str_start_date='22-03-2023',str_end_date='23-03-2023',folder_path=INPUT_ALL_TEST_FOLDER + '/realistic_strict', action=sparcify_realisticly_strict_trajectories, threshold=0.0, boundary_box=None)
-    sparcify_trajectories_with_action_for_folder(str_start_date='22-03-2023',str_end_date='23-03-2023',folder_path=INPUT_ALL_TEST_FOLDER + '/realistic', action=sparcify_realisticly_trajectories, threshold=0.0, boundary_box=None)
-    #sparcify_trajectories_with_action_for_folder(str_start_date='22-03-2023',str_end_date='23-03-2023',folder_path=INPUT_ALL_TEST_FOLDER + '/large_gap_0_5', action=sparcify_large_time_gap_with_threshold_percentage, threshold=0.5, boundary_box=None)
-    # sparcify_trajectories_with_action_for_folder(str_start_date='01-03-2023',str_end_date='01-03-2023',folder_path=INPUT_ALL_TEST_FOLDER + '/random_0_5', action=sparcify_trajectories_randomly_using_threshold, threshold=0.5, boundary_box=None)
+    #sparcify_trajectories_with_action_for_folder(str_start_date='01-11-2023',str_end_date='01-11-2023',folder_path=INPUT_ALL_TEST_FOLDER + '/realistic_strict', action=sparcify_realisticly_strict_trajectories, threshold=0.0, boundary_box=None)
+    sparcify_trajectories_with_action_for_folder(str_start_date='01-15-2024',str_end_date='01-15-2024',folder_path=INPUT_ALL_TEST_FOLDER + '/realistic', action=sparcify_realisticly_trajectories, threshold=0.0, boundary_box=None)
+    #sparcify_trajectories_with_action_for_folder(str_start_date='01-11-2023',str_end_date='01-11-2023',folder_path=INPUT_ALL_TEST_FOLDER + '/large_gap_0_5', action=sparcify_large_time_gap_with_threshold_percentage, threshold=0.5, boundary_box=None)
+    #sparcify_trajectories_with_action_for_folder(str_start_date='01-11-2023',str_end_date='01-11-2023',folder_path=INPUT_ALL_TEST_FOLDER + '/random_0_5', action=sparcify_trajectories_randomly_using_threshold, threshold=0.5, boundary_box=None)
 
-filter_original_trajectories(sog_threshold=0.0)
+#move_random_files_to_original_imputation()
