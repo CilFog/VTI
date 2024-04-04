@@ -67,7 +67,7 @@ def filter_original_trajectories(sog_threshold: float):
         initial_time = t.perf_counter()
         logging.info('Began filtering original trajectories')
         os_path_split = ''   
-        for root, folder, files in os.walk(INPUT_GRAPH_FOLDER):
+        for root, folder, files in os.walk(ORIGINAL_FOLDER):
             os_path_split = '/' if '/' in root else '\\'
             for file in files:
                 file_path = os.path.join(root, file)
