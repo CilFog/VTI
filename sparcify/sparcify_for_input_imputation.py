@@ -688,10 +688,3 @@ def move_random_files_to_original_imputation(percentage=0.1):
         logging.info(f'Finished moving {num_files_to_move} files')
     except Exception as e:
         logging.error(f'Error was thrown with {repr(e)}')
-
-write_trajectories_for_area()
-write_trajectories_for_all()
-
-# filter_original_trajectories(0.0)
-
-#move_random_files_to_original_imputation()
