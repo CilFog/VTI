@@ -559,7 +559,7 @@ def get_files_in_range(start_date, end_date, directory):
     end_date = dt.datetime.strptime(end_date, '%d-%m-%Y').date()
     files_in_range = []
 
-    for dirpath, dirnames, filenames in os.walk(directory):
+    for path, dirnames, filenames in os.walk(directory):
         for filename in filenames:
             # Extract the date part from the filename, assuming format like '111219502_01-03-2023_11-45-51'
             parts = filename.split('_')
@@ -567,11 +567,11 @@ def get_files_in_range(start_date, end_date, directory):
                 logging.error(f'Incorrect nameformat for {filename}')
                 quit()  # Not enough parts in the filename
             date_str = parts[1]  # The date part is expected to be in the middle
-            print(filename)
             try:
                 file_date = dt.datetime.strptime(date_str, '%d-%m-%Y').date()
                 if start_date <= file_date <= end_date:
-                    files_in_range.append(filename)
+                    filepath = os.path.join(path, filename)
+                    files_in_range.append(filepath)
             except ValueError:
                 # If date parsing fails, ignore the file
                 pass
@@ -594,7 +594,7 @@ def sparcify_trajectories_with_action_for_folder(
     logging.info(f'Began sparcifying trajectories with {str(action)}')
 
     # file_paths = get_files_in_range(start_date=str_start_date, end_date=str_end_date, directory=ORIGINAL_FOLDER)
-    file_paths = get_files_in_range(str_start_date, str_end_date, ORIGINAL_FOLDER)
+    file_paths = get_files_in_range(str_start_date, str_end_date, INPUT_IMPUTATION_ORIGINAL_FOLDER)
     # Process files in parallel
     with ProcessPoolExecutor() as executor:
         results = executor.map(action, file_paths, [folder_path] * len(file_paths), [threshold] * len(file_paths), [boundary_box] * len(file_paths))        
@@ -682,15 +682,13 @@ def move_random_files_to_original_imputation(percentage=0.1):
         logging.error(f'Error was thrown with {repr(e)}')
 
 
-# if __name__ == '__main__':
-#     freeze_support()
+if __name__ == '__main__':
+    freeze_support()
 
     # Assuming all necessary imports are already done
-    #sparcify_trajectories_with_action_for_folder(str_start_date='22-03-2023',str_end_date='23-03-2023',folder_path=INPUT_ALL_TEST_FOLDER + '/realistic_strict', action=sparcify_realisticly_strict_trajectories, threshold=0.0, boundary_box=None)
-    #sparcify_trajectories_with_action_for_folder(str_start_date='22-03-2023',str_end_date='23-03-2023',folder_path=INPUT_ALL_TEST_FOLDER + '/realistic', action=sparcify_realisticly_trajectories, threshold=0.0, boundary_box=None)
-    #sparcify_trajectories_with_action_for_folder(str_start_date='22-03-2023',str_end_date='23-03-2023',folder_path=INPUT_ALL_TEST_FOLDER + '/large_gap_0_5', action=sparcify_large_time_gap_with_threshold_percentage, threshold=0.5, boundary_box=None)
-    # sparcify_trajectories_with_action_for_folder(str_start_date='01-03-2023',str_end_date='01-03-2023',folder_path=INPUT_ALL_TEST_FOLDER + '/random_0_5', action=sparcify_trajectories_randomly_using_threshold, threshold=0.5, boundary_box=None)
-
-filter_original_trajectories(0.0)
+    #sparcify_trajectories_with_action_for_folder(str_start_date='01-11-2023',str_end_date='01-11-2023',folder_path=INPUT_ALL_TEST_FOLDER + '/realistic_strict', action=sparcify_realisticly_strict_trajectories, threshold=0.0, boundary_box=None)
+    sparcify_trajectories_with_action_for_folder(str_start_date='01-11-2023',str_end_date='01-11-2023',folder_path=INPUT_ALL_TEST_FOLDER + '/realistic', action=sparcify_realisticly_trajectories, threshold=0.0, boundary_box=None)
+    #sparcify_trajectories_with_action_for_folder(str_start_date='01-11-2023',str_end_date='01-11-2023',folder_path=INPUT_ALL_TEST_FOLDER + '/large_gap_0_5', action=sparcify_large_time_gap_with_threshold_percentage, threshold=0.5, boundary_box=None)
+    #sparcify_trajectories_with_action_for_folder(str_start_date='01-11-2023',str_end_date='01-11-2023',folder_path=INPUT_ALL_TEST_FOLDER + '/random_0_5', action=sparcify_trajectories_randomly_using_threshold, threshold=0.5, boundary_box=None)
 
 #move_random_files_to_original_imputation()
