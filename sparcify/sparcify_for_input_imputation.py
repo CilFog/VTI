@@ -646,6 +646,9 @@ def write_trajectories_for_area():
         aalborg_harbor_bbox:Polygon = box(minx=9.915161, miny=57.047827, maxx=10.061760, maxy=57.098774)
         aalborg_harbor_path = os.path.join(INPUT_AREA_FOLDER, 'aalborg_harbor')
 
+        brunsbuettel_to_rendsburg_bbox:Polygon = box(minx=9.1167, miny=54.1183, maxx=9.6667, maxy=54.3167)
+        brunsbuettel_to_rendsburg_path = os.path.join(INPUT_AREA_FOLDER, 'brunsbuettel_to_rendsburg')
+
         sparcify_trajectories_with_action_for_folder(str_start_date='',str_end_date='',folder_path=aalborg_harbor_path, action=sparcify_realisticly_strict_trajectories, threshold=0.0, boundary_box=aalborg_harbor_bbox)
         sparcify_trajectories_with_action_for_folder(str_start_date='',str_end_date='',folder_path=aalborg_harbor_path, action=sparcify_realisticly_trajectories, threshold=0.0, boundary_box=aalborg_harbor_bbox)
         sparcify_trajectories_with_action_for_folder(str_start_date='',str_end_date='',folder_path=aalborg_harbor_path, action=sparcify_large_time_gap_with_threshold_percentage, threshold=0.5, boundary_box=aalborg_harbor_bbox)
@@ -662,7 +665,9 @@ def write_trajectories_for_all():
         sparcify_trajectories_with_action_for_folder(str_start_date='',str_end_date='',folder_path=INPUT_ALL_TEST_FOLDER, action=sparcify_trajectories_randomly_using_threshold, threshold=0.5, boundary_box=None)
 
 def move_random_files_to_original_imputation(percentage=0.1):
+    os_path_split = '/' if '/' in INPUT_GRAPH_FOLDER else '\\'
     all_files = []
+
     # Walk through the directory
     for root, dirs, files in os.walk(INPUT_GRAPH_FOLDER):
         for file in files:
@@ -674,17 +679,20 @@ def move_random_files_to_original_imputation(percentage=0.1):
     # Randomly select the files
     files_to_move = random.sample(all_files, num_files_to_move)
     
-    os.makedirs(INPUT_IMPUTATION_ORIGINAL_FOLDER, exist_ok=True)  # Create the folder if it doesn't exist
-
     try:
         logging.info('Began moving files')
         # Move the files
         for i, file_path in enumerate(files_to_move, start=1):
-            # Move the file
-            shutil.move(file_path, INPUT_IMPUTATION_ORIGINAL_FOLDER)
+            # Move the file to input imputation folder with vessel/mmsi folder structure
+            vessel_mmsi_folder = f'{file_path.split(os_path_split)[-3]}/{file_path.split(os_path_split)[-2]}'
+            end_dir = os.path.join(INPUT_IMPUTATION_ORIGINAL_FOLDER, vessel_mmsi_folder)
+            os.makedirs(end_dir, exist_ok=True)
+            shutil.move(file_path, end_dir)
             sys.stdout.write(f"\rMoved {i}/{num_files_to_move}")
             sys.stdout.flush()
         
         logging.info(f'Finished moving {num_files_to_move} files')
     except Exception as e:
         logging.error(f'Error was thrown with {repr(e)}')
+
+move_random_files_to_original_imputation()
