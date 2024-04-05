@@ -646,13 +646,26 @@ def write_trajectories_for_area():
         aalborg_harbor_bbox:Polygon = box(minx=9.915161, miny=57.047827, maxx=10.061760, maxy=57.098774)
         aalborg_harbor_path = os.path.join(INPUT_AREA_FOLDER, 'aalborg_harbor')
 
-        brunsbuettel_to_rendsburg_bbox:Polygon = box(minx=9.1167, miny=54.1183, maxx=9.6667, maxy=54.3167)
-        brunsbuettel_to_rendsburg_path = os.path.join(INPUT_AREA_FOLDER, 'brunsbuettel_to_rendsburg')
-
         sparcify_trajectories_with_action_for_folder(str_start_date='',str_end_date='',folder_path=aalborg_harbor_path, action=sparcify_realisticly_strict_trajectories, threshold=0.0, boundary_box=aalborg_harbor_bbox)
         sparcify_trajectories_with_action_for_folder(str_start_date='',str_end_date='',folder_path=aalborg_harbor_path, action=sparcify_realisticly_trajectories, threshold=0.0, boundary_box=aalborg_harbor_bbox)
         sparcify_trajectories_with_action_for_folder(str_start_date='',str_end_date='',folder_path=aalborg_harbor_path, action=sparcify_large_time_gap_with_threshold_percentage, threshold=0.5, boundary_box=aalborg_harbor_bbox)
         sparcify_trajectories_with_action_for_folder(str_start_date='',str_end_date='',folder_path=aalborg_harbor_path, action=sparcify_trajectories_randomly_using_threshold, threshold=0.5, boundary_box=aalborg_harbor_bbox)
+
+        brunsbuettel_to_rendsburg_bbox:Polygon = box(minx=9.1167, miny=54.1183, maxx=9.6667, maxy=54.3167)
+        brunsbuettel_to_rendsburg_path = os.path.join(INPUT_AREA_FOLDER, 'brunsbuettel_to_rendsburg')
+
+        sparcify_trajectories_with_action_for_folder(str_start_date='',str_end_date='',folder_path=brunsbuettel_to_rendsburg_path, action=sparcify_realisticly_strict_trajectories, threshold=0.0, boundary_box=brunsbuettel_to_rendsburg_bbox)
+        sparcify_trajectories_with_action_for_folder(str_start_date='',str_end_date='',folder_path=brunsbuettel_to_rendsburg_path, action=sparcify_realisticly_trajectories, threshold=0.0, boundary_box=brunsbuettel_to_rendsburg_bbox)
+        sparcify_trajectories_with_action_for_folder(str_start_date='',str_end_date='',folder_path=brunsbuettel_to_rendsburg_path, action=sparcify_large_time_gap_with_threshold_percentage, threshold=0.5, boundary_box=brunsbuettel_to_rendsburg_bbox)
+        sparcify_trajectories_with_action_for_folder(str_start_date='',str_end_date='',folder_path=brunsbuettel_to_rendsburg_path, action=sparcify_trajectories_randomly_using_threshold, threshold=0.5, boundary_box=brunsbuettel_to_rendsburg_bbox)
+
+        doggersbank_to_lemvig_bbox:Polygon = box(minx=3.5, miny=54.5, maxx=8.5, maxy=56.5)
+        doggersbank_to_lemvig_path = os.path.join(INPUT_AREA_FOLDER, 'doggersbank_to_lemvig')
+
+        sparcify_trajectories_with_action_for_folder(str_start_date='',str_end_date='',folder_path=doggersbank_to_lemvig_path, action=sparcify_realisticly_strict_trajectories, threshold=0.0, boundary_box=doggersbank_to_lemvig_bbox)
+        sparcify_trajectories_with_action_for_folder(str_start_date='',str_end_date='',folder_path=doggersbank_to_lemvig_path, action=sparcify_realisticly_trajectories, threshold=0.0, boundary_box=doggersbank_to_lemvig_bbox)
+        sparcify_trajectories_with_action_for_folder(str_start_date='',str_end_date='',folder_path=doggersbank_to_lemvig_path, action=sparcify_large_time_gap_with_threshold_percentage, threshold=0.5, boundary_box=doggersbank_to_lemvig_bbox)
+        sparcify_trajectories_with_action_for_folder(str_start_date='',str_end_date='',folder_path=doggersbank_to_lemvig_path, action=sparcify_trajectories_randomly_using_threshold, threshold=0.5, boundary_box=doggersbank_to_lemvig_bbox)
 
 def write_trajectories_for_all():
     # Wrap the code in if __name__ == '__main__': block and call freeze_support()
@@ -695,4 +708,4 @@ def move_random_files_to_original_imputation(percentage=0.1):
     except Exception as e:
         logging.error(f'Error was thrown with {repr(e)}')
 
-move_random_files_to_original_imputation()
+write_trajectories_for_area()
