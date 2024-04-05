@@ -50,7 +50,7 @@ def export_graph_to_geojson(G, nodes_file_path, edges_file_path):
             "type": "Feature",
             "geometry": {
                 "type": "Point",
-                "coordinates": [node[1], node[0]]  # Note: GeoJSON uses [longitude, latitude]
+                "coordinates": [node[1], node[0]] 
             },
             "properties": G.nodes[node]
         }
@@ -71,7 +71,7 @@ def export_graph_to_geojson(G, nodes_file_path, edges_file_path):
             "type": "Feature",
             "geometry": {
                 "type": "LineString",
-                "coordinates": [[start_node[1], start_node[0]], [end_node[1], end_node[0]]]  # Note: GeoJSON uses [longitude, latitude]
+                "coordinates": [[start_node[1], start_node[0]], [end_node[1], end_node[0]]]
             },
             "properties": {
                 "weight": data.get('weight', None)

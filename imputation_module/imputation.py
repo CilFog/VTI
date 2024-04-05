@@ -1,5 +1,6 @@
 import csv
 import heapq
+import json
 import os
 import networkx as nx
 from graph_construction_module.graph import create_graph
@@ -9,8 +10,8 @@ from .heuristics import heuristics
 OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'imputation_module')
 OUTPUT_FOLDER_PATH = os.path.join(OUTPUT_FOLDER, 'output')
 INPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
-INPUT_FOLDER_PATH = os.path.join(INPUT_FOLDER, 'input_imputation/all/test/realistic/Passenger/209392000_15-01-2024_08-31-42.txt')
-
+INPUT_FOLDER_PATH = os.path.join(INPUT_FOLDER, 'input_imputation/area/aalborg_harbor/large_time_gap_0_5/Cargo/209525000_15-01-2024_00-05-59.txt')
+                                                                      
 if not os.path.exists(OUTPUT_FOLDER_PATH):
     os.makedirs(OUTPUT_FOLDER_PATH)
 
@@ -70,7 +71,7 @@ def impute_trajectory():
             trajectory_points.append(trajectory_point)
 
     print("Impute trajectory")
-
+    
     imputed_paths = []  # List to store paths between consecutive points
     
     # Iterate through pairs of consecutive points
@@ -89,20 +90,30 @@ def impute_trajectory():
             G.add_node(end_point, **end_props)
 
         # Connect start and end points to existing nodes within a given radius
-        for node in nodes_within_radius(G, start_point, 0.02):
+        for node in nodes_within_radius(G, start_point, 0.0035):
             if node != start_point:  # Avoid self-connections
                 distance = haversine_distance(start_point[0], start_point[1], node[0], node[1])
                 G.add_edge(start_point, node, weight=distance)
                 G.add_edge(node, start_point, weight=distance)
 
-        for node in nodes_within_radius(G, end_point, 0.02):
+                if G.has_edge(start_point, node):
+                    print(f"Edge successfully added between {start_point} and {node}")
+                else:
+                    print(f"Failed to add edge between {start_point} and {node}")
+
+        for node in nodes_within_radius(G, end_point, 0.0035): 
             if node != end_point:  # Avoid self-connections
                 distance = haversine_distance(end_point[0], end_point[1], node[0], node[1])
                 G.add_edge(end_point, node, weight=distance)
                 G.add_edge(node, end_point, weight=distance)
+
+                if G.has_edge(end_point, node):
+                    print(f"Edge successfully added between {end_point} and {node}")
+                else:
+                    print(f"Failed to add edge between {end_point} and {node}")
         
         max_draught = start_props.get("draught", None)
-
+        
         # Export the initial state of the graph to GeoJSON
         G_temp = adjust_edge_weights_for_draught(G, max_draught)
 
@@ -124,8 +135,8 @@ def impute_trajectory():
         for i in range(len(path)-1):
             edges.append((path[i], path[i+1]))
 
-    imputed_nodes_file_path = os.path.join(OUTPUT_FOLDER_PATH, 'i-nodes.geojson')
-    imputed_edges_file_path = os.path.join(OUTPUT_FOLDER_PATH, 'i-edges.geojson')
+    imputed_nodes_file_path = os.path.join(OUTPUT_FOLDER_PATH, 'ii-nodes.geojson')
+    imputed_edges_file_path = os.path.join(OUTPUT_FOLDER_PATH, 'ii-edges.geojson')
 
     nodes_to_geojson(G_temp, unique_nodes, imputed_nodes_file_path)
     edges_to_geojson(G_temp, edges, imputed_edges_file_path)

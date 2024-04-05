@@ -644,8 +644,9 @@ def write_trajectories_for_area():
     if __name__ == '__main__':
         freeze_support()
 
-        aalborg_harbor_bbox:Polygon = box(minx=9.915161, miny=57.047827, maxx=10.061760, maxy=57.098774)
-        aalborg_harbor_path = os.path.join(INPUT_AREA_FOLDER, 'aalborg_harbor')
+        aalborg_harbor_bbox:Polygon = box(minx=9.1724, miny=56.6988, maxx=9.19526, maxy=56.71218)
+        aalborg_harbor_path = os.path.join(INPUT_AREA_FOLDER, 'passanger-area')
+        
 
         sparcify_trajectories_with_action_for_folder(str_start_date='',str_end_date='',folder_path=aalborg_harbor_path, action=sparcify_realisticly_strict_trajectories, threshold=0.0, boundary_box=aalborg_harbor_bbox)
         sparcify_trajectories_with_action_for_folder(str_start_date='',str_end_date='',folder_path=aalborg_harbor_path, action=sparcify_realisticly_trajectories, threshold=0.0, boundary_box=aalborg_harbor_bbox)
@@ -691,6 +692,6 @@ def move_random_files_to_original_imputation(percentage=0.1):
         logging.error(f'Error was thrown with {repr(e)}')
 
 write_trajectories_for_area()
-write_trajectories_for_all()
+#write_trajectories_for_all()
 
 #move_random_files_to_original_imputation()

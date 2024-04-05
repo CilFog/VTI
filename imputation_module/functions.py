@@ -1,6 +1,8 @@
 import json
 from math import radians, sin, cos, sqrt, atan2
 import networkx as nx
+import numpy as np
+from scipy.spatial import cKDTree
 
 def nodes_to_geojson(G, nodes, file_path):
     features = []    
@@ -73,17 +75,19 @@ def haversine_distance(lat1, lon1, lat2, lon2):
 
 
 def nodes_within_radius(G, point, radius):
-    nodes_within = []
-    lat1, lon1 = point  # Unpack the point tuple
+    # Extract node positions into a NumPy array (assuming G.nodes is a list of tuples or similar)
+    node_positions = np.array([(data['latitude'], data['longitude']) for node, data in G.nodes(data=True)])
+    
+    # Build a KD-tree for efficient spatial queries
+    tree = cKDTree(node_positions)
 
-    for node in G.nodes:
-        node_data = G.nodes[node]
-        # Assume node is a tuple (latitude, longitude)
-        lat2, lon2 = node  # Unpack node identifier
-        # Calculate distance using the haversine function or another appropriate distance function
-        distance = haversine_distance(lat1, lon1, lat2, lon2)
-        
-        if distance <= radius:
-            nodes_within.append(node)
+     # Convert the point to the same format (latitude, longitude) and ensure radius is appropriate
+    query_point = np.array([point[0], point[1]])  # Assuming point is already a tuple (latitude, longitude)
+
+    # Use query_ball_point to find indices of nodes within the radius
+    indices_within_radius = tree.query_ball_point(query_point, radius)
+
+    # Convert indices back to node identifiers
+    nodes_within = [list(G.nodes)[i] for i in indices_within_radius]
 
     return nodes_within

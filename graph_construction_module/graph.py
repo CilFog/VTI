@@ -12,13 +12,8 @@ from .functions import calculate_bearing, calculate_bearing_difference, export_g
 LOG_PATH = 'graph_log.txt'
 DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'graph_construction_module')
-INPUT_FOLDER_PATH = os.path.join(DATA_FOLDER, 'input_graph/Passenger')
+INPUT_FOLDER_PATH = os.path.join(DATA_FOLDER, 'input_graph/Cargo')
 OUTPUT_FOLDER_PATH = os.path.join(OUTPUT_FOLDER, 'output')
-
-BEARING_THRESHOLD = 45
-NUMBER_OF_GRAPH_POINTS = 200000
-SAMPLING_RADIUS_THRESHOLD = 0.0005 # approx 55 meters
-EDGE_RADIUS_THRESHOLD = 0.001 # approx 111 meters
 
 if not os.path.exists(OUTPUT_FOLDER_PATH):
     os.makedirs(OUTPUT_FOLDER_PATH)
@@ -60,7 +55,7 @@ def extract_original_trajectories() -> list:
 
     return ais_points
 
-def geometric_sampling(trajectories):
+def geometric_sampling(trajectories, sampling_radius_threshold, number_of_nodes):
     """
         Iterates over a collection of AIS points and assigns a density score to each point
         based on how many neighboring AIS points is within a specified radius threshold.
@@ -78,7 +73,7 @@ def geometric_sampling(trajectories):
 
     # Iterate over each point to calculate density
     for i, point in enumerate(coordinates):
-        neighbors = kdtree.query_ball_point(point, SAMPLING_RADIUS_THRESHOLD)
+        neighbors = kdtree.query_ball_point(point, sampling_radius_threshold)
         density_values[i] = len(neighbors)
 
     density_values += 1e-9  # Avoid division by zero
@@ -87,13 +82,13 @@ def geometric_sampling(trajectories):
     sampling_probabilities = 1 - normalized_density_scores
     sampling_probabilities /= sampling_probabilities.sum()
 
-    num_samples = min(NUMBER_OF_GRAPH_POINTS, len(coordinates))  # Adjust based on your dataset size
+    num_samples = min(number_of_nodes, len(coordinates))  # Adjust based on your dataset size
     sampled_indices = np.random.choice(len(coordinates), size=num_samples, replace=False, p=sampling_probabilities)
     sampled_ais_points = [trajectories[idx] for idx in sampled_indices]
 
     return sampled_ais_points
 
-def create_nodes(sampled_trajectories):
+def create_nodes(sampled_trajectories, grid_size):
     """
         Receives the geometrically sampled AIS points, assigns them with a avg_depth
         by intersecting with a grid layer. The function then returns the a graph
@@ -109,7 +104,7 @@ def create_nodes(sampled_trajectories):
     # Assign depth values
     config = load_config()
     engine = create_engine(f"postgresql://{config['user']}:{config['password']}@{config['host']}:{config['port']}/{config['database']}")
-    parent_grid_id = "SELECT * FROM grid_400"
+    parent_grid_id = f"SELECT * FROM {grid_size}"
     polygons_gdf = gpd.read_postgis(parent_grid_id, engine, geom_col='geometry')
     joined = gpd.sjoin(ais_points_gdf, polygons_gdf, how='left', op='within')
     ais_points_gdf['avg_depth'] = joined['avg_depth']
@@ -123,7 +118,7 @@ def create_nodes(sampled_trajectories):
 
     return G
 
-def create_edges(G):
+def create_edges(G, edge_radius_threshold, bearing_threshold):
     """
         Creates edges between nodes in the graph. The creation of an edge 
         is based on two criterias. Distance between nodes, and bearing between nodes.
@@ -137,7 +132,7 @@ def create_edges(G):
 
     for i, (node, data) in enumerate(node_coords_list):
         node_cog = data['cog']
-        nearby_indices = kdtree.query_ball_point(node, EDGE_RADIUS_THRESHOLD)
+        nearby_indices = kdtree.query_ball_point(node, edge_radius_threshold)
         
         for nearby_index in nearby_indices:
             if nearby_index != i:  # Exclude self
@@ -146,11 +141,12 @@ def create_edges(G):
                 bearing = calculate_bearing(node, nearby_node)
                 bearing_diff = calculate_bearing_difference(node_cog, bearing)
 
-                if bearing_diff <= BEARING_THRESHOLD:
+                if bearing_diff <= bearing_threshold:
                     distance = haversine_distance(node[0], node[1], nearby_node[0], nearby_node[1])
                     G.add_edge(node, nearby_node, weight=distance)
+                    G.add_edge(nearby_node, node, weight=distance)
                     
-        if i % 10000 == 0:
+        if i % 50000 == 0:
             print(f"Processed {i} nodes for edge creation.")
 
     nodes_file_path = os.path.join(OUTPUT_FOLDER_PATH, 'nodes.geojson')
@@ -161,8 +157,11 @@ def create_edges(G):
     return G
 
 def create_graph():
+    """
+        
+    """
     graph_trajectories = extract_original_trajectories()
-    geometric_sampled_graph_trajectories = geometric_sampling(graph_trajectories)
-    nodes = create_nodes(geometric_sampled_graph_trajectories)
-    edges = create_edges(nodes) 
+    geometric_sampled_nodes = geometric_sampling(graph_trajectories, 0.001, 500000)
+    nodes = create_nodes(geometric_sampled_nodes, 'grid_400')
+    edges = create_edges(nodes, 0.01, 45) 
     return edges
