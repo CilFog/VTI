@@ -76,13 +76,14 @@ def add_meta_data(trajectory_df: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
 
 def sparcify_trajectories_randomly_using_threshold(filepath:str, folderpath: str, threshold:float = 0.0, boundary_box:Polygon = None) -> SparsifyResult:
     try:
+        os_split = '/' if '/' in filepath else '\\'
         reduced_points:int = 0
         number_of_points:int = 0
                                 
         trajectory_df:gpd.GeoDataFrame = get_trajectory_df_from_txt(file_path=filepath)
         filename = os.path.basename(filepath)
         folderpath = os.path.join(folderpath, f'random_{threshold}'.replace('.', '_'))
-        vessel_folder = trajectory_df['ship_type'].iloc[0].replace(' ', '_').replace('/', '_')
+        vessel_folder = filepath.split(os_split)[-3]
         vessel_folder_path = os.path.join(folderpath, vessel_folder)
         new_filepath = os.path.join(vessel_folder_path, filename)
         
@@ -146,10 +147,9 @@ def sparcify_trajectories_randomly_using_threshold(filepath:str, folderpath: str
     
 def sparcify_trajectories_realisticly(filepath:str, folderpath: str, threshold:float = 0.0, boundary_box:Polygon = None) -> SparsifyResult:
     try:    
+        os_split = '/' if '/' in filepath else '\\'
         reduced_points:int = 0
         number_of_points:int = 0
-           
-        os_split = '/' if '/' in filepath else '\\'
         
         trajectory_df:gpd.GeoDataFrame = get_trajectory_df_from_txt(file_path=filepath)
         filename = os.path.basename(filepath)
@@ -252,13 +252,15 @@ def sparcify_trajectories_realisticly(filepath:str, folderpath: str, threshold:f
 
 def sparcify_realisticly_strict_trajectories(filepath:str, folderpath: str, threshold:float = 0.0, boundary_box:Polygon = None) -> SparsifyResult:
     try:
+        os_split = '/' if '/' in filepath else '\\'
         reduced_points:int = 0
         number_of_points:int = 0
-                        
+  
+
         trajectory_df:gpd.GeoDataFrame = get_trajectory_df_from_txt(file_path=filepath)
         filename = os.path.basename(filepath)
         folderpath = os.path.join(folderpath, 'realistic_strict')
-        vessel_folder = trajectory_df['ship_type'].iloc[0].replace(' ', '_').replace('/', '_')
+        vessel_folder = filepath.split(os_split)[-3]
         vessel_folder_path = os.path.join(folderpath, vessel_folder)
         new_filepath = os.path.join(vessel_folder_path, filename)
         
@@ -350,13 +352,14 @@ def sparcify_realisticly_strict_trajectories(filepath:str, folderpath: str, thre
 
 def sparcify_large_time_gap_with_threshold_percentage(filepath:str, folderpath: str, threshold:float = 0.0, boundary_box:Polygon = None) -> SparsifyResult:
     try:
+        os_split = '/' if '/' in filepath else '\\'
         reduced_points = 0
         number_of_points = 0
           
         trajectory_df = get_trajectory_df_from_txt(file_path=filepath)
         filename = os.path.basename(filepath)
         folderpath = os.path.join(folderpath, f'large_time_gap_{threshold}'.replace('.', '_'))
-        vessel_folder = trajectory_df['ship_type'].iloc[0].replace(' ', '_').replace('/', '_')
+        vessel_folder = filepath.split(os_split)[-3]
         vessel_folder_path = os.path.join(folderpath, vessel_folder)
         new_filepath = os.path.join(vessel_folder_path, filename)
 
