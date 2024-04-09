@@ -174,22 +174,3 @@ def move_random_files_to_original_imputation(percentage=0.1):
         logging.info(f'Finished moving {num_files_to_move} files')
     except Exception as e:
         logging.error(f'Error was thrown with {repr(e)}')
-
-if __name__ == '__main__':
-    freeze_support()
-
-    # brunsbuettel_to_rendsburg_bbox:Polygon = box(minx=9.114532, miny=53.880869, maxx=9.722900, maxy=54.314921)
-    # brunsbuettel_to_rendsburg_path = os.path.join(INPUT_AREA_FOLDER, 'brunsbuettel_to_rendsburg')
-
-    # sparcify_trajectories_with_action_for_folder(str_start_date='',str_end_date='',folder_path=brunsbuettel_to_rendsburg_path, action=sparcify_realisticly_strict_trajectories, threshold=0.0, boundary_box=brunsbuettel_to_rendsburg_bbox)
-    # sparcify_trajectories_with_action_for_folder(str_start_date='',str_end_date='',folder_path=brunsbuettel_to_rendsburg_path, action=sparcify_trajectories_realisticly, threshold=0.0, boundary_box=brunsbuettel_to_rendsburg_bbox)
-    # sparcify_trajectories_with_action_for_folder(str_start_date='',str_end_date='',folder_path=brunsbuettel_to_rendsburg_path, action=sparcify_large_time_gap_with_threshold_percentage, threshold=0.5, boundary_box=brunsbuettel_to_rendsburg_bbox)
-    # sparcify_trajectories_with_action_for_folder(str_start_date='',str_end_date='',folder_path=brunsbuettel_to_rendsburg_path, action=sparcify_trajectories_randomly_using_threshold, threshold=0.5, boundary_box=brunsbuettel_to_rendsburg_bbox)
-
-    aalborg_harbor_to_kattegat_bbox:Polygon = box(minx=9.841940, miny=56.970433, maxx=10.416415, maxy=57.098774)
-    aalborg_harbor_to_kattegat_path = os.path.join(INPUT_AREA_FOLDER, 'aalborg_harbor_to_kattegat')
-
-    #sparcify_trajectories_with_action_for_folder(str_start_date='',str_end_date='',folder_path=aalborg_harbor_to_kattegat_path, action=sparcify_realisticly_strict_trajectories, threshold=0.0, boundary_box=aalborg_harbor_to_kattegat_bbox)
-    sparcify_trajectories_with_action_for_folder(str_start_date='',str_end_date='',folder_path=aalborg_harbor_to_kattegat_path, action=sparcify_trajectories_realisticly, threshold=0.0, boundary_box=aalborg_harbor_to_kattegat_bbox)
-    # sparcify_trajectories_with_action_for_folder(str_start_date='',str_end_date='',folder_path=aalborg_harbor_to_kattegat_path, action=sparcify_large_time_gap_with_threshold_percentage, threshold=0.5, boundary_box=aalborg_harbor_to_kattegat_bbox)
-    # sparcify_trajectories_with_action_for_folder(str_start_date='',str_end_date='',folder_path=aalborg_harbor_to_kattegat_path, action=sparcify_trajectories_randomly_using_threshold, threshold=0.5, boundary_box=aalborg_harbor_to_kattegat_bbox)
