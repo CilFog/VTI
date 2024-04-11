@@ -166,8 +166,7 @@ def knots_to_meters_per_second(knots):
 def calculate_interpolated_timestamps(nodes_within_path, start_timestamp_unix, end_timestamp_unix):
     start_timestamp = datetime.fromtimestamp(start_timestamp_unix)
     end_timestamp = datetime.fromtimestamp(end_timestamp_unix)
-    print(start_timestamp)
-    print(end_timestamp)
+    
     timestamps = [start_timestamp]
     total_path_length_m = sum(haversine_distance(nodes_within_path[i][0], nodes_within_path[i][1],
                                                  nodes_within_path[i+1][0], nodes_within_path[i+1][1])
@@ -193,6 +192,4 @@ def calculate_interpolated_timestamps(nodes_within_path, start_timestamp_unix, e
     # Make sure the last timestamp is exactly the end timestamp
     timestamps[-1] = end_timestamp
 
-    print(timestamps)
-    
     return [timestamp.strftime('%d/%m/%Y %H:%M:%S') for timestamp in timestamps]

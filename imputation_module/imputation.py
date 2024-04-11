@@ -80,37 +80,34 @@ def impute_trajectory():
 
         start_point = (start_props["latitude"], start_props["longitude"])
         end_point = (end_props["latitude"], end_props["longitude"])
-        
-        G_tmep = G
 
-        if start_point not in G_tmep:
-            G_tmep.add_node(start_point, **start_props) 
-        if end_point not in G_tmep:
-            G_tmep.add_node(end_point, **end_props)
+        if start_point not in G:
+            G.add_node(start_point, **start_props) 
+        if end_point not in G:
+            G.add_node(end_point, **end_props)
 
-        for node in nodes_within_radius(G_tmep, start_point, 0.001):
+        for node in nodes_within_radius(G, start_point, 0.001):
             if node != start_point:  
                 distance = haversine_distance(start_point[0], start_point[1], node[0], node[1])
-                G_tmep.add_edge(start_point, node, weight=distance)
-                G_tmep.add_edge(node, start_point, weight=distance)
+                G.add_edge(start_point, node, weight=distance)
+                G.add_edge(node, start_point, weight=distance)
 
-        for node in nodes_within_radius(G_tmep, end_point, 0.001): 
-            if node != end_point:  # Avoid self-connections
+        for node in nodes_within_radius(G, end_point, 0.001): 
+            if node != end_point: 
                 distance = haversine_distance(end_point[0], end_point[1], node[0], node[1])
-                G_tmep.add_edge(end_point, node, weight=distance)
-                G_tmep.add_edge(node, end_point, weight=distance)
+                G.add_edge(end_point, node, weight=distance)
+                G.add_edge(node, end_point, weight=distance)
         
-        direct_path_exists = G_tmep.has_edge(start_point, end_point)
+        direct_path_exists = G.has_edge(start_point, end_point)
 
         if direct_path_exists:
             print(f"Direct path exists between {i} and {i+1}. Using direct path.")
-
             path = [start_point, end_point]
             imputed_paths.append(path)
         
         else:
             max_draught = start_props.get("draught", None)
-            G_apply_draught_penalty = adjust_edge_weights_for_draught(G_tmep, start_point, end_point, max_draught)
+            G_apply_draught_penalty = adjust_edge_weights_for_draught(G, start_point, end_point, max_draught)
             G_apply_cog_penalty = adjust_edge_weights_for_cog(G_apply_draught_penalty, start_point, end_point)
 
             print("Finding path")
