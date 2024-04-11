@@ -12,7 +12,7 @@ from .functions import calculate_bearing, calculate_bearing_difference, export_g
 LOG_PATH = 'graph_log.txt'
 DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'graph_construction_module')
-INPUT_FOLDER_PATH = os.path.join(DATA_FOLDER, 'input_graph/Cargo')
+INPUT_FOLDER_PATH = os.path.join(DATA_FOLDER, 'input_graph/Passenger')
 OUTPUT_FOLDER_PATH = os.path.join(OUTPUT_FOLDER, 'output')
 
 if not os.path.exists(OUTPUT_FOLDER_PATH):
@@ -35,8 +35,6 @@ def extract_original_trajectories() -> list:
     print('Extracting trajectories')
     
     ais_points = []
-    processed_mmsi= 0
-    
     for dirpath, dirnames, filenames in os.walk(INPUT_FOLDER_PATH):
         for filename in filenames:
             file_path = os.path.join(dirpath, filename)
@@ -46,12 +44,8 @@ def extract_original_trajectories() -> list:
                 continue
             
             if len(gdf_curr) >= 2:
-                
-                # Extract required columns and convert to list of tuples
-                points_with_metadata = gdf_curr[['latitude', 'longitude', 'cog', 'draught', 'ship_type', 'sog']].itertuples(index=False, name=None)
+                points_with_metadata = gdf_curr[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].itertuples(index=False, name=None)
                 ais_points.extend(points_with_metadata)
-
-                processed_mmsi += 1
 
     return ais_points
 
@@ -66,23 +60,21 @@ def geometric_sampling(trajectories, sampling_radius_threshold, number_of_nodes)
     print('Performing geometric sampling')
     coordinates = np.array([point[:2] for point in trajectories])
 
-    # Create a cKDTree for efficient nearest neighbor search
     kdtree = cKDTree(coordinates)
 
     density_values = np.zeros(len(coordinates), dtype=float)
 
-    # Iterate over each point to calculate density
     for i, point in enumerate(coordinates):
         neighbors = kdtree.query_ball_point(point, sampling_radius_threshold)
         density_values[i] = len(neighbors)
 
-    density_values += 1e-9  # Avoid division by zero
+    density_values += 1e-9  
 
     normalized_density_scores = (density_values - np.min(density_values)) / (np.max(density_values) - np.min(density_values))
     sampling_probabilities = 1 - normalized_density_scores
     sampling_probabilities /= sampling_probabilities.sum()
 
-    num_samples = min(number_of_nodes, len(coordinates))  # Adjust based on your dataset size
+    num_samples = min(number_of_nodes, len(coordinates)) 
     sampled_indices = np.random.choice(len(coordinates), size=num_samples, replace=False, p=sampling_probabilities)
     sampled_ais_points = [trajectories[idx] for idx in sampled_indices]
 
@@ -96,12 +88,10 @@ def create_nodes(sampled_trajectories, grid_size):
     """
     print("Creating nodes")
 
-    # Convert sampled points into a GeoDataFrame
-    ais_points_gdf = gpd.GeoDataFrame(sampled_trajectories, columns=['latitude', 'longitude', 'cog', 'draught', 'ship_type', 'sog'])
+    ais_points_gdf = gpd.GeoDataFrame(sampled_trajectories, columns=['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type'])
     ais_points_gdf['geometry'] = gpd.points_from_xy(ais_points_gdf.longitude, ais_points_gdf.latitude)
     ais_points_gdf.set_crs(epsg=4326, inplace=True)
 
-    # Assign depth values
     config = load_config()
     engine = create_engine(f"postgresql://{config['user']}:{config['password']}@{config['host']}:{config['port']}/{config['database']}")
     parent_grid_id = f"SELECT * FROM {grid_size}"
@@ -109,7 +99,6 @@ def create_nodes(sampled_trajectories, grid_size):
     joined = gpd.sjoin(ais_points_gdf, polygons_gdf, how='left', op='within')
     ais_points_gdf['avg_depth'] = joined['avg_depth']
 
-    # Create a graph and add nodes with attributes
     G = nx.Graph()
     for index, row in ais_points_gdf.iterrows():
         node = (row['latitude'], row['longitude'])
@@ -118,7 +107,7 @@ def create_nodes(sampled_trajectories, grid_size):
 
     return G
 
-def create_edges(G, edge_radius_threshold, bearing_threshold):
+def create_edges(G, edge_radius_threshold, bearing_threshold, nodes_file_path, edges_file_path):
     """
         Creates edges between nodes in the graph. The creation of an edge 
         is based on two criterias. Distance between nodes, and bearing between nodes.
@@ -135,7 +124,7 @@ def create_edges(G, edge_radius_threshold, bearing_threshold):
         nearby_indices = kdtree.query_ball_point(node, edge_radius_threshold)
         
         for nearby_index in nearby_indices:
-            if nearby_index != i:  # Exclude self
+            if nearby_index != i: 
                 nearby_node, nearby_data = node_coords_list[nearby_index]
 
                 bearing = calculate_bearing(node, nearby_node)
@@ -144,24 +133,32 @@ def create_edges(G, edge_radius_threshold, bearing_threshold):
                 if bearing_diff <= bearing_threshold:
                     distance = haversine_distance(node[0], node[1], nearby_node[0], nearby_node[1])
                     G.add_edge(node, nearby_node, weight=distance)
-                    G.add_edge(nearby_node, node, weight=distance)
                     
-        if i % 50000 == 0:
+        if i % 500000 == 0:
             print(f"Processed {i} nodes for edge creation.")
-
-    nodes_file_path = os.path.join(OUTPUT_FOLDER_PATH, 'nodes.geojson')
-    edges_file_path = os.path.join(OUTPUT_FOLDER_PATH, 'edges.geojson')
 
     export_graph_to_geojson(G, nodes_file_path, edges_file_path)
 
     return G
 
-def create_graph():
+def create_graph(graph_trajectories, geometric_parameter, sample_size, grid_size, edge_conneciton, bearing_parameter):
     """
-        
+        111 meters geometric sampling
+        100.000 nodes
+        400 grid size
+        111 meters edge conneciton
+        45 bearing criteria
     """
+    print(f"Began {sample_size}")
+    geometric_sampled_nodes = geometric_sampling(graph_trajectories, geometric_parameter, sample_size)
+    nodes = create_nodes(geometric_sampled_nodes, grid_size)
+    nodes_file_path = os.path.join(OUTPUT_FOLDER_PATH, f'graph_all/{sample_size}/nodes.geojson')
+    edges_file_path = os.path.join(OUTPUT_FOLDER_PATH, f'graph_all/{sample_size}/edges.geojson')
+    create_edges(nodes, edge_conneciton, bearing_parameter, nodes_file_path, edges_file_path) 
+
+def create_all_graphs():
     graph_trajectories = extract_original_trajectories()
-    geometric_sampled_nodes = geometric_sampling(graph_trajectories, 0.001, 500000)
-    nodes = create_nodes(geometric_sampled_nodes, 'grid_400')
-    edges = create_edges(nodes, 0.01, 45) 
-    return edges
+    #create_graph(graph_trajectories, 0.001, 100000, 'grid_400', 0.0012, 45)
+    create_graph(graph_trajectories, 0.001, 500000, 'grid_400', 0.0012, 45)
+
+create_all_graphs()

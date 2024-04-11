@@ -1,3 +1,4 @@
+from datetime import timedelta, datetime
 import json
 from math import radians, sin, cos, sqrt, atan2
 import networkx as nx
@@ -91,3 +92,107 @@ def nodes_within_radius(G, point, radius):
     nodes_within = [list(G.nodes)[i] for i in indices_within_radius]
 
     return nodes_within
+
+def adjust_edge_weights_for_draught(G, start_point, end_point, max_draught, base_penalty=1000, depth_penalty_factor=1):
+    # Create a copy of the graph so the original graph remains unchanged.
+    radius = haversine_distance(start_point[0], start_point[1], end_point[0], end_point[1])
+
+    relevant_nodes_start = set(nodes_within_radius(G, start_point, radius))
+    relevant_nodes_end = set(nodes_within_radius(G, end_point, radius))
+
+    # Union of nodes near start and end points to find all relevant nodes.
+    relevant_nodes = relevant_nodes_start.union(relevant_nodes_end)
+    
+    # Iterate only through edges connected to relevant nodes.
+    for node in relevant_nodes:
+        for neighbor in G.neighbors(node):
+            if neighbor in relevant_nodes:  # Ensure both nodes are relevant
+                data = G.get_edge_data(node, neighbor)
+                
+                # Compute the minimum depth of connected nodes.
+                u_depth = G.nodes[node].get('avg_depth', float('inf'))
+                v_depth = G.nodes[neighbor].get('avg_depth', float('inf'))
+                min_depth = min(u_depth, v_depth)
+                
+                # Apply penalties based on the draught comparison.
+                penalty = base_penalty if abs(min_depth) < max_draught else 0
+                
+                # Adjust the edge weight accordingly.
+                initial_weight = data.get('weight')
+                G[node][neighbor]['weight'] = initial_weight + penalty
+
+    return G
+
+def cog_penalty(cog1, cog2, threshold=30, large_penalty=1000):
+    angle_difference = abs(cog1 - cog2)
+    angle_difference = min(angle_difference, 360 - angle_difference)  # Account for circular nature of angles
+    
+    # Apply a large penalty if the difference exceeds the threshold
+    if angle_difference > threshold:
+        return large_penalty
+    else:
+        return 0
+
+def adjust_edge_weights_for_cog(G, start_point, end_point):
+    # Create a copy of the graph so the original graph remains unchanged.
+    radius = haversine_distance(start_point[0], start_point[1], end_point[0], end_point[1])
+    
+    relevant_nodes_start = set(nodes_within_radius(G, start_point, radius))
+    relevant_nodes_end = set(nodes_within_radius(G, end_point, radius))
+    
+    # Union of nodes near start and end points for all relevant nodes.
+    relevant_nodes = relevant_nodes_start.union(relevant_nodes_end)
+    
+    # Iterate through the relevant nodes and their neighbors to adjust weights selectively.
+    for node in relevant_nodes:
+        for neighbor in G.neighbors(node):
+            if neighbor in relevant_nodes:  # Check if the neighbor is also relevant.
+                if 'cog' in G.nodes[node] and 'cog' in G.nodes[neighbor]:
+                    # Calculate the COG penalty.
+                    cog_u = G.nodes[node]['cog']
+                    cog_v = G.nodes[neighbor]['cog']
+                    penalty = cog_penalty(cog_u, cog_v)
+                    
+                    # Get the existing edge data to adjust its weight.
+                    data = G.get_edge_data(node, neighbor)
+                    initial_weight = data.get('weight')
+                    G[node][neighbor]['weight'] = initial_weight + penalty
+
+    return G
+
+def knots_to_meters_per_second(knots):
+    return knots * 0.514444
+
+def calculate_interpolated_timestamps(nodes_within_path, start_timestamp_unix, end_timestamp_unix):
+    start_timestamp = datetime.fromtimestamp(start_timestamp_unix)
+    end_timestamp = datetime.fromtimestamp(end_timestamp_unix)
+    print(start_timestamp)
+    print(end_timestamp)
+    timestamps = [start_timestamp]
+    total_path_length_m = sum(haversine_distance(nodes_within_path[i][0], nodes_within_path[i][1],
+                                                 nodes_within_path[i+1][0], nodes_within_path[i+1][1])
+                              for i in range(len(nodes_within_path) - 1))
+
+    total_travel_time_seconds = (end_timestamp - start_timestamp).total_seconds()
+    
+    cumulative_distance_m = 0
+    for i in range(1, len(nodes_within_path)):
+        edge_length_m = haversine_distance(nodes_within_path[i-1][0], nodes_within_path[i-1][1],
+                                           nodes_within_path[i][0], nodes_within_path[i][1])
+        cumulative_distance_m += edge_length_m
+        
+        # Proportion of total path completed
+        path_proportion = cumulative_distance_m / total_path_length_m
+        
+        # Calculate new timestamp based on proportion of path completed
+        interpolated_time_seconds = path_proportion * total_travel_time_seconds
+        interpolated_timestamp = start_timestamp + timedelta(seconds=interpolated_time_seconds)
+        
+        timestamps.append(interpolated_timestamp)
+
+    # Make sure the last timestamp is exactly the end timestamp
+    timestamps[-1] = end_timestamp
+
+    print(timestamps)
+    
+    return [timestamp.strftime('%d/%m/%Y %H:%M:%S') for timestamp in timestamps]
