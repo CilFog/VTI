@@ -1,11 +1,5 @@
 from math import radians, sin, cos, sqrt, atan2
 
-def calculate_cog_divergence(cog1, cog2):
-    divergence = abs(cog1 - cog2) % 360  # Normalize to [0, 360)
-    if divergence > 180:  # Normalize to [0, 180]
-        divergence = 360 - divergence
-    return divergence
-
 def heuristics(coord1, coord2):
 
     R = 6371.0  # Earth radius in kilometers

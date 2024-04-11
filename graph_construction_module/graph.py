@@ -32,22 +32,23 @@ def get_trajectory_df(file_path) -> gpd.GeoDataFrame:
         logging.warning(f'Error occurred trying to retrieve trajectory csv: {repr(e)}')
         
 def extract_original_trajectories() -> list:
-    print('Extracting trajectories')
-    
-    ais_points = []
-    for dirpath, dirnames, filenames in os.walk(INPUT_FOLDER_PATH):
-        for filename in filenames:
-            file_path = os.path.join(dirpath, filename)
-            gdf_curr:gpd.GeoDataFrame = get_trajectory_df(file_path=file_path)
+    try: 
+        ais_points = []
+        for dirpath, dirnames, filenames in os.walk(INPUT_FOLDER_PATH):
+            for filename in filenames:
+                file_path = os.path.join(dirpath, filename)
+                gdf_curr:gpd.GeoDataFrame = get_trajectory_df(file_path=file_path)
 
-            if (gdf_curr.empty):
-                continue
-            
-            if len(gdf_curr) >= 2:
-                points_with_metadata = gdf_curr[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].itertuples(index=False, name=None)
-                ais_points.extend(points_with_metadata)
+                if (gdf_curr.empty):
+                    continue
+                
+                if len(gdf_curr) >= 2:
+                    points_with_metadata = gdf_curr[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].itertuples(index=False, name=None)
+                    ais_points.extend(points_with_metadata)
 
-    return ais_points
+        return ais_points
+    except Exception as e:
+        logging.warning(f'Error occurred trying to extract trajectories: {repr(e)}')
 
 def geometric_sampling(trajectories, sampling_radius_threshold, number_of_nodes):
     """
@@ -57,28 +58,30 @@ def geometric_sampling(trajectories, sampling_radius_threshold, number_of_nodes)
         in total. It then randomly exclude points based on the density score, the higher the
         score the greater the change of exclusion is.
     """
-    print('Performing geometric sampling')
-    coordinates = np.array([point[:2] for point in trajectories])
+    try: 
+        coordinates = np.array([point[:2] for point in trajectories])
 
-    kdtree = cKDTree(coordinates)
+        kdtree = cKDTree(coordinates)
 
-    density_values = np.zeros(len(coordinates), dtype=float)
+        density_values = np.zeros(len(coordinates), dtype=float)
 
-    for i, point in enumerate(coordinates):
-        neighbors = kdtree.query_ball_point(point, sampling_radius_threshold)
-        density_values[i] = len(neighbors)
+        for i, point in enumerate(coordinates):
+            neighbors = kdtree.query_ball_point(point, sampling_radius_threshold)
+            density_values[i] = len(neighbors)
 
-    density_values += 1e-9  
+        density_values += 1e-9  
 
-    normalized_density_scores = (density_values - np.min(density_values)) / (np.max(density_values) - np.min(density_values))
-    sampling_probabilities = 1 - normalized_density_scores
-    sampling_probabilities /= sampling_probabilities.sum()
+        normalized_density_scores = (density_values - np.min(density_values)) / (np.max(density_values) - np.min(density_values))
+        sampling_probabilities = 1 - normalized_density_scores
+        sampling_probabilities /= sampling_probabilities.sum()
 
-    num_samples = min(number_of_nodes, len(coordinates)) 
-    sampled_indices = np.random.choice(len(coordinates), size=num_samples, replace=False, p=sampling_probabilities)
-    sampled_ais_points = [trajectories[idx] for idx in sampled_indices]
+        num_samples = min(number_of_nodes, len(coordinates)) 
+        sampled_indices = np.random.choice(len(coordinates), size=num_samples, replace=False, p=sampling_probabilities)
+        sampled_ais_points = [trajectories[idx] for idx in sampled_indices]
 
-    return sampled_ais_points
+        return sampled_ais_points
+    except Exception as e:
+        logging.warning(f'Error occurred trying to geometric sampling ais points: {repr(e)}')
 
 def create_nodes(sampled_trajectories, grid_size):
     """
@@ -86,60 +89,59 @@ def create_nodes(sampled_trajectories, grid_size):
         by intersecting with a grid layer. The function then returns the a graph
         containing the nodes with relevant attributes. 
     """
-    print("Creating nodes")
+    try:
+        ais_points_gdf = gpd.GeoDataFrame(sampled_trajectories, columns=['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type'])
+        ais_points_gdf['geometry'] = gpd.points_from_xy(ais_points_gdf.longitude, ais_points_gdf.latitude)
+        ais_points_gdf.set_crs(epsg=4326, inplace=True)
 
-    ais_points_gdf = gpd.GeoDataFrame(sampled_trajectories, columns=['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type'])
-    ais_points_gdf['geometry'] = gpd.points_from_xy(ais_points_gdf.longitude, ais_points_gdf.latitude)
-    ais_points_gdf.set_crs(epsg=4326, inplace=True)
+        config = load_config()
+        engine = create_engine(f"postgresql://{config['user']}:{config['password']}@{config['host']}:{config['port']}/{config['database']}")
+        parent_grid_id = f"SELECT * FROM {grid_size}"
+        polygons_gdf = gpd.read_postgis(parent_grid_id, engine, geom_col='geometry')
+        joined = gpd.sjoin(ais_points_gdf, polygons_gdf, how='left', op='within')
+        ais_points_gdf['avg_depth'] = joined['avg_depth']
 
-    config = load_config()
-    engine = create_engine(f"postgresql://{config['user']}:{config['password']}@{config['host']}:{config['port']}/{config['database']}")
-    parent_grid_id = f"SELECT * FROM {grid_size}"
-    polygons_gdf = gpd.read_postgis(parent_grid_id, engine, geom_col='geometry')
-    joined = gpd.sjoin(ais_points_gdf, polygons_gdf, how='left', op='within')
-    ais_points_gdf['avg_depth'] = joined['avg_depth']
+        G = nx.Graph()
+        for index, row in ais_points_gdf.iterrows():
+            node = (row['latitude'], row['longitude'])
+            attributes = row.drop(['geometry']).to_dict()
+            G.add_node(node, **attributes)
 
-    G = nx.Graph()
-    for index, row in ais_points_gdf.iterrows():
-        node = (row['latitude'], row['longitude'])
-        attributes = row.drop(['geometry']).to_dict()
-        G.add_node(node, **attributes)
-
-    return G
+        return G
+    except Exception as e:
+        logging.warning(f'Error occurred trying to create nodes for the graph: {repr(e)}')
 
 def create_edges(G, edge_radius_threshold, bearing_threshold, nodes_file_path, edges_file_path):
     """
         Creates edges between nodes in the graph. The creation of an edge 
         is based on two criterias. Distance between nodes, and bearing between nodes.
     """
-    print("Creating edges")
-
-    node_coords_list = [(node, data) for node, data in G.nodes(data=True)]
-    node_array = np.array([node for node, data in node_coords_list])
-    
-    kdtree = cKDTree(node_array)
-
-    for i, (node, data) in enumerate(node_coords_list):
-        node_cog = data['cog']
-        nearby_indices = kdtree.query_ball_point(node, edge_radius_threshold)
+    try:
+        node_coords_list = [(node, data) for node, data in G.nodes(data=True)]
+        node_array = np.array([node for node, data in node_coords_list])
         
-        for nearby_index in nearby_indices:
-            if nearby_index != i: 
-                nearby_node, nearby_data = node_coords_list[nearby_index]
+        kdtree = cKDTree(node_array)
 
-                bearing = calculate_bearing(node, nearby_node)
-                bearing_diff = calculate_bearing_difference(node_cog, bearing)
+        for i, (node, data) in enumerate(node_coords_list):
+            node_cog = data['cog']
+            nearby_indices = kdtree.query_ball_point(node, edge_radius_threshold)
+            
+            for nearby_index in nearby_indices:
+                if nearby_index != i: 
+                    nearby_node, nearby_data = node_coords_list[nearby_index]
 
-                if bearing_diff <= bearing_threshold:
-                    distance = haversine_distance(node[0], node[1], nearby_node[0], nearby_node[1])
-                    G.add_edge(node, nearby_node, weight=distance)
-                    
-        if i % 500000 == 0:
-            print(f"Processed {i} nodes for edge creation.")
+                    bearing = calculate_bearing(node, nearby_node)
+                    bearing_diff = calculate_bearing_difference(node_cog, bearing)
 
-    export_graph_to_geojson(G, nodes_file_path, edges_file_path)
+                    if bearing_diff <= bearing_threshold:
+                        distance = haversine_distance(node[0], node[1], nearby_node[0], nearby_node[1])
+                        G.add_edge(node, nearby_node, weight=distance)
 
-    return G
+        export_graph_to_geojson(G, nodes_file_path, edges_file_path)
+
+    except Exception as e:
+        logging.warning(f'Error occurred trying to create edges for the graph: {repr(e)}')
+
 
 def create_graph(graph_trajectories, geometric_parameter, sample_size, grid_size, edge_conneciton, bearing_parameter):
     """
