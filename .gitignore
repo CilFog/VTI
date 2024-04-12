@@ -180,7 +180,11 @@ data/meta_trajectories/
 
 data/original/
 
+data/graph_input/
+
 .vscode/
+db_connection/database.ini
+debug.py
 data/input_imputation/
 data/input_graph/
 
@@ -189,3 +193,6 @@ data/input_graph/
 data/stats/stats.json
 data/stats/stats_final.csv
 data/stats/stats.ndjson
+
+graph_construction_module/output
+imputation_module/output

@@ -46,7 +46,7 @@ def get_csv_files_in_interval(interval: str):
     try:
         for file in files_to_download:
             logging.info(f'Extracting {file}')
-            extract_csv_file(filename=file)
+            extract_csv_file(file_name=file)
             downloaded += 1
             stdout.write(f'\rDownloaded {file}.  Completed ({downloaded}/{len(files_to_download)})')
             stdout.flush()
@@ -75,7 +75,7 @@ def connect_to_to_ais_web_server_and_get_data():
     except Exception as e:
         logging.error('Fetching AIS data failed with: %s', repr(e))
 
-def extract_csv_file(filename: str):
+def extract_csv_file(file_name: str):
     """
     Downloads the given file, runs it through the pipeline and adds the file to the log.
     :param filename: The file to be downloaded, cleansed and inserted
@@ -92,14 +92,14 @@ def extract_csv_file(filename: str):
         stats.filepath = csv_filepath
 
         # Step 1: Read CSV
-        logging.info(f'Read csv {filename}')
+        logging.info(f'Read csv {file_name}')
         
-        df = get_csv_as_df(filepath=csv_filepath) 
+        df = get_csv_as_df(filepath=csv_file_path) 
         
         stats.initial_rows = len(df)
         
         # Step 2: Cleanse CSV
-        logging.info(f'Cleansing csv {filename}')
+        logging.info(f'Cleansing csv {file_name}')
         df = cleanse_df(gdf=df)
         stats.filtered_rows = len(df)
         
