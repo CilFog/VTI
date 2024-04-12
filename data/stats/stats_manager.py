@@ -1,5 +1,3 @@
-from .statistics import Statistics, STATISTIC_JSON_FILE
-import os
-
+from .statistics import Statistics
 # Initialize the global instance
-stats = Statistics.instantiate_new(STATISTIC_JSON_FILE)
+stats = Statistics.instantiate_new()
