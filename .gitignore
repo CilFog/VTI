@@ -187,7 +187,5 @@ data/input_graph/
 .python-version
 
 data/stats/stats.json
-
 data/stats/stats_final.csv
-
 data/stats/stats.ndjson
