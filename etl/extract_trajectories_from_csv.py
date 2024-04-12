@@ -271,5 +271,3 @@ def write_trajectory_to_original_folder(sub_trajectory_df: gpd.GeoDataFrame):
     file_path = os.path.join(folderpath, filename)
     
     sub_trajectory_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'navigational_status']].reset_index(drop=True).to_csv(file_path, sep=',', index=True, header=True, mode='w')
-
-extract_trajectories_from_csv_files()
