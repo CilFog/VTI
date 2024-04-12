@@ -217,11 +217,11 @@ def create_trajectories_files(gdf: gpd.GeoDataFrame):
                     total_trajectories_after_split += 1
                     trajectory_rows = len(filtered_sub_trajectory)
                     rows_per_trajectory_after_split.append(trajectory_rows)
-                    distance_travelled = calculate_distance_travelled(trajectory_df=filtered_sub_trajectory)
+                    distance_travelled = calculate_distance_traveled(trajectory_df=filtered_sub_trajectory)
 
                     lengths.append(distance_travelled)
                                     
-                    write_trajectory_to_original_folder(filtered_sub_trajectory)
+                    write_trajectory_to_input_graph_folder(filtered_sub_trajectory)
         
         stats.trajectory_counts = len(trajectories_df)  
         stats.rows_per_trajectory.extend(trajectories_df.apply(len))
@@ -243,7 +243,7 @@ def extract_harbors_df() -> gpd.GeoDataFrame:
     
     return gdf  
     
-def calculate_distance_travelled(trajectory_df: gpd.GeoDataFrame) -> float:
+def calculate_distance_traveled(trajectory_df: gpd.GeoDataFrame) -> float:
     gdf_next = trajectory_df.shift(-1)
     trajectory_df, gdf_next = get_radian_and_radian_diff_columns(trajectory_df, gdf_next)
     
@@ -255,7 +255,7 @@ def calculate_distance_travelled(trajectory_df: gpd.GeoDataFrame) -> float:
 
     return distance_travelled
 
-def write_trajectory_to_original_folder(sub_trajectory_df: gpd.GeoDataFrame):
+def write_trajectory_to_input_graph_folder(sub_trajectory_df: gpd.GeoDataFrame):
     if (sub_trajectory_df.empty):
         return
         

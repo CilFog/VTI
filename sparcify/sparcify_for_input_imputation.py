@@ -176,9 +176,10 @@ def sparcify_trajectories_with_action_for_folder(
     logging.info(f'Reduced on avg. pr trajectory: {reduced_avg} for {total_trajectories} trajectories. Reduced points in total: {total_reduced_points}/{total_number_of_points}. Elapsed time: {finished_time:0.4f} seconds')   
 
 
-def move_random_files_to_original_imputation(percentage=0.1):
+def move_random_files_to_input_imputation(percentage=0.1):
     os_path_split = '/' if '/' in INPUT_GRAPH_FOLDER else '\\'
     all_files = []
+    directories_with_moved_files = set()
 
     # Walk through the directory
     for root, dirs, files in os.walk(INPUT_GRAPH_FOLDER):
@@ -200,9 +201,16 @@ def move_random_files_to_original_imputation(percentage=0.1):
             end_dir = os.path.join(INPUT_IMPUTATION_ORIGINAL_FOLDER, vessel_mmsi_folder)
             os.makedirs(end_dir, exist_ok=True)
             shutil.move(file_path, end_dir)
+            directories_with_moved_files.add(os.path.dirname(file_path))
             sys.stdout.write(f"\rMoved {i}/{num_files_to_move}")
             sys.stdout.flush()
         
+        # Remove empty directories
+        for dir_path in directories_with_moved_files:
+            if not os.listdir(dir_path):  # Check if directory is empty
+                os.rmdir(dir_path)  # Remove empty directory
+                logging.info(f'Removed empty directory {dir_path}')
+
         logging.info(f'Finished moving {num_files_to_move} files')
     except Exception as e:
         logging.error(f'Error was thrown with {repr(e)}')
