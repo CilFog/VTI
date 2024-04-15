@@ -51,6 +51,7 @@ def extract_original_trajectories() -> list:
         logging.warning(f'Error occurred trying to extract trajectories: {repr(e)}')
 
 def geometric_sampling(trajectories, sampling_radius_threshold, number_of_nodes):
+    print("Performing geometric sampling")
     """
         Iterates over a collection of AIS points and assigns a density score to each point
         based on how many neighboring AIS points is within a specified radius threshold.
@@ -84,6 +85,7 @@ def geometric_sampling(trajectories, sampling_radius_threshold, number_of_nodes)
         logging.warning(f'Error occurred trying to geometric sampling ais points: {repr(e)}')
 
 def create_nodes(sampled_trajectories, grid_size):
+    print("Creating Nodes")
     """
         Receives the geometrically sampled AIS points, assigns them with a avg_depth
         by intersecting with a grid layer. The function then returns the a graph
@@ -112,6 +114,7 @@ def create_nodes(sampled_trajectories, grid_size):
         logging.warning(f'Error occurred trying to create nodes for the graph: {repr(e)}')
 
 def create_edges(G, edge_radius_threshold, bearing_threshold, nodes_file_path, edges_file_path):
+    print("Creating Edges")
     """
         Creates edges between nodes in the graph. The creation of an edge 
         is based on two criterias. Distance between nodes, and bearing between nodes.
