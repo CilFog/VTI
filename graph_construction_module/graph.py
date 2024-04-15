@@ -12,7 +12,7 @@ from .functions import calculate_bearing, calculate_bearing_difference, export_g
 LOG_PATH = 'graph_log.txt'
 DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'graph_construction_module')
-INPUT_FOLDER_PATH = os.path.join(DATA_FOLDER, 'input_graph/Passenger')
+INPUT_FOLDER_PATH = os.path.join(DATA_FOLDER, 'input_graph/Cargo')
 OUTPUT_FOLDER_PATH = os.path.join(OUTPUT_FOLDER, 'output')
 
 if not os.path.exists(OUTPUT_FOLDER_PATH):
@@ -161,6 +161,6 @@ def create_graph(graph_trajectories, geometric_parameter, sample_size, grid_size
 def create_all_graphs():
     graph_trajectories = extract_original_trajectories()
     #create_graph(graph_trajectories, 0.001, 100000, 'grid_400', 0.0012, 45)
-    create_graph(graph_trajectories, 0.001, 500000, 'grid_400', 0.0012, 45)
+    create_graph(graph_trajectories, 0.001, 5000000, 'grid_200', 0.0012, 30)
 
 create_all_graphs()
