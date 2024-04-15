@@ -32,49 +32,49 @@ class DepthPoint(Base):
     geometry = Column(geoalchemy2.Geometry('POINT', srid=4326))
     depth = Column(Float)
 
-class Grid_1600_tmp(Base):
-    __tablename__ = 'grid_1600_tmp'
-    id = Column(Integer, primary_key=True)
-    geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
+# class Grid_1600_tmp(Base):
+#     __tablename__ = 'grid_1600_tmp'
+#     id = Column(Integer, primary_key=True)
+#     geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
 
-class Grid_1600(Base):
-    __tablename__ = 'grid_1600'
-    id = Column(Integer, primary_key=True)
-    geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
-    avg_depth = Column(Float)
+# class Grid_1600(Base):
+#     __tablename__ = 'grid_1600'
+#     id = Column(Integer, primary_key=True)
+#     geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
+#     avg_depth = Column(Float)
 
-class Grid_800_tmp(Base):
-    __tablename__ = 'grid_800_tmp'
-    id = Column(Integer, primary_key=True)
-    geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
+# class Grid_800_tmp(Base):
+#     __tablename__ = 'grid_800_tmp'
+#     id = Column(Integer, primary_key=True)
+#     geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
 
-class Grid_800(Base):
-    __tablename__ = 'grid_800'
-    id = Column(Integer, primary_key=True)
-    geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
-    avg_depth = Column(Float)
+# class Grid_800(Base):
+#     __tablename__ = 'grid_800'
+#     id = Column(Integer, primary_key=True)
+#     geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
+#     avg_depth = Column(Float)
 
-class Grid_400_tmp(Base):
-    __tablename__ = 'grid_400_tmp'
-    id = Column(Integer, primary_key=True)
-    geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
+# class Grid_400_tmp(Base):
+#     __tablename__ = 'grid_400_tmp'
+#     id = Column(Integer, primary_key=True)
+#     geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
 
-class Grid_400(Base):
-    __tablename__ = 'grid_400'
-    id = Column(Integer, primary_key=True)
-    geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
-    avg_depth = Column(Float)
+# class Grid_400(Base):
+#     __tablename__ = 'grid_400'
+#     id = Column(Integer, primary_key=True)
+#     geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
+#     avg_depth = Column(Float)
 
-class Grid_200_tmp(Base):
-    __tablename__ = 'grid_200_tmp'
-    id = Column(Integer, primary_key=True)
-    geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
+# class Grid_200_tmp(Base):
+#     __tablename__ = 'grid_200_tmp'
+#     id = Column(Integer, primary_key=True)
+#     geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
 
-class Grid_200(Base):
-    __tablename__ = 'grid_200'
-    id = Column(Integer, primary_key=True)
-    geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
-    avg_depth = Column(Float)
+# class Grid_200(Base):
+#     __tablename__ = 'grid_200'
+#     id = Column(Integer, primary_key=True)
+#     geometry = Column(geoalchemy2.Geometry('POLYGON', srid=4326))
+#     avg_depth = Column(Float)
 
 class Grid_100_tmp(Base):
     __tablename__ = 'grid_100_tmp'
@@ -384,7 +384,7 @@ def create_and_populate_grid_100(engine):
             try:
                 connection.execute(sql_command)
                 transaction.commit()  # Commit if all is well
-                print("grid_1600 table created and populated successfully.")
+                print("grid_100 table created and populated successfully.")
             except Exception as e:
                 transaction.rollback()  # Roll back on error
                 print(f"An error occurred: {e}")
@@ -416,23 +416,23 @@ def create_and_populate_grid_50(engine):
             try:
                 connection.execute(sql_command)
                 transaction.commit()  # Commit if all is well
-                print("grid_1600 table created and populated successfully.")
+                print("grid_50 table created and populated successfully.")
             except Exception as e:
                 transaction.rollback()  # Roll back on error
                 print(f"An error occurred: {e}")
 
 #extract_depth_map()
-create_and_insert_grid_into_db(1.6)
-create_and_populate_grid_1600(engine)
+# create_and_insert_grid_into_db(1.6)
+# create_and_populate_grid_1600(engine)
 
-create_and_insert_grid_into_db(0.8)
-create_and_populate_grid_800(engine)
+# create_and_insert_grid_into_db(0.8)
+# create_and_populate_grid_800(engine)
 
-create_and_insert_grid_into_db(0.4)
-create_and_populate_grid_400(engine)
+# create_and_insert_grid_into_db(0.4)
+# create_and_populate_grid_400(engine)
 
-create_and_insert_grid_into_db(0.2)
-create_and_populate_grid_200(engine)   
+# create_and_insert_grid_into_db(0.2)
+# create_and_populate_grid_200(engine)   
 
 create_and_insert_grid_into_db(0.1)
 create_and_populate_grid_100(engine)   
