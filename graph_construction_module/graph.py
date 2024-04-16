@@ -22,14 +22,34 @@ logging = setup_logger(name=LOG_PATH, log_file=LOG_PATH)
 
 def get_trajectory_df(file_path) -> gpd.GeoDataFrame:
     try:
-        df = pd.read_csv(file_path, header=0)
-        if (df.empty):
-            logging.warning('No coordinates to extract')
+        # Initialize an empty GeoDataFrame with the correct CRS
+        gdf_chunks = []
+        chunk_size = 50000
+        
+        for chunk in pd.read_csv(file_path, chunksize=chunk_size):
+            if chunk.empty:
+                continue
+            # Immediately create a GeoDataFrame with a geometry column
+            temp_gdf = gpd.GeoDataFrame(
+                chunk,
+                geometry=gpd.points_from_xy(chunk['longitude'], chunk['latitude']),
+                crs="EPSG:4326"  # Assign CRS at the point of geometry creation
+            )
+            gdf_chunks.append(temp_gdf)
 
-        df = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df['longitude'], df['latitude']), crs="EPSG:4326")
-        return df
+        # Concatenate all GeoDataFrame chunks into one GeoDataFrame
+        gdf = pd.concat(gdf_chunks, ignore_index=True)
+
+        # Check if the concatenated GeoDataFrame is empty after processing all chunks
+        if gdf.empty:
+            logging.warning('No coordinates to extract')
+            return gdf
+        
+        return gdf
     except Exception as e:
         logging.warning(f'Error occurred trying to retrieve trajectory csv: {repr(e)}')
+        # Return an empty gpd.GeoDataFrame in case of an exception
+        return gpd.GeoDataFrame(crs="EPSG:4326")
         
 def extract_original_trajectories() -> list:
     try: 
@@ -157,6 +177,6 @@ def create_graph(graph_trajectories, geometric_parameter, sample_size, grid_size
 def create_all_graphs():
     graph_trajectories = extract_original_trajectories()
     #create_graph(graph_trajectories, 0.001, 100000, 'grid_400', 0.0012, 45)
-    create_graph(graph_trajectories, 0.001, 5000000, 'grid_400', 0.0012, 30)
+    create_graph(graph_trajectories, 0.001, 100000, 'grid_400', 0.0012, 30)
 
 create_all_graphs()
