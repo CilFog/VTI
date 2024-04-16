@@ -69,6 +69,7 @@ def extract_original_trajectories() -> list:
         return ais_points
     except Exception as e:
         logging.warning(f'Error occurred trying to extract trajectories: {repr(e)}')
+        return []
 
 def geometric_sampling(trajectories, sampling_radius_threshold, number_of_nodes):
     print("Performing geometric sampling")
@@ -79,6 +80,10 @@ def geometric_sampling(trajectories, sampling_radius_threshold, number_of_nodes)
         in total. It then randomly exclude points based on the density score, the higher the
         score the greater the change of exclusion is.
     """
+    if trajectories is None:
+        logging.error('No trajectories data provided to geometric_sampling.')
+        return []
+    
     coordinates = np.array([point[:2] for point in trajectories])
 
     kdtree = cKDTree(coordinates)
@@ -177,6 +182,6 @@ def create_graph(graph_trajectories, geometric_parameter, sample_size, grid_size
 def create_all_graphs():
     graph_trajectories = extract_original_trajectories()
     #create_graph(graph_trajectories, 0.001, 100000, 'grid_400', 0.0012, 45)
-    create_graph(graph_trajectories, 0.001, 100000, 'grid_400', 0.0012, 30)
+    create_graph(graph_trajectories, 0.001, 100000, 'grid_400', 0.0095, 30)
 
 create_all_graphs()
