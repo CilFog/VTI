@@ -175,7 +175,6 @@ def sparcify_trajectories_with_action_for_folder(
     finished_time = t.perf_counter() - initial_time
     logging.info(f'Reduced on avg. pr trajectory: {reduced_avg} for {total_trajectories} trajectories. Reduced points in total: {total_reduced_points}/{total_number_of_points}. Elapsed time: {finished_time:0.4f} seconds')   
 
-
 def move_random_files_to_input_imputation(percentage=0.1):
     os_path_split = '/' if '/' in INPUT_GRAPH_FOLDER else '\\'
     all_files = []

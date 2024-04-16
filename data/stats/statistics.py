@@ -1,17 +1,31 @@
 import os
+import sys
 import json
 import numpy as np
 import pandas as pd
+from pathlib import Path
 from typing import List, Dict, Any
+from utils import get_radian_and_radian_diff_columns, calculate_initial_compass_bearing, get_haversine_dist_df_in_meters
+
 
 STATISTIC_CLEANSING_JSON_FILE = os.path.join(os.path.dirname(__file__), 'stats_after_cleansing.ndjson')
 STATISTIC_CLEANSING_CSV_FILE = os.path.join(os.path.dirname(__file__), 'stats_after_cleansing.csv')
-STATISTIC_CLEANSING_VESSELS_CSV_FILE = os.path.join(os.path.dirname(__file__), 'vessels_after_cleansing.csv')
+
 INPUT_GRAPH_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'input_graph')
 STATISTIC_INPUT_GRAPH_JSON_FILE = os.path.join(os.path.dirname(__file__), 'stats_input_graph.ndjson')
 STATISTIC_INPUT_GRAPH_CSV_FILE = os.path.join(os.path.dirname(__file__), 'stats_input_graph.csv')
+VESSELS_INPUT_GRAPH_CSV_FILE = os.path.join(os.path.dirname(__file__), 'vessels_after_cleansing.csv')
 
-class Statistics:
+INPUT_IMPUTATION_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'input_imputation')
+STATISTIC_INPUT_IMPUTATION_JSON_FILE = os.path.join(os.path.dirname(__file__), 'stats_input_imputation.ndjson')
+STATISTIC_INPUT_IMPUTATION_CSV_FILE = os.path.join(os.path.dirname(__file__), 'stats_input_imputation.csv')
+VESSELS_INPUT_IMPUTATION_CSV_FILE = os.path.join(os.path.dirname(__file__), 'vessels_after_cleansing.csv')
+
+STATISTIC_AFTER_CLEANSING_TOTAL_JSON_FILE = os.path.join(os.path.dirname(__file__), 'stats_after_cleansing_total.ndjson')
+STATISTIC_AFTER_TOTAL_CSV_FILE = os.path.join(os.path.dirname(__file__), 'stats_after_cleansing_total.csv')
+VESSEL_CSV_TOTAL = os.path.join(os.path.dirname(__file__), 'vessels_after_cleansing_total.csv')
+
+class CleansingStatistics:
     def __init__(self):
         self.filepath: str = ''
         self.initial_rows: int = 0
@@ -44,20 +58,20 @@ class Statistics:
         with open(filepath, 'a') as file:
             json.dump(self.to_dict(), file)
             file.write('\n') 
-        self = Statistics()
+        self = CleansingStatistics()
             
     @staticmethod
-    def instantiate_new() -> 'Statistics':
+    def instantiate_new() -> 'CleansingStatistics':
         '''Instantiates a new Statistics object.'''
-        return Statistics()
+        return CleansingStatistics()
 
 
 def calculate_cleansing_statistics(df, column_name):
     '''Calculate required statistics for a given column.'''
     data = df[column_name]
     # If the column contains lists (implying dtype is object), concatenate into a single series
-    if data.apply(lambda x: isinstance(x, list)).any():
-        data = pd.Series(np.concatenate(data))
+    # if data.apply(lambda x: isinstance(x, list)).any():
+    #     data = pd.Series(np.concatenate(data))
     return {
         'total': data.sum(),
         'average': data.mean(),
@@ -94,31 +108,94 @@ def make_trajectory_cleansing_statistic_file(input_file:str, output_file:str):
     # Writing DataFrame to CSV
     df_stats.to_csv(STATISTIC_CLEANSING_CSV_FILE)
 
-def get_number_of_vessel_trajectories_in_folder(input_folder:str, output_file_str):
-    '''Count the number of vessel trajectories in a folder and write the result to a csv file.'''
-    vessels = ['Anti-pollution', 'Dredging', 'Passenger', 'Port_tender', 'Towing_long_wide','Cargo', 'Fishing', 'Pilot', 'Tanker', 'Tug', 'Diving', 'Law_enforcement', 'Pleasure', 'Towing']
-    vessel_stats = []
 
-    # Dictionary to accumulate file counts
-    file_counts = {vessel: 0 for vessel in vessels}
+class Trajectory_Statistics:
+    def __init__(self):
+        self.filepath: str = ''
+        self.position_reports: int = 0
+        self.distance_travelled_m: float = 0
+        self.vessel_type: str = ''
 
-    for root, dirs, files in os.walk(input_folder): 
-        last_segment = os.path.basename(root)
-        if last_segment in vessels:
-                # Sum file counts for the current directory and all its subdirectories
-                file_counts[last_segment] += sum(len(files) for _, _, files in os.walk(root))
+    def to_dict(self) -> Dict[str, Any]:
+        '''Converts the class attributes to a dictionary.'''
+        return {
+            'filepath': self.filepath,
+            'position_reports': self.position_reports,
+            'distance_travelled_m': self.distance_travelled_m,
+            'vessel_type': self.vessel_type,
+        }
 
-    # Creating entries for the DataFrame
-    for vessel, count in file_counts.items():
-        vessel_stats.append({'Vessel type': vessel, 'Number of trajectories': count})
+    def add_to_file(self, filepath:str) -> None:
+        '''Adds latest parsed csv file'''
+        with open(filepath, 'a') as file:
+            json.dump(self.to_dict(), file)
+            file.write('\n') 
+        self = Trajectory_Statistics()
+
+    def calculate_distance_traveled(trajectory_df: pd.DataFrame) -> float:
+        gdf_next = trajectory_df.shift(-1)
+        trajectory_df, gdf_next = get_radian_and_radian_diff_columns(trajectory_df, gdf_next)
+        
+        bearing_df = calculate_initial_compass_bearing(df_curr=trajectory_df, df_next=gdf_next)
+        trajectory_df['cog'] = trajectory_df['cog'].fillna(bearing_df)
+
+        trajectory_df['dist'] = get_haversine_dist_df_in_meters(df_curr=trajectory_df, df_next=gdf_next).fillna(0)
+        distance_travelled = trajectory_df['dist'].sum()
+
+        return distance_travelled
+
+    def make_statistics_for_input_folder(self, input_folder:str, json_file:str, stats_file:str, vessel_file:str):
+        '''Create statistics for the input graph folder.'''
+        stats = Trajectory_Statistics()
+        path = Path(input_folder)
+
+        print(f"Getting number of files")
+        number_of_files = sum(1 for file in path.rglob('*.txt'))
+        i = 0
+
+        print(f"Making statistics for {number_of_files} files")
+        for root, dirs, files in os.walk(input_folder):
+            for file in files:
+                df = pd.read_csv(os.path.join(root, file))
+                stats.filepath = os.path.join(root, file)
+                stats.position_reports = len(df)
+                stats.vessel_type = df['ship_type'].iloc[0]
+                stats.distance_travelled_m = Trajectory_Statistics.calculate_distance_traveled(df)
+
+                stats.add_to_file(json_file)
+                i += 1
+                sys.stdout.write(f"\rMade stats for {i}/{number_of_files}")
+                sys.stdout.flush()
+        
+        json_df = pd.read_json(json_file, lines=True)
     
-    # Handling case where no files are found
-    if not vessel_stats:
-        raise ValueError('No vessel trajectories found in the folder')
+        columns_to_calculate = [
+            'position_reports', 'distance_travelled_m'
+        ]
 
-    # Convert to DataFrame and save to CSV
-    df = pd.DataFrame(vessel_stats)
-    df.to_csv(output_file_str)
+        # List of columns to calculate statistics for
+        stats = {col: calculate_cleansing_statistics(json_df, col) for col in columns_to_calculate}
+        
+        total_number_of_trajectories_files = json_df['filepath'].count()
 
-make_trajectory_cleansing_statistic_file(input_file=STATISTIC_CLEANSING_JSON_FILE, output_file=STATISTIC_CLEANSING_CSV_FILE)
-get_number_of_vessel_trajectories_in_folder(input_folder=INPUT_GRAPH_FOLDER, output_file_str=STATISTIC_CLEANSING_VESSELS_CSV_FILE)
+        stats['trajectories'] = {'total': total_number_of_trajectories_files, 'average': 0, 'median': 0, 'max': 0, 'min': 0, 'quantile 25%': 0, 'quantile 50%': 0, 'quantile 75%': 0}
+        df_stats = pd.DataFrame.from_dict(stats, orient='index', 
+                                        columns=['total', 'average', 'median', 'max', 'min', 'quantile 25%', 'quantile 50%', 'quantile 75%'])
+        # Writing DataFrame to CSV
+        df_stats.to_csv(stats_file)
+        
+        # Make file for vessels
+        vessel_counts = json_df.groupby('vessel_type').size()
+
+        # Converting to dictionary
+        vessel_dict = vessel_counts.to_dict()
+
+        # Adding total count to the dictionary
+        vessel_dict['Total'] = json_df['vessel_type'].count()
+
+        df_vessel = pd.DataFrame(vessel_dict, index=[0])
+
+        df_vessel.to_csv(vessel_file)
+
+stats = Trajectory_Statistics()
+stats.make_statistics_for_input_folder(input_folder=INPUT_GRAPH_FOLDER, json_file=STATISTIC_AFTER_CLEANSING_TOTAL_JSON_FILE, stats_file=STATISTIC_AFTER_TOTAL_CSV_FILE, vessel_file=VESSEL_CSV_TOTAL)

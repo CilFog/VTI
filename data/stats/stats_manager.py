@@ -1,3 +1,3 @@
-from .statistics import Statistics
+from .statistics import CleansingStatistics, Trajectory_Statistics
 # Initialize the global instance
-stats = Statistics.instantiate_new()
+stats = CleansingStatistics.instantiate_new()
