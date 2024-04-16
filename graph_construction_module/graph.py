@@ -24,7 +24,7 @@ def get_trajectory_df(file_path) -> gpd.GeoDataFrame:
     try:
         # Initialize an empty GeoDataFrame with the correct CRS
         gdf_chunks = []
-        chunk_size = 50000
+        chunk_size = 50
         
         for chunk in pd.read_csv(file_path, chunksize=chunk_size):
             if chunk.empty:
@@ -182,6 +182,6 @@ def create_graph(graph_trajectories, geometric_parameter, sample_size, grid_size
 def create_all_graphs():
     graph_trajectories = extract_original_trajectories()
     #create_graph(graph_trajectories, 0.001, 100000, 'grid_400', 0.0012, 45)
-    create_graph(graph_trajectories, 0.001, 100000, 'grid_400', 0.0095, 30)
+    create_graph(graph_trajectories, 0.001, 300000, 'grid_400', 0.005, 45)
 
 create_all_graphs()
