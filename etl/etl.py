@@ -94,7 +94,7 @@ def extract_csv_file(file_name: str):
         # Step 1: Read CSV
         logging.info(f'Read csv {file_name}')
         
-        df = get_csv_as_df(filepath=csv_file_path) 
+        df = get_csv_as_df(filepath=csv_filepath) 
         
         stats.initial_rows = len(df)
         

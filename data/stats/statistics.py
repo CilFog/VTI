@@ -69,9 +69,9 @@ class CleansingStatistics:
 def calculate_cleansing_statistics(df, column_name):
     '''Calculate required statistics for a given column.'''
     data = df[column_name]
-    # If the column contains lists (implying dtype is object), concatenate into a single series
-    # if data.apply(lambda x: isinstance(x, list)).any():
-    #     data = pd.Series(np.concatenate(data))
+    #If the column contains lists (implying dtype is object), concatenate into a single series
+    if data.apply(lambda x: isinstance(x, list)).any():
+        data = pd.Series(np.concatenate(data))
     return {
         'total': data.sum(),
         'average': data.mean(),
