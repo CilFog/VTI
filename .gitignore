@@ -196,3 +196,6 @@ data/stats/stats.ndjson
 
 graph_construction_module/output
 imputation_module/output
+
+data/stats/stats_after_cleansing.ndjson
+data/input_graph_area/
