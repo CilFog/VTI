@@ -205,8 +205,8 @@ def find_area_input_files():
 
     logging.info('Finished finding area input files')        
 
-#move_random_files_to_test_and_validation()
-write_trajectories_for_area(INPUT_VALIDATION_DATA_ORIGINAL_FOLDER, INPUT_VALIDATION_SPARSED_AREA_FOLDER)
-write_trajectories_for_all(INPUT_VALIDATION_DATA_ORIGINAL_FOLDER, INPUT_VALIDATION_SPARSED_ALL_FOLDER)
-write_trajectories_for_area(INPUT_TEST_DATA_FOLDER_ORIGINAL_FOLDER, INPUT_TEST_SPARSED_AREA_FOLDER)
-write_trajectories_for_all(INPUT_TEST_DATA_FOLDER_ORIGINAL_FOLDER, INPUT_TEST_SPARSED_ALL_FOLDER)
+move_random_files_to_test_and_validation()
+#write_trajectories_for_area(INPUT_VALIDATION_DATA_ORIGINAL_FOLDER, INPUT_VALIDATION_SPARSED_AREA_FOLDER)
+#write_trajectories_for_all(INPUT_VALIDATION_DATA_ORIGINAL_FOLDER, INPUT_VALIDATION_SPARSED_ALL_FOLDER)
+#write_trajectories_for_area(INPUT_TEST_DATA_FOLDER_ORIGINAL_FOLDER, INPUT_TEST_SPARSED_AREA_FOLDER)
+#write_trajectories_for_all(INPUT_TEST_DATA_FOLDER_ORIGINAL_FOLDER, INPUT_TEST_SPARSED_ALL_FOLDER)
