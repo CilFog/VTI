@@ -193,6 +193,8 @@ data/input_graph/
 data/stats/stats.json
 data/stats/stats_final.csv
 data/stats/stats.ndjson
-
+data/stats/stats_after_cleansing.ndjson
+data/stats/stats_after_cleansing_total.ndjson
 graph_construction_module/output
 imputation_module/output
+
