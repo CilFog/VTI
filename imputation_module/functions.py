@@ -84,41 +84,46 @@ def nodes_within_radius(G, point, radius):
 
      # Convert the point to the same format (latitude, longitude) and ensure radius is appropriate
     query_point = np.array([point[0], point[1]])  # Assuming point is already a tuple (latitude, longitude)
-
+    
     # Use query_ball_point to find indices of nodes within the radius
     indices_within_radius = tree.query_ball_point(query_point, radius)
 
     # Convert indices back to node identifiers
     nodes_within = [list(G.nodes)[i] for i in indices_within_radius]
-
+    
     return nodes_within
 
 def adjust_edge_weights_for_draught(G, start_point, end_point, max_draught, base_penalty=1000, depth_penalty_factor=1):
     # Create a copy of the graph so the original graph remains unchanged.
     radius = haversine_distance(start_point[0], start_point[1], end_point[0], end_point[1])
 
-    relevant_nodes_start = set(nodes_within_radius(G, start_point, radius))
-    relevant_nodes_end = set(nodes_within_radius(G, end_point, radius))
+    radiusNew = radius / 100 
+
+    relevant_nodes_start = set(nodes_within_radius(G, start_point, radiusNew))
+    relevant_nodes_end = set(nodes_within_radius(G, end_point, radiusNew))
 
     # Union of nodes near start and end points to find all relevant nodes.
     relevant_nodes = relevant_nodes_start.union(relevant_nodes_end)
     
-    # Iterate only through edges connected to relevant nodes.
+    # Process only edges between relevant nodes
+    processed_edges = set()
     for node in relevant_nodes:
         for neighbor in G.neighbors(node):
-            if neighbor in relevant_nodes:  # Ensure both nodes are relevant
+            # Create a unique identifier for each edge, assuming an undirected graph
+            edge = tuple(sorted([node, neighbor]))
+            if edge not in processed_edges and neighbor in relevant_nodes:
+                processed_edges.add(edge)
                 data = G.get_edge_data(node, neighbor)
                 
-                # Compute the minimum depth of connected nodes.
+                # Calculate minimum depth between nodes
                 u_depth = G.nodes[node].get('avg_depth', float('inf'))
                 v_depth = G.nodes[neighbor].get('avg_depth', float('inf'))
                 min_depth = min(u_depth, v_depth)
                 
-                # Apply penalties based on the draught comparison.
-                penalty = base_penalty if abs(min_depth) < max_draught else 0
-                
-                # Adjust the edge weight accordingly.
-                initial_weight = data.get('weight')
+                # Determine penalty based on depth comparison with max_draught
+                penalty = base_penalty if min_depth < max_draught else 0
+                # Apply the penalty to the edge's weight
+                initial_weight = data.get('weight')  # Provide a default weight if missing
                 G[node][neighbor]['weight'] = initial_weight + penalty
 
     return G
@@ -134,29 +139,44 @@ def cog_penalty(cog1, cog2, threshold=30, large_penalty=1000):
         return 0
 
 def adjust_edge_weights_for_cog(G, start_point, end_point):
-    # Create a copy of the graph so the original graph remains unchanged.
     radius = haversine_distance(start_point[0], start_point[1], end_point[0], end_point[1])
     
-    relevant_nodes_start = set(nodes_within_radius(G, start_point, radius))
-    relevant_nodes_end = set(nodes_within_radius(G, end_point, radius))
+    radiusNew = radius / 100 
+
+    relevant_nodes_start = set(nodes_within_radius(G, start_point, radiusNew))
+    relevant_nodes_end = set(nodes_within_radius(G, end_point, radiusNew))
     
     # Union of nodes near start and end points for all relevant nodes.
     relevant_nodes = relevant_nodes_start.union(relevant_nodes_end)
     
-    # Iterate through the relevant nodes and their neighbors to adjust weights selectively.
+    # Dictionary to cache penalties between COG values
+    penalty_cache = {}
+
+    # Adjust edge weights based on COG values
     for node in relevant_nodes:
+        cog_u = G.nodes[node].get('cog')
+        if cog_u is None:
+            continue
+        
         for neighbor in G.neighbors(node):
-            if neighbor in relevant_nodes:  # Check if the neighbor is also relevant.
-                if 'cog' in G.nodes[node] and 'cog' in G.nodes[neighbor]:
-                    # Calculate the COG penalty.
-                    cog_u = G.nodes[node]['cog']
-                    cog_v = G.nodes[neighbor]['cog']
-                    penalty = cog_penalty(cog_u, cog_v)
-                    
-                    # Get the existing edge data to adjust its weight.
-                    data = G.get_edge_data(node, neighbor)
-                    initial_weight = data.get('weight')
-                    G[node][neighbor]['weight'] = initial_weight + penalty
+            if neighbor not in relevant_nodes:
+                continue
+            
+            cog_v = G.nodes[neighbor].get('cog')
+            if cog_v is None:
+                continue
+
+            # Use cached penalty if available
+            cog_pair = (cog_u, cog_v) if cog_u <= cog_v else (cog_v, cog_u)
+            if cog_pair in penalty_cache:
+                penalty = penalty_cache[cog_pair]
+            else:
+                penalty = cog_penalty(cog_u, cog_v)
+                penalty_cache[cog_pair] = penalty
+
+            # Update the edge weight
+            initial_weight = G[node][neighbor].get('weight')
+            G[node][neighbor]['weight'] = initial_weight + penalty
 
     return G
 
@@ -188,7 +208,7 @@ def calculate_interpolated_timestamps(nodes_within_path, start_timestamp_unix, e
         interpolated_timestamp = start_timestamp + timedelta(seconds=interpolated_time_seconds)
         
         timestamps.append(interpolated_timestamp)
-
+    
     # Make sure the last timestamp is exactly the end timestamp
     timestamps[-1] = end_timestamp
 
