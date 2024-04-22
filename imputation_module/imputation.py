@@ -53,6 +53,7 @@ def create_graph_from_geojson(nodes_geojson_path, edges_geojson_path):
 
 
 def impute_trajectory():
+    G_apply_cog_penalty = None
     G = create_graph_from_geojson(GRAPH_INPUT_NODES, GRAPH_INPUT_EDGES)
 
     trajectory_points = []
