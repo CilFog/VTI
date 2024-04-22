@@ -22,34 +22,16 @@ logging = setup_logger(name=LOG_PATH, log_file=LOG_PATH)
 
 def get_trajectory_df(file_path) -> gpd.GeoDataFrame:
     try:
-        # Initialize an empty GeoDataFrame with the correct CRS
-        gdf_chunks = []
-        chunk_size = 50
-        # There are 850.000 files approx
-        for chunk in pd.read_csv(file_path, chunksize=chunk_size):
-            if chunk.empty:
-                continue
-            # Immediately create a GeoDataFrame with a geometry column
-            temp_gdf = gpd.GeoDataFrame(
-                chunk,
-                geometry=gpd.points_from_xy(chunk['longitude'], chunk['latitude']),
-                crs="EPSG:4326"  # Assign CRS at the point of geometry creation
-            )
-            gdf_chunks.append(temp_gdf)
-
-        # Concatenate all GeoDataFrame chunks into one GeoDataFrame
-        gdf = pd.concat(gdf_chunks, ignore_index=True)
-
-        # Check if the concatenated GeoDataFrame is empty after processing all chunks
-        if gdf.empty:
+        df = pd.read_csv(file_path, header=0)
+        if (df.empty):
             logging.warning('No coordinates to extract')
-            return gdf
-        
-        return gdf
+
+        df = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df['longitude'], df['latitude']), crs="EPSG:4326")
+        return df
+    
     except Exception as e:
         logging.warning(f'Error occurred trying to retrieve trajectory csv: {repr(e)}')
-        # Return an empty gpd.GeoDataFrame in case of an exception
-        return gpd.GeoDataFrame(crs="EPSG:4326")
+
         
 def extract_original_trajectories() -> list:
     try: 
@@ -175,13 +157,13 @@ def create_graph(graph_trajectories, geometric_parameter, sample_size, grid_size
     print(f"Began {sample_size}")
     geometric_sampled_nodes = geometric_sampling(graph_trajectories, geometric_parameter, sample_size)
     nodes = create_nodes(geometric_sampled_nodes, grid_size)
-    nodes_file_path = os.path.join(OUTPUT_FOLDER_PATH, f'graph_all/{sample_size}/nodes.geojson')
-    edges_file_path = os.path.join(OUTPUT_FOLDER_PATH, f'graph_all/{sample_size}/edges.geojson')
+    nodes_file_path = os.path.join(OUTPUT_FOLDER_PATH, f'graph_cargo/{sample_size}/nodes.geojson')
+    edges_file_path = os.path.join(OUTPUT_FOLDER_PATH, f'graph_cargo/{sample_size}/edges.geojson')
     create_edges(nodes, edge_conneciton, bearing_parameter, nodes_file_path, edges_file_path) 
 
 def create_all_graphs():
     graph_trajectories = extract_original_trajectories()
     #create_graph(graph_trajectories, 0.001, 100000, 'grid_400', 0.0012, 45)
-    create_graph(graph_trajectories, 0.001, 500000, 'grid_200', 0.0011, 45)
+    create_graph(graph_trajectories, 0.001, 100000, 'grid_200', 0.0005, 45)
 
 create_all_graphs()
