@@ -182,6 +182,6 @@ def create_graph(graph_trajectories, geometric_parameter, sample_size, grid_size
 def create_all_graphs():
     graph_trajectories = extract_original_trajectories()
     #create_graph(graph_trajectories, 0.001, 100000, 'grid_400', 0.0012, 45)
-    create_graph(graph_trajectories, 0.001, 1000000, 'grid_200', 0.0012, 45)
+    create_graph(graph_trajectories, 0.001, 500000, 'grid_200', 0.0011, 45)
 
 create_all_graphs()
