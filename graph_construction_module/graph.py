@@ -12,7 +12,7 @@ from .functions import calculate_bearing, calculate_bearing_difference, export_g
 LOG_PATH = 'graph_log.txt'
 DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'graph_construction_module')
-INPUT_FOLDER_PATH = os.path.join(DATA_FOLDER, 'input_graph_area/aalborg_harbor_to_kategat/Cargo')
+INPUT_FOLDER_PATH = os.path.join(DATA_FOLDER, 'input_graph_area/aalborg_harbor_to_kattegat/Cargo')
 OUTPUT_FOLDER_PATH = os.path.join(OUTPUT_FOLDER, 'output')
 
 if not os.path.exists(OUTPUT_FOLDER_PATH):
