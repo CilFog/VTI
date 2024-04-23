@@ -12,7 +12,7 @@ from .functions import calculate_bearing, calculate_bearing_difference, export_g
 LOG_PATH = 'graph_log.txt'
 DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'graph_construction_module')
-INPUT_FOLDER_PATH = os.path.join(DATA_FOLDER, 'input_graph_area/aalborg_harbor_to_kattegat/Cargo')
+INPUT_FOLDER_PATH = os.path.join(DATA_FOLDER, 'input_graph_area/brunsbuettel_to_kiel/Cargo')
 OUTPUT_FOLDER_PATH = os.path.join(OUTPUT_FOLDER, 'output')
 
 if not os.path.exists(OUTPUT_FOLDER_PATH):
@@ -157,8 +157,8 @@ def create_graph(graph_trajectories, geometric_parameter, sample_size, grid_size
     print(f"Began {sample_size}")
     geometric_sampled_nodes = geometric_sampling(graph_trajectories, geometric_parameter, sample_size)
     nodes = create_nodes(geometric_sampled_nodes, grid_size)
-    nodes_file_path = os.path.join(OUTPUT_FOLDER_PATH, f'graph_cargo/{sample_size}/nodes.geojson')
-    edges_file_path = os.path.join(OUTPUT_FOLDER_PATH, f'graph_cargo/{sample_size}/edges.geojson')
+    nodes_file_path = os.path.join(OUTPUT_FOLDER_PATH, f'graph_cargo_kiel/{sample_size}/nodes.geojson')
+    edges_file_path = os.path.join(OUTPUT_FOLDER_PATH, f'graph_cargo_kiel/{sample_size}/edges.geojson')
     create_edges(nodes, edge_conneciton, bearing_parameter, nodes_file_path, edges_file_path) 
 
 def create_all_graphs():

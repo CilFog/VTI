@@ -94,13 +94,13 @@ def impute_trajectory():
             if end_point not in G:
                 G.add_node(end_point, **end_props)
 
-            for node in nodes_within_radius(G, start_point, 0.002):
+            for node in nodes_within_radius(G, start_point, 0.0005):
                 if node != start_point:  
                     distance = haversine_distance(start_point[0], start_point[1], node[0], node[1])
                     G.add_edge(start_point, node, weight=distance)
                     G.add_edge(node, start_point, weight=distance)
 
-            for node in nodes_within_radius(G, end_point, 0.002): 
+            for node in nodes_within_radius(G, end_point, 0.0005): 
                 if node != end_point: 
                     distance = haversine_distance(end_point[0], end_point[1], node[0], node[1])
                     G.add_edge(end_point, node, weight=distance)
