@@ -11,7 +11,7 @@ from .functions import calculate_bearing, calculate_bearing_difference, export_g
 
 LOG_PATH = 'graph_log.txt'
 DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
-INPUT_FOLDER_PATH = os.path.join(DATA_FOLDER, 'input_graph_area/skagen_harbor/Cargo')
+INPUT_FOLDER_PATH = os.path.join(DATA_FOLDER, 'input_graph_area/doggersbank_to_lemvig')
 
 OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'graph_construction_module')
 OUTPUT_FOLDER_PATH = os.path.join(OUTPUT_FOLDER, 'output')
@@ -158,12 +158,12 @@ def create_graph(graph_trajectories, geometric_parameter, grid_size, edge_connec
     geometric_sampled_nodes = geometric_sampling(graph_trajectories, geometric_parameter)
 
     nodes = create_nodes(geometric_sampled_nodes, grid_size)
-    nodes_file_path = os.path.join(OUTPUT_FOLDER_PATH, f'graph_cargo/new-nodes.geojson')
-    edges_file_path = os.path.join(OUTPUT_FOLDER_PATH, f'graph_cargo/new-edges.geojson')
+    nodes_file_path = os.path.join(OUTPUT_FOLDER_PATH, f'graph_cargo/nodes.geojson')
+    edges_file_path = os.path.join(OUTPUT_FOLDER_PATH, f'graph_cargo/edges.geojson')
     create_edges(nodes, edge_conneciton, bearing_parameter, nodes_file_path, edges_file_path) 
 
 def create_all_graphs():
     graph_trajectories = extract_original_trajectories()
-    create_graph(graph_trajectories, 0.0002, 'grid_400', 0.0005, 45)
+    create_graph(graph_trajectories, 0.0001, 'grid_200', 0.0003, 45)
 
 create_all_graphs()
