@@ -13,11 +13,11 @@ OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'imputa
 OUTPUT_FOLDER_PATH = os.path.join(OUTPUT_FOLDER, 'output')
 
 IMPUTATION_INPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
-IMPUTATION_INPUT_FOLDER_PATH = os.path.join(IMPUTATION_INPUT_FOLDER, 'input_imputation/area/aalborg_harbor/large_time_gap_0_5/Cargo/209525000_15-01-2024_00-05-59.txt')
+IMPUTATION_INPUT_FOLDER_PATH = os.path.join(IMPUTATION_INPUT_FOLDER, 'input_imputation/244059000_24-03-2024_04-40-36.txt')
 
 GRAPH_INPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'graph_construction_module')
-GRAPH_INPUT_NODES = os.path.join(GRAPH_INPUT_FOLDER, 'output\\graph_cargo\\100000\\nodes.geojson')
-GRAPH_INPUT_EDGES = os.path.join(GRAPH_INPUT_FOLDER, 'output\\graph_cargo\\100000\\edges.geojson')                       
+GRAPH_INPUT_NODES = os.path.join(GRAPH_INPUT_FOLDER, 'output\\kiel-nodes.geojson')
+GRAPH_INPUT_EDGES = os.path.join(GRAPH_INPUT_FOLDER, 'output\\kiel-edges.geojson')                       
 
 logging = setup_logger(name=LOG_PATH, log_file=LOG_PATH)
 
@@ -55,7 +55,7 @@ def create_graph_from_geojson(nodes_geojson_path, edges_geojson_path):
 def impute_trajectory():
     G_apply_cog_penalty = None
     G = create_graph_from_geojson(GRAPH_INPUT_NODES, GRAPH_INPUT_EDGES)
-
+    print("Done loading in geojson-files")
     trajectory_points = []
 
     try:
@@ -89,6 +89,9 @@ def impute_trajectory():
             start_point = (start_props["latitude"], start_props["longitude"])
             end_point = (end_props["latitude"], end_props["longitude"])
 
+            if i % 50 == 0:
+                print("Done with first 50")
+
             if start_point not in G:
                 G.add_node(start_point, **start_props) 
             if end_point not in G:
@@ -115,7 +118,7 @@ def impute_trajectory():
             else:
                 max_draught = start_props.get("draught", None)
                 G_apply_draught_penalty = adjust_edge_weights_for_draught(G, start_point, end_point, max_draught)
-                G_apply_cog_penalty = adjust_edge_weights_for_cog(G_apply_draught_penalty, start_point, end_point)
+                G_apply_cog_penalty = adjust_edge_weights_for_cog(G, start_point, end_point)
                 
                 try:
                     path = nx.astar_path(G_apply_cog_penalty, start_point, end_point, heuristic=heuristics, weight='weight')
@@ -159,8 +162,8 @@ def impute_trajectory():
         for i in range(len(path)-1):
             edges.append((path[i], path[i+1]))
 
-    imputed_nodes_file_path = os.path.join(OUTPUT_FOLDER_PATH, 'i-nodes.geojson')
-    imputed_edges_file_path = os.path.join(OUTPUT_FOLDER_PATH, 'i-edges.geojson')
+    imputed_nodes_file_path = os.path.join(OUTPUT_FOLDER_PATH, 'kiel-nodes.geojson')
+    imputed_edges_file_path = os.path.join(OUTPUT_FOLDER_PATH, 'kiel-edges.geojson')
 
     nodes_to_geojson(G_apply_cog_penalty, unique_nodes, imputed_nodes_file_path)
     edges_to_geojson(G_apply_cog_penalty, edges, imputed_edges_file_path)
