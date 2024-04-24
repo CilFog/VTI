@@ -82,23 +82,11 @@ def geometric_sampling(trajectories, min_distance_threshold):
     for i in range(len(coordinates)):
         if i in excluded_indices:
             continue
-
-        # Initially add the current point to the list of sampled indices
+        # Add the current point to the list of sampled indices
         sampled_indices.append(i)
+        # Find all points within the specified minimum distance
         indices = kdtree.query_ball_point(coordinates[i], min_distance_threshold)
-
-        # Track if an opposite COG point has been kept
-        opposite_cog_point_kept = False
-
-        for j in indices:
-            if j != i:
-                cog_diff = calculate_cog_difference(trajectories[i][4], trajectories[j][4])  # Assuming COG is at index 5
-                if cog_diff > 140 and cog_diff < 215:  # COG difference approximately 180 degrees
-                    if not opposite_cog_point_kept:  # Check if no opposite COG point has been kept yet
-                        sampled_indices.append(j)
-                        opposite_cog_point_kept = True
-
-        # Update excluded indices to include all points within the radius, ensuring each is only considered once
+        # Add these points to the excluded_indices set
         excluded_indices.update(indices)
 
     # Filter the trajectories to only include sampled points
@@ -162,12 +150,12 @@ def create_edges(G, edge_radius_threshold, bearing_threshold, nodes_file_path, e
             if nearby_index != i: 
                 nearby_node, nearby_data = node_coords_list[nearby_index]
 
-                bearing = calculate_bearing(node, nearby_node)
+                # bearing = calculate_bearing(node, nearby_node)
 
-                if bearing <= bearing_threshold:
-                    distance = haversine_distance(node[0], node[1], nearby_node[0], nearby_node[1])
-                    G.add_edge(node, nearby_node, weight=distance)
-                    edge_count += 1
+                # if bearing <= bearing_threshold:
+                distance = haversine_distance(node[0], node[1], nearby_node[0], nearby_node[1])
+                G.add_edge(node, nearby_node, weight=distance)
+                edge_count += 1
 
     print(f"Total edges created: {edge_count}")
 
