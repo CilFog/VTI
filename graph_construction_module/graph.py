@@ -142,6 +142,7 @@ def create_edges(G, edge_radius_threshold, bearing_threshold, nodes_file_path, e
                 nearby_node, nearby_data = node_coords_list[nearby_index]
 
                 bearing = calculate_bearing(node, nearby_node)
+
                 print(bearing)
                 if bearing <= bearing_threshold:
                     distance = haversine_distance(node[0], node[1], nearby_node[0], nearby_node[1])
@@ -164,6 +165,6 @@ def create_graph(graph_trajectories, geometric_parameter, grid_size, edge_connec
 
 def create_all_graphs():
     graph_trajectories = extract_original_trajectories()
-    create_graph(graph_trajectories, 0.02, 'grid_400', 0.0005, 45)
+    create_graph(graph_trajectories, 0.0002, 'grid_400', 0.0005, 45)
 
 create_all_graphs()
