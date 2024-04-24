@@ -173,6 +173,6 @@ def create_graph(graph_trajectories, geometric_parameter, grid_size, edge_connec
 
 def create_all_graphs():
     graph_trajectories = extract_original_trajectories()
-    create_graph(graph_trajectories, 0.0001, 'grid_200', 0.0003, 45)
+    create_graph(graph_trajectories, 0.0001, 'grid_200', 0.0002, 45)
 
 create_all_graphs()
