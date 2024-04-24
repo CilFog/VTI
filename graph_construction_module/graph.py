@@ -142,13 +142,13 @@ def create_edges(G, edge_radius_threshold, bearing_threshold, nodes_file_path, e
             if nearby_index != i: 
                 nearby_node, nearby_data = node_coords_list[nearby_index]
 
-                bearing = calculate_bearing(node, nearby_node)
-                bearing_diff = calculate_bearing_difference(node_cog, bearing)
+                # bearing = calculate_bearing(node, nearby_node)
+                # bearing_diff = calculate_bearing_difference(node_cog, bearing)
 
-                if bearing_diff <= bearing_threshold:
-                    distance = haversine_distance(node[0], node[1], nearby_node[0], nearby_node[1])
-                    G.add_edge(node, nearby_node, weight=distance)
-                    edge_count += 1
+                # if bearing_diff <= bearing_threshold:
+                distance = haversine_distance(node[0], node[1], nearby_node[0], nearby_node[1])
+                G.add_edge(node, nearby_node, weight=distance)
+                edge_count += 1
 
     print(f"Total edges created: {edge_count}")
 
