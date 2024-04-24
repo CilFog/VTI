@@ -11,7 +11,7 @@ from .functions import calculate_bearing, calculate_bearing_difference, export_g
 
 LOG_PATH = 'graph_log.txt'
 DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
-INPUT_FOLDER_PATH = os.path.join(DATA_FOLDER, 'input_graph_area/brunsbuettel_to_kiel/Cargo')
+INPUT_FOLDER_PATH = os.path.join(DATA_FOLDER, 'input_graph_area/skagen_harbor/Cargo')
 
 OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'graph_construction_module')
 OUTPUT_FOLDER_PATH = os.path.join(OUTPUT_FOLDER, 'output')
@@ -141,13 +141,12 @@ def create_edges(G, edge_radius_threshold, bearing_threshold, nodes_file_path, e
             if nearby_index != i: 
                 nearby_node, nearby_data = node_coords_list[nearby_index]
 
-                bearing = calculate_bearing(node, nearby_node)
+                # bearing = calculate_bearing(node, nearby_node)
 
-                print(bearing)
-                if bearing <= bearing_threshold:
-                    distance = haversine_distance(node[0], node[1], nearby_node[0], nearby_node[1])
-                    G.add_edge(node, nearby_node, weight=distance)
-                    edge_count += 1
+                # if bearing <= bearing_threshold:
+                distance = haversine_distance(node[0], node[1], nearby_node[0], nearby_node[1])
+                G.add_edge(node, nearby_node, weight=distance)
+                edge_count += 1
 
     print(f"Total edges created: {edge_count}")
 
