@@ -11,7 +11,7 @@ from .functions import calculate_bearing, calculate_bearing_difference, export_g
 
 LOG_PATH = 'graph_log.txt'
 DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
-INPUT_FOLDER_PATH = os.path.join(DATA_FOLDER, 'input_graph_area/doggersbank_to_lemvig')
+INPUT_FOLDER_PATH = os.path.join(DATA_FOLDER, 'input_graph_area/brunsbuettel_to_kiel/Cargo')
 
 OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'graph_construction_module')
 OUTPUT_FOLDER_PATH = os.path.join(OUTPUT_FOLDER, 'output')
@@ -49,12 +49,22 @@ def extract_original_trajectories() -> list:
                     points_with_metadata = gdf_curr[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].itertuples(index=False, name=None)
                     ais_points.extend(points_with_metadata)
 
+        print("Number of points:", len(ais_points))
+
         return ais_points
     except Exception as e:
         logging.warning(f'Error occurred trying to extract trajectories: {repr(e)}')
         return []
 
+def calculate_cog_difference(cog1, cog2):
+    """Calculate the absolute difference in COG, adjusted for circular COG values."""
+    diff = abs(cog1 - cog2) % 360
+    if diff > 180:
+        diff = 360 - diff
+    return diff
+
 def geometric_sampling(trajectories, min_distance_threshold):
+
     print("Performing geometric sampling")
     if trajectories is None or len(trajectories) == 0:
         logging.error('No trajectories data provided to geometric_sampling.')
@@ -72,18 +82,29 @@ def geometric_sampling(trajectories, min_distance_threshold):
     for i in range(len(coordinates)):
         if i in excluded_indices:
             continue
-        # Add the current point to the list of sampled indices
+
+        # Initially add the current point to the list of sampled indices
         sampled_indices.append(i)
-        # Find all points within the specified minimum distance
         indices = kdtree.query_ball_point(coordinates[i], min_distance_threshold)
-        # Add these points to the excluded_indices set
+
+        # Track if an opposite COG point has been kept
+        opposite_cog_point_kept = False
+
+        for j in indices:
+            if j != i:
+                cog_diff = calculate_cog_difference(trajectories[i][4], trajectories[j][4])  # Assuming COG is at index 5
+                if cog_diff > 140 and cog_diff < 215:  # COG difference approximately 180 degrees
+                    if not opposite_cog_point_kept:  # Check if no opposite COG point has been kept yet
+                        sampled_indices.append(j)
+                        opposite_cog_point_kept = True
+
+        # Update excluded indices to include all points within the radius, ensuring each is only considered once
         excluded_indices.update(indices)
 
     # Filter the trajectories to only include sampled points
     sampled_trajectories = [trajectories[i] for i in sampled_indices]
 
-    print("Number of points:", len(sampled_trajectories))
-    
+    print("Number of points after sampling:", len(sampled_trajectories))
     return sampled_trajectories
 
 
@@ -164,6 +185,6 @@ def create_graph(graph_trajectories, geometric_parameter, grid_size, edge_connec
 
 def create_all_graphs():
     graph_trajectories = extract_original_trajectories()
-    create_graph(graph_trajectories, 0.0001, 'grid_200', 0.0003, 45)
+    create_graph(graph_trajectories, 0.0001, 'grid_200', 0.00012, 45)
 
 create_all_graphs()
