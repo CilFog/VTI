@@ -135,20 +135,18 @@ def create_edges(G, edge_radius_threshold, bearing_threshold, nodes_file_path, e
     edge_count = 0
 
     for i, (node, data) in enumerate(node_coords_list):
-        node_cog = data['cog']
         nearby_indices = kdtree.query_ball_point(node, edge_radius_threshold)
         
         for nearby_index in nearby_indices:
             if nearby_index != i: 
                 nearby_node, nearby_data = node_coords_list[nearby_index]
 
-                # bearing = calculate_bearing(node, nearby_node)
-                # bearing_diff = calculate_bearing_difference(node_cog, bearing)
-
-                # if bearing_diff <= bearing_threshold:
-                distance = haversine_distance(node[0], node[1], nearby_node[0], nearby_node[1])
-                G.add_edge(node, nearby_node, weight=distance)
-                edge_count += 1
+                bearing = calculate_bearing(node, nearby_node)
+                print(bearing)
+                if bearing <= bearing_threshold:
+                    distance = haversine_distance(node[0], node[1], nearby_node[0], nearby_node[1])
+                    G.add_edge(node, nearby_node, weight=distance)
+                    edge_count += 1
 
     print(f"Total edges created: {edge_count}")
 
@@ -166,6 +164,6 @@ def create_graph(graph_trajectories, geometric_parameter, grid_size, edge_connec
 
 def create_all_graphs():
     graph_trajectories = extract_original_trajectories()
-    create_graph(graph_trajectories, 0.0002, 'grid_400', 0.0005, 45)
+    create_graph(graph_trajectories, 0.02, 'grid_400', 0.0005, 45)
 
 create_all_graphs()
