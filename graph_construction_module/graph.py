@@ -165,7 +165,7 @@ def create_edges(G, edge_radius_threshold, bearing_threshold, nodes_file_path, e
                 nearby_cog = nearby_data['cog']
 
                 cog_diff = calculate_bearing_difference(node_cog, nearby_cog)
-                print(cog_diff)
+                
                 if cog_diff <= bearing_threshold:
                     distance = haversine_distance(node[0], node[1], nearby_node[0], nearby_node[1])
                     G.add_edge(node, nearby_node, weight=distance)
@@ -187,6 +187,6 @@ def create_graph(graph_trajectories, geometric_parameter, grid_size, edge_connec
 
 def create_all_graphs():
     graph_trajectories = extract_original_trajectories()
-    create_graph(graph_trajectories, 0.0001, 'grid_200', 0.0002, 45)
+    create_graph(graph_trajectories, 0.0001, 'grid_200', 0.0003, 45)
 
 create_all_graphs()
