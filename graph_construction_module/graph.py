@@ -11,7 +11,7 @@ from .functions import calculate_bearing, calculate_bearing_difference, export_g
 
 LOG_PATH = 'graph_log.txt'
 DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
-INPUT_FOLDER_PATH = os.path.join(DATA_FOLDER, 'input_graph_area/brunsbuettel_to_kiel/Cargo')
+INPUT_FOLDER_PATH = os.path.join(DATA_FOLDER, 'input_graph_area/brunsbuettel_to_kiel')
 
 OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'graph_construction_module')
 OUTPUT_FOLDER_PATH = os.path.join(OUTPUT_FOLDER, 'output')
