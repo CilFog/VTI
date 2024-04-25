@@ -1,4 +1,5 @@
 import os
+from shapely.geometry import Point, box
 import numpy as np
 import pandas as pd
 import networkx as nx
@@ -7,11 +8,11 @@ from scipy.spatial import cKDTree
 from sqlalchemy import create_engine
 from data.logs.logging import setup_logger
 from db_connection.config import load_config
-from .functions import calculate_bearing, calculate_bearing_difference, export_graph_to_geojson, haversine_distance
+from .functions import calculate_bearing_difference, export_graph_to_geojson, haversine_distance
 
 LOG_PATH = 'graph_log.txt'
 DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
-INPUT_FOLDER_PATH = os.path.join(DATA_FOLDER, 'input_graph_area/brunsbuettel_to_kiel')
+INPUT_FOLDER_PATH = os.path.join(DATA_FOLDER, 'input_graph_area')
 
 OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'graph_construction_module')
 OUTPUT_FOLDER_PATH = os.path.join(OUTPUT_FOLDER, 'output')
@@ -34,21 +35,15 @@ def get_trajectory_df(file_path) -> gpd.GeoDataFrame:
         logging.warning(f'Error occurred trying to retrieve trajectory csv: {repr(e)}')
 
         
-def extract_original_trajectories() -> list:
+def extract_original_trajectories(input_folder) -> list:
     try: 
         ais_points = []
-        for dirpath, dirnames, filenames in os.walk(INPUT_FOLDER_PATH):
-            for filename in filenames:
-                file_path = os.path.join(dirpath, filename)
-                gdf_curr:gpd.GeoDataFrame = get_trajectory_df(file_path=file_path)
-
-                if (gdf_curr.empty):
-                    continue
-                
-                if len(gdf_curr) >= 2:
-                    points_with_metadata = gdf_curr[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].itertuples(index=False, name=None)
-                    ais_points.extend(points_with_metadata)
-
+        for filename in os.listdir(input_folder):
+            file_path = os.path.join(input_folder, filename)
+            gdf = get_trajectory_df(file_path)
+            if gdf is not None and not gdf.empty and len(gdf) >= 2:
+                points_with_metadata = gdf[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].itertuples(index=False, name=None)
+                ais_points.extend(points_with_metadata)
         print("Number of points:", len(ais_points))
 
         return ais_points
@@ -175,8 +170,6 @@ def create_edges(G, edge_radius_threshold, bearing_threshold, nodes_file_path, e
 
     export_graph_to_geojson(G, nodes_file_path, edges_file_path)
 
-
-
 def create_graph(graph_trajectories, geometric_parameter, grid_size, edge_conneciton, bearing_parameter):
     geometric_sampled_nodes = geometric_sampling(graph_trajectories, geometric_parameter)
 
@@ -185,8 +178,60 @@ def create_graph(graph_trajectories, geometric_parameter, grid_size, edge_connec
     edges_file_path = os.path.join(OUTPUT_FOLDER_PATH, f'graph_cargo/edges.geojson')
     create_edges(nodes, edge_conneciton, bearing_parameter, nodes_file_path, edges_file_path) 
 
-def create_all_graphs():
-    graph_trajectories = extract_original_trajectories()
-    create_graph(graph_trajectories, 0.00025, 'grid_200', 0.00075, 45)
+def create_graphs_for_folders():
+    for folder_name in os.listdir(INPUT_FOLDER_PATH):
+        folder_path = os.path.join(INPUT_FOLDER_PATH, folder_name)
+        if os.path.isdir(folder_path):
+            print(f"Processing {folder_name}")
+            trajectories = extract_original_trajectories(folder_path)
+            output_subfolder = os.path.join(OUTPUT_FOLDER_PATH, folder_name)
 
-create_all_graphs()
+            if not os.path.exists(output_subfolder):
+                os.makedirs(output_subfolder)
+            nodes_file_path = os.path.join(output_subfolder, 'nodes.geojson')
+            edges_file_path = os.path.join(output_subfolder, 'edges.geojson')
+            
+            create_graph(trajectories, 0.00050, 'grid_200', 0.0015, 45, nodes_file_path, edges_file_path)
+
+
+create_graphs_for_folders()
+
+
+# def create_all_graphs():
+#     graph_trajectories = extract_original_trajectories()
+#     create_graph(graph_trajectories, 0.00025, 'grid_200', 0.00075, 45)
+
+
+
+# def create_grid_layer(cell_size_km, output_file_path):
+#     min_lat, min_lon, max_lat, max_lon = 53.00, 3.00, 59.00, 16.00
+#     lat_conversion = 111.32  # km per degree
+#     avg_lat = np.mean([min_lat, max_lat])
+#     lon_conversion = lat_conversion * np.cos(np.radians(avg_lat))
+    
+#     lat_step = cell_size_km / lat_conversion
+#     lon_step = cell_size_km / lon_conversion
+
+#     n_cells_lat = int((max_lat - min_lat) / lat_step)
+#     n_cells_lon = int((max_lon - min_lon) / lon_step)
+
+#     with open(output_file_path, 'w') as file:
+#         file.write("cell_id,min_lon,max_lon,min_lat,max_lat\n")
+#         for i in range(n_cells_lat):
+#             for j in range(n_cells_lon):
+#                 lat0 = min_lat + i * lat_step
+#                 lon0 = min_lon + j * lon_step
+#                 lat1 = lat0 + lat_step
+#                 lon1 = lon0 + lon_step
+
+#                 cell_name = f"{i+1}_{j+1}"
+
+#                 # Write each bounding box to the text file
+#                 file.write(f"{cell_name},{lon0},{lon1},{lat0},{lat1}\n")
+
+#     print(f"Grid data written to {output_file_path}")
+
+# create_grid_layer(50.0, os.path.join(OUTPUT_FOLDER_PATH, f'graph_cargo/file.txt'))
+
+
+#create_all_graphs()
