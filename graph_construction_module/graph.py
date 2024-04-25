@@ -160,10 +160,9 @@ def create_edges(G, edge_radius_threshold, bearing_threshold, nodes_file_path, e
         nearby_indices = kdtree.query_ball_point(node, edge_radius_threshold)
         
         for nearby_index in nearby_indices:
-            nearby_cog = data['cog']
-
             if nearby_index != i: 
                 nearby_node, nearby_data = node_coords_list[nearby_index]
+                nearby_cog = nearby_data['cog']
 
                 cog_diff = calculate_bearing_difference(node_cog, nearby_cog)
 
