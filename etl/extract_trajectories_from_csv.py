@@ -100,9 +100,7 @@ def cleanse_df(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     Takes a df and cleanses it according to the set predicates.
     :param df: df to cleanse'
     :return: A cleansed geodataframe, sorted by timestamp (ascending)
-    """
-    
-    # df['Ship type'] = df['Ship type'].str.lower().replace(' ', '_').replace('/', '_')
+    """    
     ship_types = ['fishing', 'tanker', 'tug', 'cargo', 'passenger', 'dredging', 'law enforcement', 'anti-pollution', 'pilot', 'pleasure', 'towing', 'port tender', 'diving', 'towing long/wide', ''] 
       
     # Remove all the rows which does not satisfy our conditions

@@ -3,19 +3,22 @@ import sys
 import random
 import shutil
 import time as t
+import pandas as pd
 import geopandas as gpd
 from pathlib import Path
 from typing import Callable
-from .classes import SparsifyResult, brunsbuettel_to_kiel_polygon, aalborg_harbor_to_kattegat_bbox, doggersbank_to_lemvig_bbox, skagens_harbor_bbox
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, box
 from multiprocessing import freeze_support
 from data.logs.logging import setup_logger
 from concurrent.futures import ProcessPoolExecutor
+from .classes import SparsifyResult, brunsbuettel_to_kiel_polygon, aalborg_harbor_to_kattegat_bbox, doggersbank_to_lemvig_bbox, skagens_harbor_bbox
 from .sparcify_methods import sparcify_realisticly_strict_trajectories, sparcify_trajectories_realisticly, sparcify_large_time_gap_with_threshold_percentage, sparcify_trajectories_randomly_using_threshold, get_trajectory_df_from_txt
 
 DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
+CELL_TXT = os.path.join(DATA_FOLDER, 'cells.txt')
 INPUT_GRAPH_FOLDER = os.path.join(DATA_FOLDER, 'input_graph')
 INPUT_GRAPH_AREA_FOLDER = os.path.join(DATA_FOLDER, 'input_graph_area')
+INPUT_GRAPH_CELLS_FOLDER = os.path.join(DATA_FOLDER, 'input_graph_cells')
 INPUT_IMPUTATION_FOLDER = os.path.join(DATA_FOLDER, 'input_imputation')
 INPUT_TEST_DATA_FOLDER = os.path.join(INPUT_IMPUTATION_FOLDER, 'test')
 INPUT_TEST_DATA_FOLDER_ORIGINAL_FOLDER= os.path.join(INPUT_TEST_DATA_FOLDER, 'original')
@@ -205,7 +208,51 @@ def find_area_input_files():
 
     logging.info('Finished finding area input files')        
 
-find_area_input_files()
+def find_cell_input_files():
+    os_path_split = '/' if '/' in INPUT_GRAPH_FOLDER else '\\'
+
+    cells_df = pd.read_csv(CELL_TXT)
+    cells_df['geometry'] = cells_df.apply(lambda row: box(row['min_lon'], row['min_lat'], row['max_lon'], row['max_lat']), axis=1)
+    cells_gdf = gpd.GeoDataFrame(cells_df, geometry='geometry', crs="EPSG:4326")
+
+    all_files = list(Path(INPUT_GRAPH_FOLDER).rglob('*.txt')) # List all files in the directory recursively
+    all_files = [str(path) for path in all_files] # Convert Path objects to strings
+
+    num_files = len(all_files)
+
+    logging.info(f'Began finding area input files for {len(all_files)} files')
+    i = 1;
+    for file_path in all_files:
+        try:
+            trajectory_df = get_trajectory_df_from_txt(file_path)
+            
+            # Perform a spatial join to identify points from trajectory_df that intersect harbors
+            points_cells_harbors = gpd.sjoin(trajectory_df, cells_gdf, how="left", predicate="intersects", lsuffix='left', rsuffix='right')
+
+            for (cell_id, group) in points_cells_harbors.groupby('cell_id'):
+                if group.empty:
+                    continue
+
+                vessel_mmsi_folder = f'{file_path.split(os_path_split)[-3]}/{file_path.split(os_path_split)[-2]}'
+                output_folder = INPUT_GRAPH_CELLS_FOLDER
+                output_folder = os.path.join(output_folder, str(cell_id))
+                output_folder = os.path.join(output_folder, vessel_mmsi_folder)
+
+                os.makedirs(output_folder, exist_ok=True)
+
+                output_path = os.path.join(output_folder, os.path.basename(file_path))
+                group[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'navigational_status']].reset_index(drop=True).to_csv(output_path, sep=',', index=True, header=True, mode='w') 
+            
+            sys.stdout.write(f"\rCell data created for {i}/{num_files} trajectories")
+            sys.stdout.flush()
+            i += 1
+        
+        except Exception as e:
+            logging.error(f'Error was thrown with {repr(e)} for file {file_path}')       
+
+    logging.info('Finished finding area input files')        
+
+find_cell_input_files()
 #write_trajectories_for_area(INPUT_VALIDATION_DATA_ORIGINAL_FOLDER, INPUT_VALIDATION_SPARSED_AREA_FOLDER)
 #write_trajectories_for_all(INPUT_VALIDATION_DATA_ORIGINAL_FOLDER, INPUT_VALIDATION_SPARSED_ALL_FOLDER)
 #write_trajectories_for_area(INPUT_TEST_DATA_FOLDER_ORIGINAL_FOLDER, INPUT_TEST_SPARSED_AREA_FOLDER)
