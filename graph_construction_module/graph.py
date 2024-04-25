@@ -170,12 +170,9 @@ def create_edges(G, edge_radius_threshold, bearing_threshold, nodes_file_path, e
 
     export_graph_to_geojson(G, nodes_file_path, edges_file_path)
 
-def create_graph(graph_trajectories, geometric_parameter, grid_size, edge_conneciton, bearing_parameter):
+def create_graph(graph_trajectories, geometric_parameter, grid_size, edge_conneciton, bearing_parameter, nodes_file_path, edges_file_path):
     geometric_sampled_nodes = geometric_sampling(graph_trajectories, geometric_parameter)
-
     nodes = create_nodes(geometric_sampled_nodes, grid_size)
-    nodes_file_path = os.path.join(OUTPUT_FOLDER_PATH, f'graph_cargo/nodes.geojson')
-    edges_file_path = os.path.join(OUTPUT_FOLDER_PATH, f'graph_cargo/edges.geojson')
     create_edges(nodes, edge_conneciton, bearing_parameter, nodes_file_path, edges_file_path) 
 
 def create_graphs_for_folders():
