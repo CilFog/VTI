@@ -38,13 +38,17 @@ def get_trajectory_df(file_path) -> gpd.GeoDataFrame:
 def extract_original_trajectories(input_folder) -> list:
     try: 
         ais_points = []
-        for filename in os.listdir(input_folder):
-            file_path = os.path.join(input_folder, filename)
-            gdf = get_trajectory_df(file_path)
-            if gdf is not None and not gdf.empty and len(gdf) >= 2:
-                points_with_metadata = gdf[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].itertuples(index=False, name=None)
-                ais_points.extend(points_with_metadata)
-        print("Number of points:", len(ais_points))
+        for dirpath, dirnames, filenames in os.walk(input_folder):
+            for filename in filenames:
+                file_path = os.path.join(dirpath, filename)
+                gdf_curr:gpd.GeoDataFrame = get_trajectory_df(file_path=file_path)
+
+                if (gdf_curr.empty):
+                    continue
+                
+                if len(gdf_curr) >= 2:
+                    points_with_metadata = gdf_curr[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].itertuples(index=False, name=None)
+                    ais_points.extend(points_with_metadata)
 
         return ais_points
     except Exception as e:
