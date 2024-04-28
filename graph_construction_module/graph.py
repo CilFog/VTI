@@ -12,7 +12,7 @@ from .functions import calculate_bearing_difference, export_graph_to_geojson, ha
 
 LOG_PATH = 'graph_log.txt'
 DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
-INPUT_FOLDER_PATH = os.path.join(DATA_FOLDER, 'input_graph_cells')
+INPUT_FOLDER_PATH = os.path.join(DATA_FOLDER, 'input_graph_cells/4_9/Cargo')
 
 OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'graph_construction_module')
 OUTPUT_FOLDER_PATH = os.path.join(OUTPUT_FOLDER, 'output')
@@ -201,7 +201,7 @@ def create_graphs_for_cells():
             nodes_file_path = os.path.join(output_subfolder, 'nodes.geojson')
             edges_file_path = os.path.join(output_subfolder, 'edges.geojson')
             print(len(trajectories))
-            
+
             # if len(trajectories) > 2000000:
             #     create_graph(trajectories, 0.002, 'grid_400', 0.008, 45, nodes_file_path, edges_file_path)
             # if len(trajectories) > 1000000:
