@@ -188,8 +188,8 @@ def create_graphs_for_cells():
         folder_path = os.path.join(INPUT_FOLDER_PATH, folder_name)
 
         if os.path.isdir(folder_path):
-            print(f"Processing {folder_name}")
             if folder_name != "Cargo":
+                print(f"Processing {folder_name}")
                 trajectories = extract_original_trajectories(folder_path)
 
             if len(trajectories) == 0:
@@ -206,16 +206,14 @@ def create_graphs_for_cells():
     nodes_file_path = os.path.join(output_subfolder, 'nodes.geojson')
     edges_file_path = os.path.join(output_subfolder, 'edges.geojson')
 
-    print(len(all_trajectories))
-
-    # if len(all_trajectories) > 2000000:
-    #     create_graph(all_trajectories, 0.002, 'grid_400', 0.008, 45, nodes_file_path, edges_file_path)
-    # if len(all_trajectories) > 1000000:
-    #     create_graph(all_trajectories, 0.002, 'grid_400', 0.008, 45, nodes_file_path, edges_file_path)
-    # if len(all_trajectories) > 500000:
-    #     create_graph(all_trajectories, 0.0005, 'grid_400', 0.0015, 45, nodes_file_path, edges_file_path)
-    # else:
-    #     create_graph(all_trajectories, 0.00025, 'grid_400', 0.00075, 45, nodes_file_path, edges_file_path)
+    if len(all_trajectories) > 2000000:
+        create_graph(all_trajectories, 0.002, 'grid_200', 0.006, 45, nodes_file_path, edges_file_path)
+    if len(all_trajectories) > 1000000:
+        create_graph(all_trajectories, 0.002, 'grid_400', 0.008, 45, nodes_file_path, edges_file_path)
+    if len(all_trajectories) > 500000:
+        create_graph(all_trajectories, 0.0005, 'grid_400', 0.0015, 45, nodes_file_path, edges_file_path)
+    else:
+        create_graph(all_trajectories, 0.00025, 'grid_400', 0.00075, 45, nodes_file_path, edges_file_path)
             
 
 create_graphs_for_cells()
