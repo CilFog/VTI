@@ -1,3 +1,4 @@
+import json
 import os
 from shapely.geometry import Point, box
 import numpy as np
@@ -185,6 +186,14 @@ def create_graphs_for_cells():
         folder_path = os.path.join(INPUT_FOLDER_PATH, folder_name)
 
         if os.path.isdir(folder_path):
+            output_subfolder = os.path.join(OUTPUT_FOLDER_PATH, folder_name)
+
+            # Check if the output folder already exists
+            if os.path.exists(output_subfolder):
+                print(f"Graph already exists for {folder_name}, skipping...")
+                continue
+
+        if os.path.isdir(folder_path):
             print(f"Processing {folder_name}")
             trajectories = extract_original_trajectories(folder_path)
 
@@ -196,8 +205,7 @@ def create_graphs_for_cells():
             
             output_subfolder = os.path.join(OUTPUT_FOLDER_PATH, folder_name)
 
-            if not os.path.exists(output_subfolder):
-                os.makedirs(output_subfolder)
+            os.makedirs(output_subfolder)
 
             nodes_file_path = os.path.join(output_subfolder, 'nodes.geojson')
             edges_file_path = os.path.join(output_subfolder, 'edges.geojson')
@@ -212,6 +220,85 @@ def create_graphs_for_cells():
 
 create_graphs_for_cells()
 
+
+def load_geojson(file_path):
+    with open(file_path, 'r') as f:
+        return json.load(f)
+
+def create_graph_from_geojson(nodes_geojson_path, edges_geojson_path):
+    try: 
+        G = nx.Graph()
+        
+        # Load GeoJSON files
+        nodes_geojson = load_geojson(nodes_geojson_path)
+        edges_geojson = load_geojson(edges_geojson_path)
+        
+        # Add nodes
+        for feature in nodes_geojson['features']:
+            node_id = tuple(feature['geometry']['coordinates'][::-1])  
+            G.add_node(node_id, **feature['properties'])
+        
+        # Add edges
+        for feature in edges_geojson['features']:
+            start_node = tuple(feature['geometry']['coordinates'][0][::-1])  
+            end_node = tuple(feature['geometry']['coordinates'][1][::-1])  
+            G.add_edge(start_node, end_node, **feature['properties'])
+        
+        return G
+    except Exception as e:
+        logging.warning(f'Error occurred trying to retrieve graph: {repr(e)}')
+
+GRAPH_INPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'graph_construction_module')
+GRAPH_INPUT_NODES_G1 = os.path.join(GRAPH_INPUT_FOLDER, 'output\\4_9\\nodes.geojson')
+GRAPH_INPUT_EDGES_G1 = os.path.join(GRAPH_INPUT_FOLDER, 'output\\4_9\\edges.geojson')
+GRAPH_INPUT_NODES_G2 = os.path.join(GRAPH_INPUT_FOLDER, 'output\\4_10\\nodes.geojson')
+GRAPH_INPUT_EDGES_G2 = os.path.join(GRAPH_INPUT_FOLDER, 'output\\4_10\\edges.geojson')  
+
+def connect_graphs(threshold_distance):
+    
+    G1 = create_graph_from_geojson(GRAPH_INPUT_NODES_G1, GRAPH_INPUT_EDGES_G1)
+    G2 = create_graph_from_geojson(GRAPH_INPUT_NODES_G2, GRAPH_INPUT_EDGES_G2)
+
+    node_list_G2 = [(node, data['longitude'], data['latitude']) for node, data in G2.nodes(data=True)]
+    tree = cKDTree([(lon, lat) for _, lon, lat in node_list_G2])
+
+
+    new_edges_G1 = []
+    new_edges_G2 = []
+
+    # Connect nodes within threshold distance
+    for node1, data1 in G1.nodes(data=True):
+        lon1, lat1 = data1['longitude'], data1['latitude']
+        nearby_indices = tree.query_ball_point([lon1, lat1], threshold_distance)
+        
+        for index in nearby_indices:
+            node2, lon2, lat2 = node_list_G2[index]
+            distance = np.sqrt((lon2 - lon1)**2 + (lat2 - lat1)**2)
+            if distance <= threshold_distance:
+                new_edges_G1.append((node1, node2, distance))
+                new_edges_G2.append((node2, node1, distance))  # If G2 should also reflect the connection
+
+    for node1, node2, dist in new_edges_G1:
+        G1.add_edge(node1, node2, weight=dist)
+
+    for node2, node1, dist in new_edges_G2:
+        G2.add_edge(node2, node1, weight=dist)
+
+    output_subfolder = os.path.join(OUTPUT_FOLDER_PATH, 'tester')
+
+    if not os.path.exists(output_subfolder):
+        os.makedirs(output_subfolder)
+
+    nodes_file_path_g1 = os.path.join(output_subfolder, 'g1-nodes.geojson')
+    edges_file_path_g1 = os.path.join(output_subfolder, 'g1-edges.geojson')
+    nodes_file_path_g2 = os.path.join(output_subfolder, 'g2-nodes.geojson')
+    edges_file_path_g2 = os.path.join(output_subfolder, 'g2-edges.geojson')
+
+    # Update GeoJSON files
+    export_graph_to_geojson(G1, nodes_file_path_g1, edges_file_path_g1)
+    export_graph_to_geojson(G2, nodes_file_path_g2, edges_file_path_g2)
+
+#connect_graphs(0.001)
 
 # def create_all_graphs():
 #     graph_trajectories = extract_original_trajectories()
