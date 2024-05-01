@@ -6,10 +6,10 @@ import numpy as np
 from tslearn.metrics import dtw
 
 ORGIGNAL_TRAJECTORY = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
-ORGIGNAL_TRAJECTORY_PATH = os.path.join(ORGIGNAL_TRAJECTORY, 'input_imputation\\area\\aalborg_harbor\\large_time_gap_0_5\\Cargo\\209525000_15-01-2024_00-05-59.txt')
+ORGIGNAL_TRAJECTORY_PATH = os.path.join(ORGIGNAL_TRAJECTORY, 'input_imputation\\244059000_24-03-2024_04-40-36.txt')
 
 IMPUTED_TRAJECTORY = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'imputation_module')
-IMPUTED_TRAJECTORY_PATH = os.path.join(IMPUTED_TRAJECTORY, 'output\\aalborg-nodes.geojson')
+IMPUTED_TRAJECTORY_PATH = os.path.join(IMPUTED_TRAJECTORY, 'output\\new-nodes.geojson')
 
 def load_geojson_extract_coordinates(file_path):
     with open(file_path, 'r') as f:

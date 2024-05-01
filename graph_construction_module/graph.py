@@ -1,6 +1,5 @@
-import json
 import os
-from shapely.geometry import Point, box
+import json
 import numpy as np
 import pandas as pd
 import networkx as nx
@@ -9,18 +8,31 @@ from scipy.spatial import cKDTree
 from sqlalchemy import create_engine
 from data.logs.logging import setup_logger
 from db_connection.config import load_config
-from .functions import calculate_bearing_difference, export_graph_to_geojson, haversine_distance
+from utils import calculate_bearing_difference, export_graph_to_geojson, haversine_distance
 
-LOG_PATH = 'graph_log.txt'
+"""
+    Graph input in the form of trajectory points extracted from the raw AIS data
+"""
 DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 INPUT_FOLDER_PATH = os.path.join(DATA_FOLDER, 'input_graph_cells')
 
+"""
+    Threshold values from which the graphs for each cell will be created 
+"""
+NODE_THRESHOLD = 0.001
+EDGE_THRESHOLD = 0.003
+COG_THRESHOLD = 45
+
+"""
+    Where the created graphs will be placed
+"""
 OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'graph_construction_module')
-OUTPUT_FOLDER_PATH = os.path.join(OUTPUT_FOLDER, 'output')
+OUTPUT_FOLDER_PATH = os.path.join(OUTPUT_FOLDER, f'output/{NODE_THRESHOLD}_{EDGE_THRESHOLD}_{COG_THRESHOLD}')
 
 if not os.path.exists(OUTPUT_FOLDER_PATH):
     os.makedirs(OUTPUT_FOLDER_PATH)
 
+LOG_PATH = 'graph_log.txt'
 logging = setup_logger(name=LOG_PATH, log_file=LOG_PATH)
 
 def get_trajectory_df(file_path) -> gpd.GeoDataFrame:
@@ -109,7 +121,7 @@ def geometric_sampling(trajectories, min_distance_threshold):
     return sampled_trajectories
 
 
-def create_nodes(sampled_trajectories, grid_size):
+def create_nodes(sampled_trajectories):
     print("Creating Nodes")
     """
         Receives the geometrically sampled AIS points, assigns them with a avg_depth
@@ -125,15 +137,32 @@ def create_nodes(sampled_trajectories, grid_size):
 
     config = load_config()
     engine = create_engine(f"postgresql://{config['user']}:{config['password']}@{config['host']}:{config['port']}/{config['database']}")
-    grid = f"SELECT * FROM {grid_size}"
-    grids_gdf = gpd.read_postgis(
-        grid, 
-        engine, 
-        geom_col='geometry'
-        )
     
-    join = gpd.sjoin(ais_points_gdf, grids_gdf, how='left', predicate='within')
-    ais_points_gdf['avg_depth'] = join['avg_depth']
+    query = """
+        SELECT a.index, a.geometry AS ais_geometry, b.depth, b.geometry AS depth_geometry
+        FROM (SELECT row_number() OVER () AS index, geometry FROM ais_points) AS a
+        CROSS JOIN LATERAL (
+            SELECT depth, geometry
+            FROM depth_points
+            ORDER BY a.geometry <-> geometry
+            LIMIT 1
+        ) AS b;
+    """
+
+    # Load AIS points into temporary table for query performance
+    ais_points_gdf.to_postgis("ais_points", engine, if_exists="replace", index=False)
+
+    # Execute query and load results
+    nearest_depths_df = pd.read_sql(query, engine)
+
+    # Join nearest depths back to original AIS points DataFrame using the index for correct alignment
+    ais_points_gdf = ais_points_gdf.merge(nearest_depths_df, left_index=True, right_on='index')
+
+    # Assign the nearest depth directly
+    ais_points_gdf['avg_depth'] = ais_points_gdf['depth']
+
+    ais_points_gdf = ais_points_gdf[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'avg_depth', 'geometry']]
+    
 
     G = nx.Graph()
     for index, row in ais_points_gdf.iterrows():
@@ -176,9 +205,9 @@ def create_edges(G, edge_radius_threshold, bearing_threshold, nodes_file_path, e
 
     export_graph_to_geojson(G, nodes_file_path, edges_file_path)
 
-def create_graph(graph_trajectories, geometric_parameter, grid_size, edge_conneciton, bearing_parameter, nodes_file_path, edges_file_path):
+def create_graph(graph_trajectories, geometric_parameter, edge_conneciton, bearing_parameter, nodes_file_path, edges_file_path):
     geometric_sampled_nodes = geometric_sampling(graph_trajectories, geometric_parameter)
-    nodes = create_nodes(geometric_sampled_nodes, grid_size)
+    nodes = create_nodes(geometric_sampled_nodes)
     create_edges(nodes, edge_conneciton, bearing_parameter, nodes_file_path, edges_file_path) 
 
 def create_graphs_for_cells():
@@ -210,15 +239,16 @@ def create_graphs_for_cells():
             nodes_file_path = os.path.join(output_subfolder, 'nodes.geojson')
             edges_file_path = os.path.join(output_subfolder, 'edges.geojson')
 
-            if len(trajectories) > 1000000:
-                create_graph(trajectories, 0.001, 'grid_200', 0.003, 45, nodes_file_path, edges_file_path)
-            elif len(trajectories) > 500000:
-                create_graph(trajectories, 0.0005, 'grid_200', 0.0015, 45, nodes_file_path, edges_file_path)
-            else:
-                create_graph(trajectories, 0.00025, 'grid_200', 0.00075, 45, nodes_file_path, edges_file_path)
-            
+            create_graph(trajectories, NODE_THRESHOLD, EDGE_THRESHOLD, COG_THRESHOLD, nodes_file_path, edges_file_path)
 
 create_graphs_for_cells()
+
+
+
+
+
+
+
 
 
 def load_geojson(file_path):
@@ -226,57 +256,90 @@ def load_geojson(file_path):
         return json.load(f)
 
 def create_graph_from_geojson(nodes_geojson_path, edges_geojson_path):
-    try: 
-        G = nx.Graph()
-        
-        # Load GeoJSON files
-        nodes_geojson = load_geojson(nodes_geojson_path)
-        edges_geojson = load_geojson(edges_geojson_path)
-        
-        # Add nodes
-        for feature in nodes_geojson['features']:
-            node_id = tuple(feature['geometry']['coordinates'][::-1])  
-            G.add_node(node_id, **feature['properties'])
-        
-        # Add edges
-        for feature in edges_geojson['features']:
-            start_node = tuple(feature['geometry']['coordinates'][0][::-1])  
-            end_node = tuple(feature['geometry']['coordinates'][1][::-1])  
-            G.add_edge(start_node, end_node, **feature['properties'])
-        
-        return G
-    except Exception as e:
-        logging.warning(f'Error occurred trying to retrieve graph: {repr(e)}')
+    if not os.path.exists(nodes_geojson_path) or not os.path.exists(edges_geojson_path):
+        return None
 
-GRAPH_INPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'graph_construction_module')
-GRAPH_INPUT_NODES_G1 = os.path.join(GRAPH_INPUT_FOLDER, 'output\\4_9\\nodes.geojson')
-GRAPH_INPUT_EDGES_G1 = os.path.join(GRAPH_INPUT_FOLDER, 'output\\4_9\\edges.geojson')
-GRAPH_INPUT_NODES_G2 = os.path.join(GRAPH_INPUT_FOLDER, 'output\\4_10\\nodes.geojson')
-GRAPH_INPUT_EDGES_G2 = os.path.join(GRAPH_INPUT_FOLDER, 'output\\4_10\\edges.geojson')  
-
-def connect_graphs(threshold_distance):
+    G = nx.Graph()
     
-    G1 = create_graph_from_geojson(GRAPH_INPUT_NODES_G1, GRAPH_INPUT_EDGES_G1)
-    G2 = create_graph_from_geojson(GRAPH_INPUT_NODES_G2, GRAPH_INPUT_EDGES_G2)
+    # Load GeoJSON files
+    nodes_geojson = load_geojson(nodes_geojson_path)
+    edges_geojson = load_geojson(edges_geojson_path)
+    
+    # Add nodes
+    for feature in nodes_geojson['features']:
+        node_id = tuple(feature['geometry']['coordinates'][::-1])  
+        G.add_node(node_id, **feature['properties'])
+    
+    # Add edges
+    for feature in edges_geojson['features']:
+        start_node = tuple(feature['geometry']['coordinates'][0][::-1])  
+        end_node = tuple(feature['geometry']['coordinates'][1][::-1])  
+        G.add_edge(start_node, end_node, **feature['properties'])
+    
+    return G
 
-    node_list_G2 = [(node, data['longitude'], data['latitude']) for node, data in G2.nodes(data=True)]
-    tree = cKDTree([(lon, lat) for _, lon, lat in node_list_G2])
+def get_neighbors(cell_id, cells_df):
+    row, col = map(int, cell_id.split('_'))
+    neighbors = []
+    for dr in (-1, 0, 1):
+        for dc in (-1, 0, 1):
+            if dr == 0 and dc == 0:
+                continue
+            nbr_row = row + dr
+            nbr_col = col + dc
+            nbr_id = f"{nbr_row}_{nbr_col}"
+            if nbr_id in cells_df.index:
+                neighbors.append(nbr_id)
+    return neighbors
 
+def process_all_cells(cells_df, threshold_distance):
+    GRAPH_INPUT_FOLDER = os.path.dirname(os.path.dirname(__file__)) + f'\\graph_construction_module\\output\\{NODE_THRESHOLD}_{EDGE_THRESHOLD}_{COG_THRESHOLD}'
+    PROCESSED_CELLS = set() 
+
+    for cell_id in cells_df.index:
+        if cell_id not in PROCESSED_CELLS:
+            connect_graphs(cell_id, cells_df, GRAPH_INPUT_FOLDER, threshold_distance, PROCESSED_CELLS)
+
+def connect_graphs(base_cell_id, cells_df, GRAPH_INPUT_FOLDER, threshold_distance, PROCESSED_CELLS):
+
+    base_graph = create_graph_from_geojson(
+        os.path.join(GRAPH_INPUT_FOLDER, f"{base_cell_id}\\nodes.geojson"),
+        os.path.join(GRAPH_INPUT_FOLDER, f"{base_cell_id}\\edges.geojson")
+    )
+    if not base_graph:
+        print(f"Graph {base_cell_id} has no data")
+        return
+    
+    print(f"Processing {base_cell_id}")
+
+    neighbors = get_neighbors(base_cell_id, cells_df)
+    PROCESSED_CELLS.add(base_cell_id)
+
+    for neighbor_id in neighbors:
+        if neighbor_id not in PROCESSED_CELLS:  
+            neighbor_nodes_path = os.path.join(GRAPH_INPUT_FOLDER, f"{neighbor_id}/nodes.geojson")
+            neighbor_edges_path = os.path.join(GRAPH_INPUT_FOLDER, f"{neighbor_id}/edges.geojson")
+            if os.path.exists(neighbor_nodes_path) and os.path.exists(neighbor_edges_path):
+                neighbor_graph = create_graph_from_geojson(neighbor_nodes_path, neighbor_edges_path)
+                if neighbor_graph:
+                    connect_two_graphs(base_graph, neighbor_graph, base_cell_id, neighbor_id, threshold_distance)
+
+def connect_two_graphs(G1, G2, base_cell_id, neighbor_id, threshold_distance):
+    G1_nodes = [(node, data['longitude'], data['latitude']) for node, data in G1.nodes(data=True) if 'longitude' in data and 'latitude' in data]
+    G2_nodes = [(node, data['longitude'], data['latitude']) for node, data in G2.nodes(data=True) if 'longitude' in data and 'latitude' in data]
+    tree_G2 = cKDTree([(lon, lat) for _, lon, lat in G2_nodes])
 
     new_edges_G1 = []
     new_edges_G2 = []
 
-    # Connect nodes within threshold distance
-    for node1, data1 in G1.nodes(data=True):
-        lon1, lat1 = data1['longitude'], data1['latitude']
-        nearby_indices = tree.query_ball_point([lon1, lat1], threshold_distance)
-        
+    for node1, lon1, lat1 in G1_nodes:
+        nearby_indices = tree_G2.query_ball_point([lon1, lat1], threshold_distance)
         for index in nearby_indices:
-            node2, lon2, lat2 = node_list_G2[index]
+            node2, lon2, lat2 = G2_nodes[index]
             distance = np.sqrt((lon2 - lon1)**2 + (lat2 - lat1)**2)
             if distance <= threshold_distance:
                 new_edges_G1.append((node1, node2, distance))
-                new_edges_G2.append((node2, node1, distance))  # If G2 should also reflect the connection
+                new_edges_G2.append((node2, node1, distance))
 
     for node1, node2, dist in new_edges_G1:
         G1.add_edge(node1, node2, weight=dist)
@@ -284,57 +347,24 @@ def connect_graphs(threshold_distance):
     for node2, node1, dist in new_edges_G2:
         G2.add_edge(node2, node1, weight=dist)
 
-    output_subfolder = os.path.join(OUTPUT_FOLDER_PATH, 'tester')
+    output_subfolder = os.path.join(OUTPUT_FOLDER_PATH, f'{base_cell_id}')
+    output_subfolder1 = os.path.join(OUTPUT_FOLDER_PATH, f'{neighbor_id}')
 
-    if not os.path.exists(output_subfolder):
-        os.makedirs(output_subfolder)
-
-    nodes_file_path_g1 = os.path.join(output_subfolder, 'g1-nodes.geojson')
-    edges_file_path_g1 = os.path.join(output_subfolder, 'g1-edges.geojson')
-    nodes_file_path_g2 = os.path.join(output_subfolder, 'g2-nodes.geojson')
-    edges_file_path_g2 = os.path.join(output_subfolder, 'g2-edges.geojson')
-
+    nodes_file_path_g1 = os.path.join(output_subfolder, f'nodes.geojson')
+    edges_file_path_g1 = os.path.join(output_subfolder, f'edges.geojson')
+    nodes_file_path_g2 = os.path.join(output_subfolder1, f'nodes.geojson')
+    edges_file_path_g2 = os.path.join(output_subfolder1, f'edges.geojson')
+    
     # Update GeoJSON files
     export_graph_to_geojson(G1, nodes_file_path_g1, edges_file_path_g1)
     export_graph_to_geojson(G2, nodes_file_path_g2, edges_file_path_g2)
 
-#connect_graphs(0.001)
 
-# def create_all_graphs():
-#     graph_trajectories = extract_original_trajectories()
-#     create_graph(graph_trajectories, 0.00025, 'grid_200', 0.00075, 45)
-
-
-
-# def create_grid_layer(cell_size_km, output_file_path):
-#     min_lat, min_lon, max_lat, max_lon = 53.00, 3.00, 59.00, 16.00
-#     lat_conversion = 111.32  # km per degree
-#     avg_lat = np.mean([min_lat, max_lat])
-#     lon_conversion = lat_conversion * np.cos(np.radians(avg_lat))
-    
-#     lat_step = cell_size_km / lat_conversion
-#     lon_step = cell_size_km / lon_conversion
-
-#     n_cells_lat = int((max_lat - min_lat) / lat_step)
-#     n_cells_lon = int((max_lon - min_lon) / lon_step)
-
-#     with open(output_file_path, 'w') as file:
-#         file.write("cell_id,min_lon,max_lon,min_lat,max_lat\n")
-#         for i in range(n_cells_lat):
-#             for j in range(n_cells_lon):
-#                 lat0 = min_lat + i * lat_step
-#                 lon0 = min_lon + j * lon_step
-#                 lat1 = lat0 + lat_step
-#                 lon1 = lon0 + lon_step
-
-#                 cell_name = f"{i+1}_{j+1}"
-
-#                 # Write each bounding box to the text file
-#                 file.write(f"{cell_name},{lon0},{lon1},{lat0},{lat1}\n")
-
-#     print(f"Grid data written to {output_file_path}")
-
-# create_grid_layer(50.0, os.path.join(OUTPUT_FOLDER_PATH, f'graph_cargo/file.txt'))
+# IMPUTATION_INPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
+# CELLS = os.path.join(IMPUTATION_INPUT_FOLDER, 'cells.txt')
+# cells_data = pd.read_csv(CELLS, index_col='cell_id')
+# process_all_cells(cells_data, 0.001)
 
 
-#create_all_graphs()
+
+
