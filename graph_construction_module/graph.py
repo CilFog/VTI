@@ -65,7 +65,7 @@ def calculate_cog_difference(cog1, cog2):
 
 def geometric_sampling(trajectories, min_distance_threshold):
 
-    print("Performing geometric sampling")
+    print("Sampling points")
     if trajectories is None or len(trajectories) == 0:
         logging.error('No trajectories data provided to geometric_sampling.')
         return []
@@ -103,7 +103,6 @@ def geometric_sampling(trajectories, min_distance_threshold):
     # Filter the trajectories to only include sampled points
     sampled_trajectories = [trajectories[i] for i in sampled_indices]
 
-    print("Number of points after sampling:", len(sampled_trajectories))
     return sampled_trajectories
 
 
@@ -187,12 +186,14 @@ def create_edges(G, edge_radius_threshold, bearing_threshold, nodes_file_path, e
                     G.add_edge(node, nearby_node, weight=distance)
                     edge_count += 1
 
-    print(f"Total edges created: {edge_count} \n")
-
     export_graph_to_geojson(G, nodes_file_path, edges_file_path)
 
+    return edge_count
 
 def create_graphs_for_cells(node_threshold, edge_threshold, cog_threshold):
+
+    stats_list = []
+
     for cell_name in os.listdir(INPUT_FOLDER_PATH):
         folder_path = os.path.join(INPUT_FOLDER_PATH, cell_name)
 
@@ -230,8 +231,28 @@ def create_graphs_for_cells(node_threshold, edge_threshold, cog_threshold):
             edges_file_path = os.path.join(output_subfolder, 'edges.geojson')
 
             geometric_sampled_nodes = geometric_sampling(trajectories, node_threshold)
+            print(f"Number of nodes in folder {cell_name}:", len(geometric_sampled_nodes))
             nodes = create_nodes(geometric_sampled_nodes)
-            create_edges(nodes, edge_threshold, cog_threshold, nodes_file_path, edges_file_path) 
+            edges = create_edges(nodes, edge_threshold, cog_threshold, nodes_file_path, edges_file_path) 
+
+            print(f"Number of edges in folder {cell_name}:", edges, "\n")
+
+            stats = {
+                'cell_name': cell_name,
+                'original_node_count': len(trajectories),
+                'sampled_node_count': len(geometric_sampled_nodes),
+                'edge_count': edges
+            }
+            stats_list.append(stats)
+    
+    # Convert list to DataFrame
+    stats_df = pd.DataFrame(stats_list)
+
+    # Save DataFrame to CSV
+    stats_df.to_csv(os.path.join(OUTPUT_FOLDER, f'stats_{node_threshold}_{edge_threshold}_{cog_threshold}.csv'), index=False)
+    return stats_df
+
+
 
 create_graphs_for_cells(0.001, 0.001, 45)
 create_graphs_for_cells(0.001, 0.002, 45)
