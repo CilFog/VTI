@@ -16,21 +16,8 @@ from utils import calculate_bearing_difference, export_graph_to_geojson, haversi
 DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 INPUT_FOLDER_PATH = os.path.join(DATA_FOLDER, 'input_graph_cells')
 
-"""
-    Threshold values from which the graphs for each cell will be created 
-"""
-NODE_THRESHOLD = 0.001
-EDGE_THRESHOLD = 0.003
-COG_THRESHOLD = 45
-
-"""
-    Where the created graphs will be placed
-"""
 OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'graph_construction_module')
-OUTPUT_FOLDER_PATH = os.path.join(OUTPUT_FOLDER, f'output/{NODE_THRESHOLD}_{EDGE_THRESHOLD}_{COG_THRESHOLD}')
 
-if not os.path.exists(OUTPUT_FOLDER_PATH):
-    os.makedirs(OUTPUT_FOLDER_PATH)
 
 LOG_PATH = 'graph_log.txt'
 logging = setup_logger(name=LOG_PATH, log_file=LOG_PATH)
@@ -105,13 +92,12 @@ def geometric_sampling(trajectories, min_distance_threshold):
 
         for j in indices:
             if j != i:
-                cog_diff = calculate_cog_difference(trajectories[i][4], trajectories[j][4])  # Assuming COG is at index 5
-                if cog_diff > 160 and cog_diff < 205:  # COG difference approximately 180 degrees
-                    if not opposite_cog_point_kept:  # Check if no opposite COG point has been kept yet
+                cog_diff = calculate_cog_difference(trajectories[i][4], trajectories[j][4]) 
+                if cog_diff > 160 and cog_diff < 205:  
+                    if not opposite_cog_point_kept:  
                         sampled_indices.append(j)
                         opposite_cog_point_kept = True
 
-        # Update excluded indices to include all points within the radius, ensuring each is only considered once
         excluded_indices.update(indices)
 
     # Filter the trajectories to only include sampled points
@@ -205,43 +191,52 @@ def create_edges(G, edge_radius_threshold, bearing_threshold, nodes_file_path, e
 
     export_graph_to_geojson(G, nodes_file_path, edges_file_path)
 
-def create_graph(graph_trajectories, geometric_parameter, edge_conneciton, bearing_parameter, nodes_file_path, edges_file_path):
-    geometric_sampled_nodes = geometric_sampling(graph_trajectories, geometric_parameter)
-    nodes = create_nodes(geometric_sampled_nodes)
-    create_edges(nodes, edge_conneciton, bearing_parameter, nodes_file_path, edges_file_path) 
 
-def create_graphs_for_cells():
-    for folder_name in os.listdir(INPUT_FOLDER_PATH):
-        folder_path = os.path.join(INPUT_FOLDER_PATH, folder_name)
+def create_graphs_for_cells(node_threshold, edge_threshold, cog_threshold):
+    for cell_name in os.listdir(INPUT_FOLDER_PATH):
+        folder_path = os.path.join(INPUT_FOLDER_PATH, cell_name)
+
+        """
+            Where the created graphs will be placed
+        """
+        output_folder_path = os.path.join(OUTPUT_FOLDER, f'output/{node_threshold}_{edge_threshold}_{cog_threshold}')
 
         if os.path.isdir(folder_path):
-            output_subfolder = os.path.join(OUTPUT_FOLDER_PATH, folder_name)
+            output_subfolder = os.path.join(output_folder_path, cell_name)
 
             # Check if the output folder already exists
             if os.path.exists(output_subfolder):
-                print(f"Graph already exists for {folder_name}, skipping...")
+                print(f"Graph already exists for {cell_name}, skipping...")
                 continue
 
         if os.path.isdir(folder_path):
-            print(f"Processing {folder_name}")
+            print(f"Processing {cell_name}")
             trajectories = extract_original_trajectories(folder_path)
 
             if len(trajectories) == 0:
-                    print(f"No trajectories found in {folder_name}, skipping...")
+                    print(f"No trajectories found in {cell_name}, skipping...")
                     continue
             
-            print(f"Number of points in folder {folder_name}:", len(trajectories))
+            print(f"Number of points in folder {cell_name}:", len(trajectories))
+
+            if not os.path.exists(output_folder_path):
+                os.makedirs(output_folder_path)
             
-            output_subfolder = os.path.join(OUTPUT_FOLDER_PATH, folder_name)
+            output_subfolder = os.path.join(output_folder_path, cell_name)
 
             os.makedirs(output_subfolder)
 
             nodes_file_path = os.path.join(output_subfolder, 'nodes.geojson')
             edges_file_path = os.path.join(output_subfolder, 'edges.geojson')
 
-            create_graph(trajectories, NODE_THRESHOLD, EDGE_THRESHOLD, COG_THRESHOLD, nodes_file_path, edges_file_path)
+            geometric_sampled_nodes = geometric_sampling(trajectories, node_threshold)
+            nodes = create_nodes(geometric_sampled_nodes)
+            create_edges(nodes, edge_threshold, cog_threshold, nodes_file_path, edges_file_path) 
 
-create_graphs_for_cells()
+create_graphs_for_cells(0.001, 0.001, 45)
+create_graphs_for_cells(0.001, 0.002, 45)
+create_graphs_for_cells(0.001, 0.004, 45)
+create_graphs_for_cells(0.001, 0.005, 45)
 
 
 
