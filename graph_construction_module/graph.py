@@ -254,10 +254,10 @@ def create_graphs_for_cells(node_threshold, edge_threshold, cog_threshold):
 
 
 
-create_graphs_for_cells(0.001, 0.001, 45)
-create_graphs_for_cells(0.001, 0.002, 45)
-create_graphs_for_cells(0.001, 0.004, 45)
-create_graphs_for_cells(0.001, 0.005, 45)
+# create_graphs_for_cells(0.001, 0.001, 45)
+# create_graphs_for_cells(0.001, 0.002, 45)
+# create_graphs_for_cells(0.001, 0.004, 45)
+# create_graphs_for_cells(0.001, 0.005, 45)
 
 
 
@@ -308,22 +308,22 @@ def get_neighbors(cell_id, cells_df):
                 neighbors.append(nbr_id)
     return neighbors
 
-def process_all_cells(cells_df, threshold_distance):
-    GRAPH_INPUT_FOLDER = os.path.dirname(os.path.dirname(__file__)) + f'\\graph_construction_module\\output\\{NODE_THRESHOLD}_{EDGE_THRESHOLD}_{COG_THRESHOLD}'
+def process_all_cells(cells_df, threshold_distance, edge_threhsold, cog_threshold):
+    GRAPH_INPUT_FOLDER = os.path.dirname(os.path.dirname(__file__)) + f'\\graph_construction_module\\output\\{threshold_distance}_{edge_threhsold}_{cog_threshold}'
     PROCESSED_CELLS = set() 
 
     for cell_id in cells_df.index:
         if cell_id not in PROCESSED_CELLS:
-            connect_graphs(cell_id, cells_df, GRAPH_INPUT_FOLDER, threshold_distance, PROCESSED_CELLS)
+            connect_graphs(cell_id, cells_df, GRAPH_INPUT_FOLDER, threshold_distance, PROCESSED_CELLS, edge_threhsold, cog_threshold)
 
-def connect_graphs(base_cell_id, cells_df, GRAPH_INPUT_FOLDER, threshold_distance, PROCESSED_CELLS):
+def connect_graphs(base_cell_id, cells_df, GRAPH_INPUT_FOLDER, threshold_distance, PROCESSED_CELLS, edge_threhsold, cog_threshold):
 
     base_graph = create_graph_from_geojson(
         os.path.join(GRAPH_INPUT_FOLDER, f"{base_cell_id}\\nodes.geojson"),
         os.path.join(GRAPH_INPUT_FOLDER, f"{base_cell_id}\\edges.geojson")
     )
     if not base_graph:
-        print(f"Graph {base_cell_id} has no data")
+        #print(f"Graph {base_cell_id} has no data")
         return
     
     print(f"Processing {base_cell_id}")
@@ -338,9 +338,9 @@ def connect_graphs(base_cell_id, cells_df, GRAPH_INPUT_FOLDER, threshold_distanc
             if os.path.exists(neighbor_nodes_path) and os.path.exists(neighbor_edges_path):
                 neighbor_graph = create_graph_from_geojson(neighbor_nodes_path, neighbor_edges_path)
                 if neighbor_graph:
-                    connect_two_graphs(base_graph, neighbor_graph, base_cell_id, neighbor_id, threshold_distance)
+                    connect_two_graphs(base_graph, neighbor_graph, base_cell_id, neighbor_id, threshold_distance, edge_threhsold, cog_threshold)
 
-def connect_two_graphs(G1, G2, base_cell_id, neighbor_id, threshold_distance):
+def connect_two_graphs(G1, G2, base_cell_id, neighbor_id, threshold_distance, edge_threhsold, cog_threshold):
     G1_nodes = [(node, data['longitude'], data['latitude']) for node, data in G1.nodes(data=True) if 'longitude' in data and 'latitude' in data]
     G2_nodes = [(node, data['longitude'], data['latitude']) for node, data in G2.nodes(data=True) if 'longitude' in data and 'latitude' in data]
     tree_G2 = cKDTree([(lon, lat) for _, lon, lat in G2_nodes])
@@ -362,6 +362,8 @@ def connect_two_graphs(G1, G2, base_cell_id, neighbor_id, threshold_distance):
 
     for node2, node1, dist in new_edges_G2:
         G2.add_edge(node2, node1, weight=dist)
+    OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'graph_construction_module')
+    OUTPUT_FOLDER_PATH = os.path.join(OUTPUT_FOLDER, f'output\\{threshold_distance}_{edge_threhsold}_{cog_threshold}')
 
     output_subfolder = os.path.join(OUTPUT_FOLDER_PATH, f'{base_cell_id}')
     output_subfolder1 = os.path.join(OUTPUT_FOLDER_PATH, f'{neighbor_id}')
@@ -376,10 +378,14 @@ def connect_two_graphs(G1, G2, base_cell_id, neighbor_id, threshold_distance):
     export_graph_to_geojson(G2, nodes_file_path_g2, edges_file_path_g2)
 
 
-# IMPUTATION_INPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
-# CELLS = os.path.join(IMPUTATION_INPUT_FOLDER, 'cells.txt')
-# cells_data = pd.read_csv(CELLS, index_col='cell_id')
-# process_all_cells(cells_data, 0.001)
+IMPUTATION_INPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
+CELLS = os.path.join(IMPUTATION_INPUT_FOLDER, 'cells.txt')
+cells_data = pd.read_csv(CELLS, index_col='cell_id')
+process_all_cells(cells_data, 0.001, 0.001, 45)
+process_all_cells(cells_data, 0.001, 0.002, 45)
+process_all_cells(cells_data, 0.001, 0.003, 45)
+process_all_cells(cells_data, 0.001, 0.004, 45)
+process_all_cells(cells_data, 0.001, 0.005, 45)
 
 
 
