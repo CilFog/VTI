@@ -382,10 +382,10 @@ IMPUTATION_INPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)
 CELLS = os.path.join(IMPUTATION_INPUT_FOLDER, 'cells.txt')
 cells_data = pd.read_csv(CELLS, index_col='cell_id')
 process_all_cells(cells_data, 0.001, 0.001, 45)
-process_all_cells(cells_data, 0.001, 0.002, 45)
-process_all_cells(cells_data, 0.001, 0.003, 45)
-process_all_cells(cells_data, 0.001, 0.004, 45)
-process_all_cells(cells_data, 0.001, 0.005, 45)
+#process_all_cells(cells_data, 0.001, 0.002, 45)
+#process_all_cells(cells_data, 0.001, 0.003, 45)
+#process_all_cells(cells_data, 0.001, 0.004, 45)
+#process_all_cells(cells_data, 0.001, 0.005, 45)
 
 
 
