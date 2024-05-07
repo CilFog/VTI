@@ -91,13 +91,15 @@ def geometric_sampling(vs, min_distance_threshold):
         opposite_cog_point_kept = False
 
         for j in indices:
-            if j != i:
-                cog_diff = calculate_cog_difference(vs[i][4], vs[j][4]) 
+            if not opposite_cog_point_kept:  
+                if j not in svs and j != i:
+                    cog_diff = calculate_cog_difference(vs[i][4], vs[j][4]) 
                 if cog_diff > 160 and cog_diff < 205:  
-                    if not opposite_cog_point_kept:  
                         svs.append(j)
                         opposite_cog_point_kept = True
-
+            else:
+                break
+            
         evs.update(indices)
 
     # Filter the trajectories to only include sampled points
