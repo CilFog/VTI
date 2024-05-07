@@ -63,28 +63,28 @@ def calculate_cog_difference(cog1, cog2):
         diff = 360 - diff
     return diff
 
-def geometric_sampling(trajectories, min_distance_threshold):
+def geometric_sampling(vs, min_distance_threshold):
 
     print("Sampling points")
-    if trajectories is None or len(trajectories) == 0:
+    if vs is None or len(vs) == 0:
         logging.error('No trajectories data provided to geometric_sampling.')
         return []
 
     # Create a KDTree from the trajectories
-    coordinates = np.array([point[:2] for point in trajectories])
+    coordinates = np.array([point[:2] for point in vs])
     kdtree = cKDTree(coordinates)
     
     # This list will store the indices of the points that are kept
-    sampled_indices = []
+    svs = []
     # This set will store indices that are too close to already selected points and should be skipped
-    excluded_indices = set()
+    evs = set()
 
     for i in range(len(coordinates)):
-        if i in excluded_indices:
+        if i in evs:
             continue
 
         # Initially add the current point to the list of sampled indices
-        sampled_indices.append(i)
+        svs.append(i)
         indices = kdtree.query_ball_point(coordinates[i], min_distance_threshold)
 
         # Track if an opposite COG point has been kept
@@ -92,16 +92,16 @@ def geometric_sampling(trajectories, min_distance_threshold):
 
         for j in indices:
             if j != i:
-                cog_diff = calculate_cog_difference(trajectories[i][4], trajectories[j][4]) 
+                cog_diff = calculate_cog_difference(vs[i][4], vs[j][4]) 
                 if cog_diff > 160 and cog_diff < 205:  
                     if not opposite_cog_point_kept:  
-                        sampled_indices.append(j)
+                        svs.append(j)
                         opposite_cog_point_kept = True
 
-        excluded_indices.update(indices)
+        evs.update(indices)
 
     # Filter the trajectories to only include sampled points
-    sampled_trajectories = [trajectories[i] for i in sampled_indices]
+    sampled_trajectories = [vs[i] for i in svs]
 
     return sampled_trajectories
 
@@ -333,8 +333,8 @@ def connect_graphs(base_cell_id, cells_df, GRAPH_INPUT_FOLDER, threshold_distanc
 
     for neighbor_id in neighbors:
         if neighbor_id not in PROCESSED_CELLS:  
-            neighbor_nodes_path = os.path.join(GRAPH_INPUT_FOLDER, f"{neighbor_id}/nodes.geojson")
-            neighbor_edges_path = os.path.join(GRAPH_INPUT_FOLDER, f"{neighbor_id}/edges.geojson")
+            neighbor_nodes_path = os.path.join(GRAPH_INPUT_FOLDER, f"{neighbor_id}\\nodes.geojson")
+            neighbor_edges_path = os.path.join(GRAPH_INPUT_FOLDER, f"{neighbor_id}\\edges.geojson")
             if os.path.exists(neighbor_nodes_path) and os.path.exists(neighbor_edges_path):
                 neighbor_graph = create_graph_from_geojson(neighbor_nodes_path, neighbor_edges_path)
                 if neighbor_graph:

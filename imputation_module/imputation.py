@@ -168,8 +168,8 @@ def impute_trajectory():
         
         else:
             max_draught = start_props.get("draught", None)
-            #G_apply_draught_penalty = adjust_edge_weights_for_draught(G, start_point, end_point, max_draught)
-            G_apply_cog_penalty = G #adjust_edge_weights_for_cog(G_apply_draught_penalty, start_point, end_point)
+            G_apply_draught_penalty = adjust_edge_weights_for_draught(G, start_point, end_point, max_draught)
+            G_apply_cog_penalty = adjust_edge_weights_for_cog(G_apply_draught_penalty, start_point, end_point)
             
             try:
                 path = nx.astar_path(G_apply_cog_penalty, start_point, end_point, heuristic=heuristics, weight='weight')
