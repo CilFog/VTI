@@ -13,14 +13,13 @@ from utils import calculate_interpolated_timestamps, haversine_distance, heurist
 
 LOG_PATH = 'imputation_log.txt'
 
+GRAPH_INPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'graph_construction_module')
 IMPUTATION_MODULE_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'imputation_module')
 OUTPUT_FOLDER = os.path.join(IMPUTATION_MODULE_FOLDER, 'output')
 OUTPUT_FOLDER_RAW = os.path.join(OUTPUT_FOLDER, 'raw')
 OUTPUT_FOLDER_PROCESSED = os.path.join(OUTPUT_FOLDER, 'processed')
 DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 CELLS_TXT = os.path.join(DATA_FOLDER, 'cells.txt')
-
-GRAPH_INPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'graph_construction_module')
 
 logging = setup_logger(name=LOG_PATH, log_file=LOG_PATH)
 
@@ -95,7 +94,8 @@ def find_relevant_cells(trajectory_points, cells_df):
                 relevant_cell_ids.add(row['cell_id'])
     return list(relevant_cell_ids)
 
-def impute_trajectory(file_name, file_path, graphs):
+# TODO output_folder_path should be corrected to the correct path
+def impute_trajectory(file_name, file_path, graphs, node_dist_threshold, edge_dist_threshold, cog_angle_threshold):
     start_time = time.time()
 
     G = nx.Graph()
@@ -127,12 +127,10 @@ def impute_trajectory(file_name, file_path, graphs):
     for cell_id in relevant_cell_ids:
         node_path = os.path.join(GRAPH_INPUT_FOLDER, f"{graphs}\\{cell_id}\\nodes.geojson")
         edge_path = os.path.join(GRAPH_INPUT_FOLDER, f"{graphs}\\{cell_id}\\edges.geojson")
-        print(node_path)
         G_cell = create_graph_from_geojson(node_path, edge_path)
         G = merge_graphs(G, G_cell)
 
     G_apply_cog_penalty = None
-    print("Done loading in graphs")
     
     imputed_paths = []
 
@@ -151,13 +149,13 @@ def impute_trajectory(file_name, file_path, graphs):
         if end_point not in G:
             G.add_node(end_point, **end_props)
 
-        for node in nodes_within_radius(G, start_point, 0.002):
+        for node in nodes_within_radius(G, start_point, edge_dist_threshold):
             if node != start_point:  
                 distance = haversine_distance(start_point[0], start_point[1], node[0], node[1])
                 G.add_edge(start_point, node, weight=distance)
                 G.add_edge(node, start_point, weight=distance)
 
-        for node in nodes_within_radius(G, end_point, 0.002): 
+        for node in nodes_within_radius(G, end_point, edge_dist_threshold): 
             if node != end_point: 
                 distance = haversine_distance(end_point[0], end_point[1], node[0], node[1])
                 G.add_edge(end_point, node, weight=distance)
@@ -204,16 +202,20 @@ def impute_trajectory(file_name, file_path, graphs):
                 G_apply_cog_penalty.add_edge(start_point, end_point, weight=distance)
                 imputed_paths.append([start_point, end_point]) 
                     
-    unique_nodes = set()
+
+    unique_nodes = []
+    seen_nodes = set()
     edges = []
 
     for path in imputed_paths:
         for node in path:
-            unique_nodes.add(node)  
+            if node not in seen_nodes:
+                unique_nodes.append(node)
+                seen_nodes.add(node) 
         for i in range(len(path)-1):
             edges.append((path[i], path[i+1]))
 
-    output_folder_path = os.path.join(OUTPUT_FOLDER_RAW, f'{file_name}')
+    output_folder_path = os.path.join(OUTPUT_FOLDER_RAW, f'{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}//raw//{file_name}')
 
     if not os.path.exists(output_folder_path):
         os.makedirs(output_folder_path)
@@ -226,7 +228,25 @@ def impute_trajectory(file_name, file_path, graphs):
 
     end_time = time.time()
     execution_time = end_time - start_time  
-    print(f"Execution Time: {execution_time} seconds") 
+
+    stats = {
+        'file_name': file_name,
+        'trajectory_points': len(trajectory_points),
+        'imputed_paths': len(unique_nodes),
+        'execution_time_seconds': execution_time
+    }
+
+    output_directory  = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data//stats//solution_stats')
+    stats_file = os.path.join(output_directory, f'{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}_imputation.csv')
+
+    write_header = not os.path.exists(stats_file)
+
+    with open(stats_file, mode='a', newline='') as csvfile:
+        fieldnames = ['file_name', 'trajectory_points', 'imputed_paths', 'execution_time_seconds']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        if write_header:
+            writer.writeheader()  
+        writer.writerow(stats)
 
     return imputed_paths
 
@@ -246,7 +266,6 @@ def best_fit(segment:List[Tuple[float,float]]):
     # extract X and Y coordinates for the segment
     y_coords = [position[1] for position in segment]
     x_coords = [position[0] for position in segment]
-
     matrix = np.vstack([y_coords, np.ones(len(y_coords))]).T
     regression_result = np.linalg.lstsq(matrix, x_coords, rcond=None)
 
@@ -307,7 +326,7 @@ def refine_trajectory(trajectory: List[Tuple[float,float]], epsilon=1e-7):
 
     return gpd.GeoDataFrame(geometry=refined_geometries)
 
-def find_swapping_point(trip, i, j):
+def find_swapping_point(trip, i, j): # GTI
     # print(trip)
     x1 = list(map(lambda x: x[1], trip[i:j]))
     y1 = list(map(lambda x: x[0], trip[i:j]))
@@ -317,7 +336,7 @@ def find_swapping_point(trip, i, j):
     residuals = function[1]
     return residuals, x1, y1, m1, c1
 
-def refinement(trip):
+def refinement(trip): # GTI
     new_points = []
     breaking_point = 0
     m1_c1s = []
@@ -343,6 +362,7 @@ def refinement(trip):
     refined_geometries = [Point(x, y) for x, y in new_points]
     return gpd.GeoDataFrame(geometry=refined_geometries)
 
+# TODO newfilepath should be correct
 def process_imputated_trajectory(filepath_nodes:str):
     nodes_gdf = gpd.read_file(filepath_nodes)
     coordinates = np.column_stack((nodes_gdf['geometry'].map(lambda p: p.x), nodes_gdf['geometry'].map(lambda p: p.y)))
@@ -358,6 +378,3 @@ def process_imputated_trajectory(filepath_nodes:str):
     new_filepath = os.path.join(new_filepath, f'{filename}_refined.geojson')
 
     nodes_refined_gdf.to_file(new_filepath, driver='GeoJSON')
-
-process_imputated_trajectory(
-    filepath_nodes='/Users/ceciliew.fog/Documents/KandidatSpeciale/VTI/imputation_module/output/raw/209525000_15-01-2024_00-05-59.txt/209525000_15-01-2024_00-05-59.txt_nodes.geojson')
