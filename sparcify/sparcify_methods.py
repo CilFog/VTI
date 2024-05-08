@@ -426,3 +426,17 @@ def sparcify_large_time_gap_with_threshold_percentage(filepath:str, folderpath: 
     except Exception as e:
         logging.error(f'Error occurred with: {repr(e)}')
         quit()
+
+def check_if_trajectory_is_dense(trajectory_df: pd.DataFrame) -> bool:
+    try:    
+        # Convert timestamps to numpy array for efficient calculations
+        timestamps = trajectory_df['timestamp'].to_numpy()
+
+        # Calculate the time differences between consecutive points
+        time_diffs = np.diff(timestamps)
+
+        # Check if all differences are less than or equal to the 30 seconds
+        return np.all(time_diffs <= 30)
+    except Exception as e:
+        logging.error(f'Error occurred with: {repr(e)}')    
+        quit()
