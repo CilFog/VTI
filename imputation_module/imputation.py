@@ -1,25 +1,34 @@
+import os
 import csv
 import json
-import os
-import networkx as nx
-from data.logs.logging import setup_logger
-from utils import calculate_interpolated_timestamps, haversine_distance, heuristics, adjust_edge_weights_for_draught, adjust_edge_weights_for_cog, nodes_within_radius, nodes_to_geojson, edges_to_geojson
 import time
-from shapely.geometry import Point, box
+import numpy as np
 import pandas as pd
+import networkx as nx
+import geopandas as gpd
+from typing import List, Tuple
+from data.logs.logging import setup_logger
+from shapely.geometry import Point, box, Polygon, LineString
+from utils import calculate_interpolated_timestamps, haversine_distance, heuristics, adjust_edge_weights_for_draught, adjust_edge_weights_for_cog, nodes_within_radius, nodes_to_geojson, edges_to_geojson
 
 LOG_PATH = 'imputation_log.txt'
 
-OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'imputation_module\\output')
-
-CELLS = os.path.join(os.path.join(os.path.dirname(os.path.dirname(__file__))), 'data\\cells.txt')
+IMPUTATION_MODULE_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'imputation_module')
+OUTPUT_FOLDER = os.path.join(IMPUTATION_MODULE_FOLDER, 'output')
+OUTPUT_FOLDER_RAW = os.path.join(OUTPUT_FOLDER, 'raw')
+OUTPUT_FOLDER_PROCESSED = os.path.join(OUTPUT_FOLDER, 'processed')
+DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
+CELLS_TXT = os.path.join(DATA_FOLDER, 'cells.txt')
 
 GRAPH_INPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'graph_construction_module')
 
 logging = setup_logger(name=LOG_PATH, log_file=LOG_PATH)
 
-if not os.path.exists(OUTPUT_FOLDER):
-    os.makedirs(OUTPUT_FOLDER)
+if not os.path.exists(OUTPUT_FOLDER_RAW):
+    os.makedirs(OUTPUT_FOLDER_RAW)
+
+if not os.path.exists(OUTPUT_FOLDER_PROCESSED):
+    os.makedirs(OUTPUT_FOLDER_PROCESSED)
 
 def load_geojson(file_path):
     with open(file_path, 'r') as f:
@@ -47,7 +56,6 @@ def create_graph_from_geojson(nodes_geojson_path, edges_geojson_path):
         return G
     except Exception as e:
         logging.warning(f'Error occurred trying to retrieve graph: {repr(e)}')
-
 
 # Load GeoJSON files and create a graph
 def load_geojson_to_graph(file_path):
@@ -87,12 +95,11 @@ def find_relevant_cells(trajectory_points, cells_df):
                 relevant_cell_ids.add(row['cell_id'])
     return list(relevant_cell_ids)
 
-
 def impute_trajectory(file_name, file_path, graphs):
     start_time = time.time()
 
     G = nx.Graph()
-    cells_df = pd.read_csv(CELLS) 
+    cells_df = pd.read_csv(CELLS_TXT) 
 
     trajectory_points = []
     try:
@@ -197,7 +204,6 @@ def impute_trajectory(file_name, file_path, graphs):
                 G_apply_cog_penalty.add_edge(start_point, end_point, weight=distance)
                 imputed_paths.append([start_point, end_point]) 
                     
-
     unique_nodes = set()
     edges = []
 
@@ -207,7 +213,7 @@ def impute_trajectory(file_name, file_path, graphs):
         for i in range(len(path)-1):
             edges.append((path[i], path[i+1]))
 
-    output_folder_path = os.path.join(OUTPUT_FOLDER, f'{file_name}')
+    output_folder_path = os.path.join(OUTPUT_FOLDER_RAW, f'{file_name}')
 
     if not os.path.exists(output_folder_path):
         os.makedirs(output_folder_path)
@@ -224,10 +230,134 @@ def impute_trajectory(file_name, file_path, graphs):
 
     return imputed_paths
 
+def calculate_center_position(positions:List[Tuple[float,float]]):
+    """Calculate the center position of the trajectory segment."""
+    
+    if len(positions) < 3:
+        print('Error: At least three positions are required to calculate the center position.')
+    center_pos = (
+        (positions[0][0] + positions[2][0]) / 2,
+        (positions[0][1] + positions[2][1]) / 2
+    )
+    return center_pos
 
+def best_fit(segment:List[Tuple[float,float]]):
+    """Perform linear least squares regression on a segment of positions."""
+    # extract X and Y coordinates for the segment
+    y_coords = [position[1] for position in segment]
+    x_coords = [position[0] for position in segment]
 
-# for root, dirs, files in os.walk(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data\\input_imputation\\area\\aalborg_harbor\\random_0_5')):
-#     for file_name in files:
-#         if file_name.endswith('.txt'):
-#             file_path = os.path.join(root, file_name)
-#             impute_trajectory(file_name, file_path)
+    matrix = np.vstack([y_coords, np.ones(len(y_coords))]).T
+    regression_result = np.linalg.lstsq(matrix, x_coords, rcond=None)
+
+    slope, intercept = regression_result[0]
+    residuals = regression_result[1]
+
+    # compute the predicted y-values based on the best-fit line
+    fitted_segment = [(y, slope * y + intercept) for y in y_coords]
+
+    return fitted_segment, residuals[0]
+
+def refine_trajectory(trajectory: List[Tuple[float,float]], epsilon=1e-7):
+    if len(trajectory) < 3:
+        return gpd.GeoDataFrame(geometry=[Point(y, x) for x, y in trajectory])
+    
+    start_index: int = 0
+    window_size: int = 3
+    final_trajectory = []
+    previous_fit = trajectory[:2]
+    turn_detected = False
+
+    for i in range(3, len(trajectory)):
+        # check if we are at the end of the trajectory
+        if (start_index + window_size >= len(trajectory)):
+            break
+
+        # refine part of the trajectory
+        current_segment:list = trajectory[start_index:start_index + window_size]
+
+        best_fit_segment, residual = best_fit(current_segment)
+
+        if (residual > epsilon):
+            extended_segment = trajectory[start_index:start_index + window_size - 1]
+            extended_segment = np.append(extended_segment, [trajectory[start_index + window_size]], axis=0)
+
+            _, residual = best_fit(extended_segment)
+
+            if residual > epsilon:
+                turn_detected = True 
+            else:
+                current_segment[-1] = calculate_center_position([extended_segment[-2], current_segment[-1], extended_segment[-1]])
+                best_fit_segment, residual = best_fit(current_segment)
+
+        if (turn_detected):
+            turn_detected = False
+            final_trajectory.extend(previous_fit)
+            start_index += window_size
+            window_size = 3
+            previous_fit = trajectory[start_index:start_index + 2]
+        else:
+            previous_fit = best_fit_segment
+            window_size += 1
+
+    # Add the last refined sub-trajectory
+    final_trajectory.extend(previous_fit)
+    # Convert refined points back to a GeoDataFrame
+    refined_geometries = [Point(y, x) for x, y in final_trajectory]
+
+    return gpd.GeoDataFrame(geometry=refined_geometries)
+
+def find_swapping_point(trip, i, j):
+    # print(trip)
+    x1 = list(map(lambda x: x[1], trip[i:j]))
+    y1 = list(map(lambda x: x[0], trip[i:j]))
+    A1 = np.vstack([x1, np.ones(len(x1))]).T
+    function = np.linalg.lstsq(A1, y1, rcond=None)
+    m1, c1 = function [0]
+    residuals = function[1]
+    return residuals, x1, y1, m1, c1
+
+def refinement(trip):
+    new_points = []
+    breaking_point = 0
+    m1_c1s = []
+    # old_bearing = calculate_initial_compass_bearing((trip[0][0], trip[0][1]), (trip[1][0], trip[1][1]))
+    for i in range(2, len(trip)):
+        if breaking_point == i + 1: 
+            continue
+        residuals, x1, y1, m1, c1 = find_swapping_point(trip, breaking_point, i)
+
+        if i > breaking_point + 2 and residuals[0] > 1e-7:
+        # if i > breaking_point + 2 and abs(old_bearing - new_bearing) > 10:
+            m1_c1s.append((prev_m1, prev_c1, i))
+            new_points += [(y1[0], x1[0])]
+            new_points += [(m1 * xx + c1, xx) for xx in x1[1:-1]]
+            new_points += [(y1[-1], x1[-1])]
+            breaking_point = i
+        prev_m1, prev_c1 = m1, c1
+    new_points += [(y1[0], x1[0])]
+    new_points += [(m1 * xx + c1, xx) for xx in x1[1:-1]]
+    new_points += [(y1[-1], x1[-1])]
+
+        # Convert refined points back to a GeoDataFrame
+    refined_geometries = [Point(x, y) for x, y in new_points]
+    return gpd.GeoDataFrame(geometry=refined_geometries)
+
+def process_imputated_trajectory(filepath_nodes:str):
+    nodes_gdf = gpd.read_file(filepath_nodes)
+    coordinates = np.column_stack((nodes_gdf['geometry'].map(lambda p: p.x), nodes_gdf['geometry'].map(lambda p: p.y)))
+
+    nodes_refined_gdf = refine_trajectory(coordinates)
+
+    os_path_split = '/' if '/' in filepath_nodes else '\\'
+    basedir = os.path.dirname(filepath_nodes).split(os_path_split)[-1]
+    filename = os.path.basename(filepath_nodes).split('_nodes')[0]
+
+    new_filepath = os.path.join(OUTPUT_FOLDER_PROCESSED, basedir)
+    os.makedirs(new_filepath, exist_ok=True)
+    new_filepath = os.path.join(new_filepath, f'{filename}_refined.geojson')
+
+    nodes_refined_gdf.to_file(new_filepath, driver='GeoJSON')
+
+process_imputated_trajectory(
+    filepath_nodes='/Users/ceciliew.fog/Documents/KandidatSpeciale/VTI/imputation_module/output/raw/209525000_15-01-2024_00-05-59.txt/209525000_15-01-2024_00-05-59.txt_nodes.geojson')
