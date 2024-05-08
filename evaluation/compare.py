@@ -37,9 +37,9 @@ def frechet_distance(original_trajectory, imputed_trajectory):
     return max(forward_frechet, reverse_frechet)
 
 
-def find_all_and_compare(imputed_trajectory_path, original_trajectory_path):
-    output_directory  = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'evaluation')
-    stats_file = os.path.join(output_directory, 'stats_output.csv')
+def find_all_and_compare(imputed_trajectory_path, original_trajectory_path, node_dist_threshold, edge_dist_threshold, cog_angle_threshold):
+    output_directory  = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data//stats//solution_stats')
+    stats_file = os.path.join(output_directory, f'{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}_evaluation.csv')
     
     with open(stats_file, mode='w', newline='') as csvfile:
         fieldnames = ['Trajectory', 'Original Length', 'Imputed Length', 'DTW', 'Frechet Distance']
@@ -71,8 +71,3 @@ def find_all_and_compare(imputed_trajectory_path, original_trajectory_path):
                         'DTW': dtw,
                         'Frechet Distance': fd
                     })
-
-
-# original_trajectory_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data\\input_imputation\\area\\aalborg_harbor\\random_0_5')
-# imputed_trajectory_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'imputation_module\\output')
-# find_all_and_compare(imputed_trajectory_path, original_trajectory_path)
