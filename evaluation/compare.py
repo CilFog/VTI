@@ -4,31 +4,21 @@ import pandas as pd
 from scipy.spatial.distance import directed_hausdorff
 import numpy as np
 from tslearn.metrics import dtw
-
-ORGIGNAL_TRAJECTORY = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
-ORGIGNAL_TRAJECTORY_PATH = os.path.join(ORGIGNAL_TRAJECTORY, 'input_imputation\\244059000_24-03-2024_04-40-36.txt')
-
-IMPUTED_TRAJECTORY = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'imputation_module')
-IMPUTED_TRAJECTORY_PATH = os.path.join(IMPUTED_TRAJECTORY, 'output\\new-nodes.geojson')
+import csv
 
 def load_geojson_extract_coordinates(file_path):
     with open(file_path, 'r') as f:
         geojson = json.load(f)
     
     coordinates = []
-    # Assuming standard GeoJSON format
     for feature in geojson['features']:
-        # Assumes coordinates are in [longitude, latitude] format
         lon, lat = feature['geometry']['coordinates']
-        coordinates.append([lat, lon])  # Appending as [latitude, longitude]
+        coordinates.append([lat, lon])  
 
     return np.array(coordinates)
     
 def load_csv_extract_coordinates(file_path):
-    # Load the CSV file
     data = pd.read_csv(file_path)
-    
-    # Extract latitude and longitude columns
     coordinates = data[['latitude', 'longitude']]
     
     return coordinates.values
@@ -37,18 +27,52 @@ def dynamic_time_warping(original_trajectory, imputed_trajectory):
         
     distance = dtw(original_trajectory, imputed_trajectory)
 
-    print("DTW Distance in Euclidean distance:", distance)
+    return distance
 
 def frechet_distance(original_trajectory, imputed_trajectory):
     
     forward_frechet = directed_hausdorff(original_trajectory, imputed_trajectory)[0]
     reverse_frechet = directed_hausdorff(imputed_trajectory, original_trajectory)[0]
 
-    print("Fréchet Distance in Euclidean:", max(forward_frechet, reverse_frechet))
+    return max(forward_frechet, reverse_frechet)
 
 
-original_trajectory = load_csv_extract_coordinates(ORGIGNAL_TRAJECTORY_PATH)
-imputed_trajectory = load_geojson_extract_coordinates(IMPUTED_TRAJECTORY_PATH)
+def find_all_and_compare(imputed_trajectory_path, original_trajectory_path):
+    output_directory  = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'evaluation')
+    stats_file = os.path.join(output_directory, 'stats_output.csv')
+    
+    with open(stats_file, mode='w', newline='') as csvfile:
+        fieldnames = ['Trajectory', 'Original Length', 'Imputed Length', 'DTW', 'Frechet Distance']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        
+        for root, _, files in os.walk(imputed_trajectory_path):
+            for file in files:
+                if file.endswith('nodes.geojson'):
+                    file_path = os.path.join(root, file)
+                    base_name = file.replace('_nodes.geojson', '')
+                    imputed_trajectory = load_geojson_extract_coordinates(file_path)
 
-dynamic_time_warping(original_trajectory, imputed_trajectory)
-frechet_distance(original_trajectory, imputed_trajectory)
+                    for r, _, f in os.walk(original_trajectory_path):
+                        for ff in f:
+                            if ff == base_name:
+                                ofile_path = os.path.join(r, ff)
+                                original_trajectory = load_csv_extract_coordinates(ofile_path)
+                    
+                    original_len = len(original_trajectory)
+                    imputed_len = len(imputed_trajectory)
+                    dtw = dynamic_time_warping(original_trajectory, imputed_trajectory)
+                    fd = frechet_distance(original_trajectory, imputed_trajectory)
+                    
+                    writer.writerow({
+                        'Trajectory': base_name,
+                        'Original Length': original_len,
+                        'Imputed Length': imputed_len,
+                        'DTW': dtw,
+                        'Frechet Distance': fd
+                    })
+
+
+# original_trajectory_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data\\input_imputation\\area\\aalborg_harbor\\random_0_5')
+# imputed_trajectory_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'imputation_module\\output')
+# find_all_and_compare(imputed_trajectory_path, original_trajectory_path)

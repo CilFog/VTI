@@ -158,7 +158,7 @@ def create_nodes(sampled_trajectories):
     return G
 
 
-def create_edges(G, edge_radius_threshold, bearing_threshold, nodes_file_path, edges_file_path):
+def create_edges(G, initial_edge_radius_threshold, bearing_threshold, nodes_file_path, edges_file_path):
     print("Creating Edges")
     """
         Creates edges between nodes in the graph. The creation of an edge 
@@ -169,30 +169,40 @@ def create_edges(G, edge_radius_threshold, bearing_threshold, nodes_file_path, e
     
     kdtree = cKDTree(node_array)
     edge_count = 0
+    total_edge_count = 0
 
     for i, (node, data) in enumerate(node_coords_list):
-        node_cog = data['cog']
-        nearby_indices = kdtree.query_ball_point(node, edge_radius_threshold)
-        
-        for nearby_index in nearby_indices:
-            if nearby_index != i: 
-                nearby_node, nearby_data = node_coords_list[nearby_index]
-                nearby_cog = nearby_data['cog']
+        edge_radius_threshold = initial_edge_radius_threshold
+        while edge_count == 0:
+            nearby_indices = kdtree.query_ball_point(node, edge_radius_threshold)
 
-                cog_diff = calculate_bearing_difference(node_cog, nearby_cog)
-                
-                if cog_diff <= bearing_threshold:
-                    distance = haversine_distance(node[0], node[1], nearby_node[0], nearby_node[1])
-                    G.add_edge(node, nearby_node, weight=distance)
-                    edge_count += 1
+            for nearby_index in nearby_indices:
+                if nearby_index != i: 
+                    nearby_node, nearby_data = node_coords_list[nearby_index]
+                    nearby_cog = nearby_data['cog']
+
+                    cog_diff = calculate_bearing_difference(data['cog'], nearby_cog)
+
+                    if cog_diff <= bearing_threshold:
+                        distance = haversine_distance(node[0], node[1], nearby_node[0], nearby_node[1])
+                        G.add_edge(node, nearby_node, weight=distance)
+                        edge_count += 1
+                        total_edge_count += 1
+
+            # Increase edge_radius_threshold if no edges were found
+            edge_radius_threshold = edge_radius_threshold * 1.1
+
+        edge_count = 0
 
     export_graph_to_geojson(G, nodes_file_path, edges_file_path)
 
-    return edge_count
+    return total_edge_count
 
 def create_graphs_for_cells(node_threshold, edge_threshold, cog_threshold):
 
     stats_list = []
+    cells_to_consider = ["10_9", "10_10", "10_11", "11_9", "11_10", "11_11", "12_9", "12_10", "12_11"]
+
 
     for cell_name in os.listdir(INPUT_FOLDER_PATH):
         folder_path = os.path.join(INPUT_FOLDER_PATH, cell_name)
@@ -200,7 +210,7 @@ def create_graphs_for_cells(node_threshold, edge_threshold, cog_threshold):
         """
             Where the created graphs will be placed
         """
-        output_folder_path = os.path.join(OUTPUT_FOLDER, f'output/{node_threshold}_{edge_threshold}_{cog_threshold}')
+        output_folder_path = os.path.join(OUTPUT_FOLDER, f'output/skagen1_{node_threshold}_{edge_threshold}_{cog_threshold}')
 
         if os.path.isdir(folder_path):
             output_subfolder = os.path.join(output_folder_path, cell_name)
@@ -211,39 +221,40 @@ def create_graphs_for_cells(node_threshold, edge_threshold, cog_threshold):
                 continue
 
         if os.path.isdir(folder_path):
-            print(f"Processing {cell_name}")
-            trajectories = extract_original_trajectories(folder_path)
+            if cell_name in cells_to_consider:
+                print(f"Processing {cell_name}")
+                trajectories = extract_original_trajectories(folder_path)
 
-            if len(trajectories) == 0:
-                    print(f"No trajectories found in {cell_name}, skipping...")
-                    continue
-            
-            print(f"Number of points in folder {cell_name}:", len(trajectories))
+                if len(trajectories) == 0:
+                        print(f"No trajectories found in {cell_name}, skipping...")
+                        continue
+                
+                print(f"Number of points in folder {cell_name}:", len(trajectories))
 
-            if not os.path.exists(output_folder_path):
-                os.makedirs(output_folder_path)
-            
-            output_subfolder = os.path.join(output_folder_path, cell_name)
+                if not os.path.exists(output_folder_path):
+                    os.makedirs(output_folder_path)
+                
+                output_subfolder = os.path.join(output_folder_path, cell_name)
 
-            os.makedirs(output_subfolder)
+                os.makedirs(output_subfolder)
 
-            nodes_file_path = os.path.join(output_subfolder, 'nodes.geojson')
-            edges_file_path = os.path.join(output_subfolder, 'edges.geojson')
+                nodes_file_path = os.path.join(output_subfolder, 'nodes.geojson')
+                edges_file_path = os.path.join(output_subfolder, 'edges.geojson')
 
-            geometric_sampled_nodes = geometric_sampling(trajectories, node_threshold)
-            print(f"Number of nodes in folder {cell_name}:", len(geometric_sampled_nodes))
-            nodes = create_nodes(geometric_sampled_nodes)
-            edges = create_edges(nodes, edge_threshold, cog_threshold, nodes_file_path, edges_file_path) 
+                geometric_sampled_nodes = geometric_sampling(trajectories, node_threshold)
+                print(f"Number of nodes in folder {cell_name}:", len(geometric_sampled_nodes))
+                nodes = create_nodes(geometric_sampled_nodes)
+                edges = create_edges(nodes, edge_threshold, cog_threshold, nodes_file_path, edges_file_path) 
 
-            print(f"Number of edges in folder {cell_name}:", edges, "\n")
+                print(f"Number of edges in folder {cell_name}:", edges, "\n")
 
-            stats = {
-                'cell_name': cell_name,
-                'original_node_count': len(trajectories),
-                'sampled_node_count': len(geometric_sampled_nodes),
-                'edge_count': edges
-            }
-            stats_list.append(stats)
+                stats = {
+                    'cell_name': cell_name,
+                    'original_node_count': len(trajectories),
+                    'sampled_node_count': len(geometric_sampled_nodes),
+                    'edge_count': edges
+                }
+                stats_list.append(stats)
     
     # Convert list to DataFrame
     stats_df = pd.DataFrame(stats_list)
@@ -251,17 +262,6 @@ def create_graphs_for_cells(node_threshold, edge_threshold, cog_threshold):
     # Save DataFrame to CSV
     stats_df.to_csv(os.path.join(OUTPUT_FOLDER, f'stats_{node_threshold}_{edge_threshold}_{cog_threshold}.csv'), index=False)
     return stats_df
-
-
-
-# create_graphs_for_cells(0.001, 0.001, 45)
-# create_graphs_for_cells(0.001, 0.002, 45)
-# create_graphs_for_cells(0.001, 0.004, 45)
-# create_graphs_for_cells(0.001, 0.005, 45)
-
-
-
-
 
 
 
@@ -309,7 +309,7 @@ def get_neighbors(cell_id, cells_df):
     return neighbors
 
 def process_all_cells(cells_df, threshold_distance, edge_threhsold, cog_threshold):
-    GRAPH_INPUT_FOLDER = os.path.dirname(os.path.dirname(__file__)) + f'\\graph_construction_module\\output\\{threshold_distance}_{edge_threhsold}_{cog_threshold}'
+    GRAPH_INPUT_FOLDER = os.path.dirname(os.path.dirname(__file__)) + f'\\graph_construction_module\\output\\skagen1_{threshold_distance}_{edge_threhsold}_{cog_threshold}'
     PROCESSED_CELLS = set() 
 
     for cell_id in cells_df.index:
@@ -363,7 +363,7 @@ def connect_two_graphs(G1, G2, base_cell_id, neighbor_id, threshold_distance, ed
     for node2, node1, dist in new_edges_G2:
         G2.add_edge(node2, node1, weight=dist)
     OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'graph_construction_module')
-    OUTPUT_FOLDER_PATH = os.path.join(OUTPUT_FOLDER, f'output\\{threshold_distance}_{edge_threhsold}_{cog_threshold}')
+    OUTPUT_FOLDER_PATH = os.path.join(OUTPUT_FOLDER, f'output\\skagen1_{threshold_distance}_{edge_threhsold}_{cog_threshold}')
 
     output_subfolder = os.path.join(OUTPUT_FOLDER_PATH, f'{base_cell_id}')
     output_subfolder1 = os.path.join(OUTPUT_FOLDER_PATH, f'{neighbor_id}')
@@ -378,14 +378,24 @@ def connect_two_graphs(G1, G2, base_cell_id, neighbor_id, threshold_distance, ed
     export_graph_to_geojson(G2, nodes_file_path_g2, edges_file_path_g2)
 
 
-IMPUTATION_INPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
-CELLS = os.path.join(IMPUTATION_INPUT_FOLDER, 'cells.txt')
-cells_data = pd.read_csv(CELLS, index_col='cell_id')
-process_all_cells(cells_data, 0.001, 0.001, 45)
-#process_all_cells(cells_data, 0.001, 0.002, 45)
-#process_all_cells(cells_data, 0.001, 0.003, 45)
-#process_all_cells(cells_data, 0.001, 0.004, 45)
-#process_all_cells(cells_data, 0.001, 0.005, 45)
+# IMPUTATION_INPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
+# CELLS = os.path.join(IMPUTATION_INPUT_FOLDER, 'cells.txt')
+# cells_data = pd.read_csv(CELLS, index_col='cell_id')
+
+
+
+
+
+# #create_graphs_for_cells(0.001, 0.001, 45)
+# #create_graphs_for_cells(0.001, 0.002, 45)
+# #create_graphs_for_cells(0.001, 0.004, 45)
+# #create_graphs_for_cells(0.001, 0.005, 45)
+
+# process_all_cells(cells_data, 0.001, 0.001, 45)
+# process_all_cells(cells_data, 0.001, 0.002, 45)
+# #process_all_cells(cells_data, 0.001, 0.003, 45)
+# process_all_cells(cells_data, 0.001, 0.004, 45)
+# process_all_cells(cells_data, 0.001, 0.005, 45)
 
 
 

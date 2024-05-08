@@ -10,20 +10,16 @@ import pandas as pd
 
 LOG_PATH = 'imputation_log.txt'
 
-OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'imputation_module')
-OUTPUT_FOLDER_PATH = os.path.join(OUTPUT_FOLDER, 'output')
+OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'imputation_module\\output')
 
-IMPUTATION_INPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
-IMPUTATION_INPUT_FOLDER_PATH = os.path.join(IMPUTATION_INPUT_FOLDER, 'input_imputation\\244059000_24-03-2024_04-40-36.txt')
-
-CELLS = os.path.join(IMPUTATION_INPUT_FOLDER, 'cells.txt')
+CELLS = os.path.join(os.path.join(os.path.dirname(os.path.dirname(__file__))), 'data\\cells.txt')
 
 GRAPH_INPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'graph_construction_module')
 
 logging = setup_logger(name=LOG_PATH, log_file=LOG_PATH)
 
-if not os.path.exists(OUTPUT_FOLDER_PATH):
-    os.makedirs(OUTPUT_FOLDER_PATH)
+if not os.path.exists(OUTPUT_FOLDER):
+    os.makedirs(OUTPUT_FOLDER)
 
 def load_geojson(file_path):
     with open(file_path, 'r') as f:
@@ -92,7 +88,7 @@ def find_relevant_cells(trajectory_points, cells_df):
     return list(relevant_cell_ids)
 
 
-def impute_trajectory():
+def impute_trajectory(file_name, file_path, graphs):
     start_time = time.time()
 
     G = nx.Graph()
@@ -100,7 +96,7 @@ def impute_trajectory():
 
     trajectory_points = []
     try:
-        with open(IMPUTATION_INPUT_FOLDER_PATH, 'r') as csvfile:
+        with open(file_path, 'r') as csvfile:
             reader = csv.DictReader(csvfile)
             
             for row in reader:
@@ -120,11 +116,11 @@ def impute_trajectory():
         logging.warning(f'Error occurred trying to retrieve trajectory to impute: {repr(e)}')
 
     relevant_cell_ids = find_relevant_cells(trajectory_points, cells_df)
-    print(relevant_cell_ids)
     
     for cell_id in relevant_cell_ids:
-        node_path = os.path.join(GRAPH_INPUT_FOLDER, f"output\\{cell_id}\\nodes.geojson")
-        edge_path = os.path.join(GRAPH_INPUT_FOLDER, f"output\\{cell_id}\\edges.geojson")
+        node_path = os.path.join(GRAPH_INPUT_FOLDER, f"{graphs}\\{cell_id}\\nodes.geojson")
+        edge_path = os.path.join(GRAPH_INPUT_FOLDER, f"{graphs}\\{cell_id}\\edges.geojson")
+        print(node_path)
         G_cell = create_graph_from_geojson(node_path, edge_path)
         G = merge_graphs(G, G_cell)
 
@@ -211,8 +207,13 @@ def impute_trajectory():
         for i in range(len(path)-1):
             edges.append((path[i], path[i+1]))
 
-    imputed_nodes_file_path = os.path.join(OUTPUT_FOLDER_PATH, 'nodes.geojson')
-    imputed_edges_file_path = os.path.join(OUTPUT_FOLDER_PATH, 'edges.geojson')
+    output_folder_path = os.path.join(OUTPUT_FOLDER, f'{file_name}')
+
+    if not os.path.exists(output_folder_path):
+        os.makedirs(output_folder_path)
+
+    imputed_nodes_file_path = os.path.join(output_folder_path, f'{file_name}_nodes.geojson')
+    imputed_edges_file_path = os.path.join(output_folder_path, f'{file_name}_edges.geojson')
 
     nodes_to_geojson(G_apply_cog_penalty, unique_nodes, imputed_nodes_file_path)
     edges_to_geojson(G_apply_cog_penalty, edges, imputed_edges_file_path)
@@ -223,4 +224,10 @@ def impute_trajectory():
 
     return imputed_paths
 
-impute_trajectory()
+
+
+# for root, dirs, files in os.walk(os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data\\input_imputation\\area\\aalborg_harbor\\random_0_5')):
+#     for file_name in files:
+#         if file_name.endswith('.txt'):
+#             file_path = os.path.join(root, file_name)
+#             impute_trajectory(file_name, file_path)
