@@ -13,8 +13,9 @@ from utils import calculate_bearing_difference, export_graph_to_geojson, haversi
 """
     Graph input in the form of trajectory points extracted from the raw AIS data
 """
-GRAPH_INPUT_DATA_FOLDER_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data//input_graph_cells')
-OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'graph_construction_module//output')
+GRAPH_INPUT = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data//input_graph_cells')
+GRAPH_OUTPUT = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data//output_graph')
+STATS_OUTPUT = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data//stats')
 LOG_PATH = 'graph_log.txt'
 
 logging = setup_logger(name=LOG_PATH, log_file=LOG_PATH)
@@ -60,44 +61,46 @@ def calculate_cog_difference(cog1, cog2):
         diff = 360 - diff
     return diff
 
-def geometric_sampling(trajectories, min_distance_threshold):
+def geometric_sampling(vs, min_distance_threshold):
     print("Sampling points")
-    if trajectories is None or len(trajectories) == 0:
+    if vs is None or len(vs) == 0:
         logging.error('No trajectories data provided to geometric_sampling.')
         return []
 
     # Create a KDTree from the trajectories
-    coordinates = np.array([point[:2] for point in trajectories])
-    kdtree = cKDTree(coordinates)
+    cvs = np.array([point[:2] for point in vs])
+    kdtree = cKDTree(cvs)
     
     # This list will store the indices of the points that are kept
-    sampled_indices = []
+    svs = []
     # This set will store indices that are too close to already selected points and should be skipped
-    excluded_indices = set()
+    evs = set()
 
-    for i in range(len(coordinates)):
-        if i in excluded_indices:
+    for i in range(len(cvs)):
+        if i in evs:
             continue
 
         # Initially add the current point to the list of sampled indices
-        sampled_indices.append(i)
-        indices = kdtree.query_ball_point(coordinates[i], min_distance_threshold)
+        svs.append(i)
+        indices = kdtree.query_ball_point(cvs[i], min_distance_threshold)
 
         # Track if an opposite COG point has been kept
         opposite_cog_point_kept = False
 
         for j in indices:
-            if j != i:
-                cog_diff = calculate_cog_difference(trajectories[i][4], trajectories[j][4]) 
-                if cog_diff > 160 and cog_diff < 205:  
-                    if not opposite_cog_point_kept:  
-                        sampled_indices.append(j)
-                        opposite_cog_point_kept = True
-
-        excluded_indices.update(indices)
+            if not opposite_cog_point_kept:  
+                if j not in svs and j != i:
+                    cog_diff = calculate_cog_difference(vs[i][4], vs[j][4]) 
+                    if cog_diff > 160 and cog_diff < 205:  
+                            svs.append(j)
+                            opposite_cog_point_kept = True
+            else:
+                break
+            
+        evs.update(indices)
 
     # Filter the trajectories to only include sampled points
-    sampled_trajectories = [trajectories[i] for i in sampled_indices]
+    sampled_trajectories = [vs[i] for i in svs]
 
     return sampled_trajectories
 
@@ -197,19 +200,19 @@ def create_edges(G, initial_edge_radius_threshold, bearing_threshold, nodes_file
 def create_graphs_for_cells(node_threshold, edge_threshold, cog_threshold, graph_output_name):
 
     stats_list = []
-    cells_to_consider = ["9_9", "9_10", "9_11", "10_9", "10_10", "10_11", "11_9", "11_10", "11_11"]
+    cells_to_consider = ["9_9", "9_10"] #, "9_11", "10_9", "10_10", "10_11", "11_9", "11_10", "11_11"
 
 
-    for cell_name in os.listdir(GRAPH_INPUT_DATA_FOLDER_PATH):
-        folder_path = os.path.join(GRAPH_INPUT_DATA_FOLDER_PATH, cell_name)
+    for cell_name in os.listdir(GRAPH_INPUT):
+        folder_path = os.path.join(GRAPH_INPUT, cell_name)
 
         """
             Where the created graphs will be placed
         """
-        output_folder_path = os.path.join(OUTPUT_FOLDER, f'{graph_output_name}_{node_threshold}_{edge_threshold}_{cog_threshold}')
+        GRAPH_OUTPUT_path = os.path.join(GRAPH_OUTPUT, f'{graph_output_name}_{node_threshold}_{edge_threshold}_{cog_threshold}')
 
         if os.path.isdir(folder_path):
-            output_subfolder = os.path.join(output_folder_path, cell_name)
+            output_subfolder = os.path.join(GRAPH_OUTPUT_path, cell_name)
 
             # Check if the output folder already exists
             if os.path.exists(output_subfolder):
@@ -226,10 +229,10 @@ def create_graphs_for_cells(node_threshold, edge_threshold, cog_threshold, graph
                 
                 print(f"Number of points in folder {cell_name}:", len(trajectories))
 
-                if not os.path.exists(output_folder_path):
-                    os.makedirs(output_folder_path)
+                if not os.path.exists(GRAPH_OUTPUT_path):
+                    os.makedirs(GRAPH_OUTPUT_path)
                 
-                output_subfolder = os.path.join(output_folder_path, cell_name)
+                output_subfolder = os.path.join(GRAPH_OUTPUT_path, cell_name)
 
                 os.makedirs(output_subfolder)
 
@@ -253,7 +256,7 @@ def create_graphs_for_cells(node_threshold, edge_threshold, cog_threshold, graph
     
     stats_df = pd.DataFrame(stats_list)
 
-    stats_df.to_csv(os.path.join(OUTPUT_FOLDER, f'{node_threshold}_{edge_threshold}_{cog_threshold}_graph.csv'), index=False)
+    stats_df.to_csv(os.path.join(STATS_OUTPUT, f'solution_stats//{node_threshold}_{edge_threshold}_{cog_threshold}_graph.csv'), index=False)
     return stats_df
 
 def load_geojson(file_path):
@@ -298,18 +301,18 @@ def get_neighbors(cell_id, cells_df):
     return neighbors
 
 def process_all_cells(cells_df, threshold_distance, edge_threhsold, cog_threshold, graph_output_name):
-    graph_output_folder = os.path.dirname(os.path.dirname(__file__)) + f'//graph_construction_module//output//{graph_output_name}_{threshold_distance}_{edge_threhsold}_{cog_threshold}'
+    output_graph_folder = os.path.dirname(os.path.dirname(__file__)) + f'//data//output_graph//{graph_output_name}_{threshold_distance}_{edge_threhsold}_{cog_threshold}'
     processed_cells = set() 
 
     for cell_id in cells_df.index:
         if cell_id not in processed_cells:
-            connect_graphs(cell_id, cells_df, graph_output_folder, threshold_distance, processed_cells, edge_threhsold, cog_threshold, graph_output_name)
+            connect_graphs(cell_id, cells_df, output_graph_folder, threshold_distance, processed_cells, edge_threhsold, cog_threshold, graph_output_name)
 
-def connect_graphs(base_cell_id, cells_df, graph_output_folder, threshold_distance, processed_cells, edge_threhsold, cog_threshold, graph_output_name):
+def connect_graphs(base_cell_id, cells_df, output_graph_folder, threshold_distance, processed_cells, edge_threhsold, cog_threshold, graph_output_name):
 
     base_graph = create_graph_from_geojson(
-        os.path.join(graph_output_folder, f"{base_cell_id}//nodes.geojson"),
-        os.path.join(graph_output_folder, f"{base_cell_id}//edges.geojson")
+        os.path.join(output_graph_folder, f"{base_cell_id}//nodes.geojson"),
+        os.path.join(output_graph_folder, f"{base_cell_id}//edges.geojson")
     )
     if not base_graph:
         return
@@ -319,8 +322,8 @@ def connect_graphs(base_cell_id, cells_df, graph_output_folder, threshold_distan
 
     for neighbor_id in neighbors:
         if neighbor_id not in processed_cells:  
-            neighbor_nodes_path = os.path.join(graph_output_folder, f"{neighbor_id}//nodes.geojson")
-            neighbor_edges_path = os.path.join(graph_output_folder, f"{neighbor_id}//edges.geojson")
+            neighbor_nodes_path = os.path.join(output_graph_folder, f"{neighbor_id}//nodes.geojson")
+            neighbor_edges_path = os.path.join(output_graph_folder, f"{neighbor_id}//edges.geojson")
             if os.path.exists(neighbor_nodes_path) and os.path.exists(neighbor_edges_path):
                 neighbor_graph = create_graph_from_geojson(neighbor_nodes_path, neighbor_edges_path)
                 if neighbor_graph:
@@ -335,11 +338,11 @@ def connect_two_graphs(G1, G2, base_cell_id, neighbor_id, threshold_distance, ed
     new_edges_G2 = []
 
     for node1, lon1, lat1 in G1_nodes:
-        nearby_indices = tree_G2.query_ball_point([lon1, lat1], threshold_distance)
+        nearby_indices = tree_G2.query_ball_point([lon1, lat1], (threshold_distance + 0.001))
         for index in nearby_indices:
             node2, lon2, lat2 = G2_nodes[index]
             distance = np.sqrt((lon2 - lon1)**2 + (lat2 - lat1)**2)
-            if distance <= threshold_distance:
+            if distance <= (threshold_distance + 0.001):
                 new_edges_G1.append((node1, node2, distance))
                 new_edges_G2.append((node2, node1, distance))
 
@@ -348,11 +351,11 @@ def connect_two_graphs(G1, G2, base_cell_id, neighbor_id, threshold_distance, ed
 
     for node2, node1, dist in new_edges_G2:
         G2.add_edge(node2, node1, weight=dist)
-    OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'graph_construction_module')
-    OUTPUT_FOLDER_PATH = os.path.join(OUTPUT_FOLDER, f'output//{graph_output_name}_{threshold_distance}_{edge_threhsold}_{cog_threshold}')
 
-    output_subfolder = os.path.join(OUTPUT_FOLDER_PATH, f'{base_cell_id}')
-    output_subfolder1 = os.path.join(OUTPUT_FOLDER_PATH, f'{neighbor_id}')
+    output_graph_folder = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'data/output_graph/{graph_output_name}_{threshold_distance}_{edge_threhsold}_{cog_threshold}')
+
+    output_subfolder = os.path.join(output_graph_folder, f'{base_cell_id}')
+    output_subfolder1 = os.path.join(output_graph_folder, f'{neighbor_id}')
 
     nodes_file_path_g1 = os.path.join(output_subfolder, f'nodes.geojson')
     edges_file_path_g1 = os.path.join(output_subfolder, f'edges.geojson')

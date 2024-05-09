@@ -20,7 +20,6 @@ def run(node_dist_threshold, edge_dist_threshold, cog_angle_threshold, graph_out
     print("Graph Connection Done")
 
     return
-
     """
         Perform imputation
     """
@@ -42,8 +41,8 @@ node_dist_threshold = 0.001
 edge_dist_threshold = 0.001
 cog_angle_threshold = 45
 graph_output_name = 'skagen'
-graph_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI//graph_construction_module//output//{graph_output_name}_{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}')
+graph_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI//data//output_graph//{graph_output_name}_{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}')
 original_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'VTI//data//input_imputation//area//aalborg_harbor//random_0_5')
-imputed_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'VTI//imputation_module//output')
+imputed_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'VTI//data//output_imputation')
 
 run(node_dist_threshold, edge_dist_threshold, cog_angle_threshold, graph_output_name, graph_path, original_trajectories, imputed_trajectories)

@@ -181,6 +181,8 @@ data/meta_trajectories/
 data/original/
 
 data/graph_input/
+data/output_graph/
+data/output_imputation/
 
 .vscode/
 db_connection/database.ini

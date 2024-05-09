@@ -10,16 +10,16 @@ import pandas as pd
 
 LOG_PATH = 'imputation_log.txt'
 
-OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'imputation_module\\output')
+IMPUTATION_OUTPUT = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data//output_imputation')
 
-CELLS = os.path.join(os.path.join(os.path.dirname(os.path.dirname(__file__))), 'data\\cells.txt')
+CELLS = os.path.join(os.path.join(os.path.dirname(os.path.dirname(__file__))), 'data//cells.txt')
 
-GRAPH_OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'graph_construction_module')
+GRAPH_OUTPUT = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 
 logging = setup_logger(name=LOG_PATH, log_file=LOG_PATH)
 
-if not os.path.exists(OUTPUT_FOLDER):
-    os.makedirs(OUTPUT_FOLDER)
+if not os.path.exists(IMPUTATION_OUTPUT):
+    os.makedirs(IMPUTATION_OUTPUT)
 
 def load_geojson(file_path):
     with open(file_path, 'r') as f:
@@ -118,8 +118,8 @@ def impute_trajectory(file_name, file_path, graphs, node_dist_threshold, edge_di
     relevant_cell_ids = find_relevant_cells(trajectory_points, cells_df)
     
     for cell_id in relevant_cell_ids:
-        node_path = os.path.join(GRAPH_OUTPUT_FOLDER, f"{graphs}\\{cell_id}\\nodes.geojson")
-        edge_path = os.path.join(GRAPH_OUTPUT_FOLDER, f"{graphs}\\{cell_id}\\edges.geojson")
+        node_path = os.path.join(GRAPH_OUTPUT, f"{graphs}//{cell_id}//nodes.geojson")
+        edge_path = os.path.join(GRAPH_OUTPUT, f"{graphs}//{cell_id}//edges.geojson")
         G_cell = create_graph_from_geojson(node_path, edge_path)
         G = merge_graphs(G, G_cell)
 
@@ -208,13 +208,13 @@ def impute_trajectory(file_name, file_path, graphs, node_dist_threshold, edge_di
         for i in range(len(path)-1):
             edges.append((path[i], path[i+1]))
 
-    output_folder_path = os.path.join(OUTPUT_FOLDER, f'{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}//raw//{file_name}')
+    IMPUTATION_OUTPUT_path = os.path.join(IMPUTATION_OUTPUT, f'{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}//raw//{file_name}')
 
-    if not os.path.exists(output_folder_path):
-        os.makedirs(output_folder_path)
+    if not os.path.exists(IMPUTATION_OUTPUT_path):
+        os.makedirs(IMPUTATION_OUTPUT_path)
 
-    imputed_nodes_file_path = os.path.join(output_folder_path, f'{file_name}_nodes.geojson')
-    imputed_edges_file_path = os.path.join(output_folder_path, f'{file_name}_edges.geojson')
+    imputed_nodes_file_path = os.path.join(IMPUTATION_OUTPUT_path, f'{file_name}_nodes.geojson')
+    imputed_edges_file_path = os.path.join(IMPUTATION_OUTPUT_path, f'{file_name}_edges.geojson')
 
     nodes_to_geojson(G_apply_cog_penalty, unique_nodes, imputed_nodes_file_path)
     edges_to_geojson(G_apply_cog_penalty, edges, imputed_edges_file_path)
