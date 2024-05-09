@@ -281,40 +281,38 @@ def refine_trajectory(trajectory: List[Tuple[float,float]], epsilon=1e-7):
     if len(trajectory) < 3:
         return gpd.GeoDataFrame(geometry=[Point(y, x) for x, y in trajectory])
     
-    start_index: int = 0
+    anchor: int = 0
     window_size: int = 3
     final_trajectory = []
     previous_fit = trajectory[:2]
     turn_detected = False
 
-    for i in range(3, len(trajectory)):
-        # check if we are at the end of the trajectory
-        if (start_index + window_size >= len(trajectory)):
-            break
+    while anchor + window_size <= len(trajectory):
+        # extract the current segment
+        current_segment:list = trajectory[anchor:anchor + window_size]
 
-        # refine part of the trajectory
-        current_segment:list = trajectory[start_index:start_index + window_size]
-
+        # compute best fit for the current segment
         best_fit_segment, residual = best_fit(current_segment)
 
-        if (residual > epsilon):
-            extended_segment = trajectory[start_index:start_index + window_size - 1]
-            extended_segment = np.append(extended_segment, [trajectory[start_index + window_size]], axis=0)
+        if residual > epsilon and anchor + window_size < len(trajectory):
+            extended_segment = trajectory[anchor:anchor + window_size - 1]
+            extended_segment = np.append(extended_segment, [trajectory[anchor + window_size]], axis=0)
 
             _, residual = best_fit(extended_segment)
 
             if residual > epsilon:
                 turn_detected = True 
             else:
-                current_segment[-1] = calculate_center_position([extended_segment[-2], current_segment[-1], extended_segment[-1]])
+                new_point = calculate_center_position([extended_segment[-2], current_segment[-1], extended_segment[-1]])
+                current_segment[-1] = new_point
                 best_fit_segment, residual = best_fit(current_segment)
 
         if (turn_detected):
             turn_detected = False
             final_trajectory.extend(previous_fit)
-            start_index += window_size
+            anchor += window_size
             window_size = 3
-            previous_fit = trajectory[start_index:start_index + 2]
+            previous_fit = trajectory[anchor:anchor + 2]
         else:
             previous_fit = best_fit_segment
             window_size += 1
@@ -378,3 +376,5 @@ def process_imputated_trajectory(filepath_nodes:str):
     new_filepath = os.path.join(new_filepath, f'{filename}_refined.geojson')
 
     nodes_refined_gdf.to_file(new_filepath, driver='GeoJSON')
+
+process_imputated_trajectory('/Users/ceciliew.fog/Documents/KandidatSpeciale/VTI/imputation_module/output/raw/209525000_15-01-2024_00-05-59.txt/209525000_15-01-2024_00-05-59.txt_nodes.geojson')
