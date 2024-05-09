@@ -218,8 +218,9 @@ def create_graphs_for_cells(node_threshold, edge_threshold, cog_threshold, graph
                 continue
 
         if os.path.isdir(folder_path):
-            print(f"Processing {cell_name}")
+            
             if cell_name in cells_to_consider:
+                print(f"Processing {cell_name}")
                 trajectories = extract_original_trajectories(folder_path)
 
                 if len(trajectories) == 0:
