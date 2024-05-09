@@ -61,46 +61,44 @@ def calculate_cog_difference(cog1, cog2):
         diff = 360 - diff
     return diff
 
-def geometric_sampling(vs, min_distance_threshold):
+def geometric_sampling(trajectories, min_distance_threshold):
     print("Sampling points")
-    if vs is None or len(vs) == 0:
+    if trajectories is None or len(trajectories) == 0:
         logging.error('No trajectories data provided to geometric_sampling.')
         return []
 
     # Create a KDTree from the trajectories
-    cvs = np.array([point[:2] for point in vs])
-    kdtree = cKDTree(cvs)
+    coordinates = np.array([point[:2] for point in trajectories])
+    kdtree = cKDTree(coordinates)
     
     # This list will store the indices of the points that are kept
-    svs = []
+    sampled_indices = []
     # This set will store indices that are too close to already selected points and should be skipped
-    evs = set()
+    excluded_indices = set()
 
-    for i in range(len(cvs)):
-        if i in evs:
+    for i in range(len(coordinates)):
+        if i in excluded_indices:
             continue
 
         # Initially add the current point to the list of sampled indices
-        svs.append(i)
-        indices = kdtree.query_ball_point(cvs[i], min_distance_threshold)
+        sampled_indices.append(i)
+        indices = kdtree.query_ball_point(coordinates[i], min_distance_threshold)
 
         # Track if an opposite COG point has been kept
         opposite_cog_point_kept = False
 
         for j in indices:
-            if not opposite_cog_point_kept:  
-                if j not in svs and j != i:
-                    cog_diff = calculate_cog_difference(vs[i][4], vs[j][4]) 
-                    if cog_diff > 160 and cog_diff < 205:  
-                            svs.append(j)
-                            opposite_cog_point_kept = True
-            else:
-                break
-            
-        evs.update(indices)
+            if j != i:
+                cog_diff = calculate_cog_difference(trajectories[i][4], trajectories[j][4]) 
+                if cog_diff > 160 and cog_diff < 205:  
+                    if not opposite_cog_point_kept:  
+                        sampled_indices.append(j)
+                        opposite_cog_point_kept = True
+
+        excluded_indices.update(indices)
 
     # Filter the trajectories to only include sampled points
-    sampled_trajectories = [vs[i] for i in svs]
+    sampled_trajectories = [trajectories[i] for i in sampled_indices]
 
     return sampled_trajectories
 
