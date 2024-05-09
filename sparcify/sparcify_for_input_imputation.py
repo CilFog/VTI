@@ -6,7 +6,7 @@ import time as t
 import pandas as pd
 import geopandas as gpd
 from pathlib import Path
-from typing import Callable
+from typing import Callable, List
 from shapely.geometry import Polygon, box
 from multiprocessing import freeze_support
 from data.logs.logging import setup_logger
@@ -115,50 +115,86 @@ def sparcify_trajectories_with_action_for_folder(
     finished_time = t.perf_counter() - initial_time
     logging.info(f'Reduced on avg. pr trajectory: {reduced_avg} for {total_trajectories} trajectories. Reduced points in total: {total_reduced_points}/{total_number_of_points}. Elapsed time: {finished_time:0.4f} seconds')   
 
+def find_cell_txt_files(directories: List[str]):
+    cell_txt_files:list[str] = []
+
+    for directory in directories:
+        cell_directory = os.path.join(INPUT_GRAPH_CELLS_FOLDER, directory)
+        path_obj = Path(cell_directory)
+        cell_txt_files.extend(path_obj.rglob('*.txt'))
+    
+    cell_txt_files_original_dict:dict = {}
+    for path in cell_txt_files:
+        path_str = str(path)
+        for cell_id in directories:
+            if cell_id in path_str:
+                # Replace everything up to and including the cell ID
+                updated_path = path_str.split(cell_id, 1)[-1]
+                updated_path = updated_path.lstrip("/")  # Remove any leading slashes
+                updated_path = os.path.join(INPUT_GRAPH_FOLDER, updated_path)
+                
+                if updated_path not in cell_txt_files_original_dict.keys():
+                    cell_txt_files_original_dict[updated_path] = [path_str]
+                else:
+                    cell_txt_files_original_dict[updated_path].append(path_str)
+    
+    cell_txt_files_original = [(filepath, cellpaths) for filepath, cellpaths in cell_txt_files_original_dict.items() for path in cellpaths]
+    return cell_txt_files_original
+
 def move_random_files_to_test_and_validation(percentage=0.1):
     os_path_split = '/' if '/' in INPUT_GRAPH_FOLDER else '\\'
     directories_with_moved_files = set()
+    
+    print('Getting all input files')
     all_files = list(Path(INPUT_GRAPH_FOLDER).rglob('*.txt')) # List all files in the directory recursively
     all_files = [str(path) for path in all_files] # Convert Path objects to strings
 
+    print('Calculating number of files to move to validation')
     num_files_to_move_to_validation = int(len(all_files) * percentage)
+    
     not_dense_files:list[str] = []
     files_moved:list[str] = []
 
     # for test
+    print('Began working on test files')
     try:
-        cells_paths = [f'input_graph_cells{os_path_split}9_9', f'input_graph_cells{os_path_split}9_10', f'input_graph_cells{os_path_split}9_11', f'input_graph_cells{os_path_split}10_9', f'input_graph_cells{os_path_split}10_10', f'input_graph_cells{os_path_split}10_11', f'input_graph_cells{os_path_split}11_9', f'input_graph_cells{os_path_split}11_10', f'input_graph_cells{os_path_split}11_11']
-        cells = ['9_9', '9_10', '9_11', '10_9', '10_10', '10_11', '11_9', '11_10', '11_11']
+        cell_ids = [
+            '9_9', 
+            '9_10', 
+            '9_11', 
+            '10_9', 
+            '10_10', 
+            '10_11', 
+            '11_9', 
+            '11_10', 
+            '11_11'
+        ]
         
+        print('get cells txt files')
         # get files (vessel samples) within all cells
-        cell_files = list(Path(INPUT_GRAPH_CELLS_FOLDER).rglob('*.txt')) # List all files in the directory recursively
-        cell_files = [str(path) for path in cell_files]
-        
-        # filter all files not within the specified cells paths
-        cell_files = [path for path in cell_files if any(cell in path for cell in cells_paths)]
+        cell_txt_files = find_cell_txt_files(cell_ids)
         
         # read cells in txt
         cells_df = pd.read_csv(CELL_TXT)
 
+        print('preparing grid cells in df')
         # filter cells not in the cells array
-        filtered_cells_df = cells_df[cells_df['cell_id'].isin(cells)]
-        filtered_cells_df['geometry'] = filtered_cells_df.apply(lambda row: box(row['min_lon'], row['min_lat'], row['max_lon'], row['max_lat']), axis=1)
-        cells_gdf = gpd.GeoDataFrame(filtered_cells_df, geometry='geometry', crs="EPSG:4326")
-
-        # look for files (whole trajectories) in input graph that we know intersects with the cells
-        all_files_with_cells = [path for path in all_files if any(os.path.basename(cell) in path for cell in cell_files)]
+        cells_df = cells_df[cells_df['cell_id'].isin(cell_ids)]
+        cells_df['geometry'] = cells_df.apply(lambda row: box(row['min_lon'], row['min_lat'], row['max_lon'], row['max_lat']), axis=1)
+        cells_gdf = gpd.GeoDataFrame(cells_df, geometry='geometry', crs="EPSG:4326")
         
+        print('calculating number of files to move to test')
         # calculate the number of files to move to test given the percentage
-        num_files_to_move_to_test = int(len(all_files_with_cells) * percentage)
+        num_files_to_move_to_test = int(len(cell_txt_files) * percentage)
         logging.info(f'Began moving test files {num_files_to_move_to_test}')
         
         # select random files
-        random_files_to_move = random.sample(all_files_with_cells, num_files_to_move_to_test)
+        random_files_to_move = random.sample(cell_txt_files, num_files_to_move_to_test)
         
         num_files_moved_to_test = 0
 
         while(num_files_moved_to_test < num_files_to_move_to_test):
-            for filepath in random_files_to_move:
+            for (filepath, cell_paths) in random_files_to_move:
                 # check we are not done
                 if (num_files_moved_to_test >= num_files_to_move_to_test):
                     break
@@ -168,7 +204,11 @@ def move_random_files_to_test_and_validation(percentage=0.1):
                     continue
 
                 trajectory_cell_df = get_trajectory_df_from_txt(filepath)
-                
+
+                if (trajectory_cell_df is None or trajectory_cell_df.empty):
+                    not_dense_files.append(filepath)
+                    continue
+
                 # spatial join: find which points fall within any of the cells
                 joined_gdf = gpd.sjoin(trajectory_cell_df, cells_gdf, how='left', predicate='within')
 
@@ -182,7 +222,7 @@ def move_random_files_to_test_and_validation(percentage=0.1):
                 valid_groups = group_sizes[group_sizes >= 2]
 
                 if valid_groups.empty:
-                    not_dense_files.append(os.path.basename(filepath))
+                    not_dense_files.append(filepath)
                     continue
                     
                 largest_group_id = valid_groups.idxmax()
@@ -206,13 +246,18 @@ def move_random_files_to_test_and_validation(percentage=0.1):
                 # remove file from input graph
                 files_moved.append(filepath)
                 num_files_moved_to_test += 1
-                os.remove(filepath) 
+                os.remove(filepath)
                 directories_with_moved_files.add(os.path.dirname(filepath))
+
+                for (cell_path) in cell_paths:
+                    os.remove(cell_path)
+                    directories_with_moved_files.add(os.path.dirname(cell_path))
+
                 sys.stdout.write(f"\rMoved {num_files_moved_to_test}/{num_files_to_move_to_test} to test")
                 sys.stdout.flush()
 
             if (num_files_moved_to_test < num_files_to_move_to_test):
-                random_files_to_move = random.sample(all_files_with_cells, num_files_to_move_to_test)
+                random_files_to_move = random.sample(cell_txt_files, num_files_to_move_to_test)
 
     except Exception as e:
         logging.error('Error was thrown with', repr(e))
@@ -270,6 +315,10 @@ def move_random_files_to_test_and_validation(percentage=0.1):
         try:
             if not os.listdir(dir_path):  # Check if directory is empty
                 os.rmdir(dir_path)  # Remove empty directory
+                dir_dir_path = os.path.dirname(dir_path) # remove parent i empty
+                if not os.listdir(dir_dir_path):
+                    os.rmdir(dir_dir_path)
+
                 empty_folders_removed += 1
         except Exception as e:
             logging.error(f'Error was thrown with {repr(e)} for files in {dir_path}')
@@ -460,9 +509,6 @@ def move_test_and_validation_back():
             empty_folders_removed += 1
 
     logging.info(f'Finished moving {num_files_to_move} files\n Removed {empty_folders_removed} empty directories from input graph')
-
-print('started moving files back')
-move_test_and_validation_back()
 
 print('began creating test and validation data for cells')
 move_random_files_to_test_and_validation()
