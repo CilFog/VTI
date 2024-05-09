@@ -61,6 +61,7 @@ def calculate_cog_difference(cog1, cog2):
     return diff
 
 def geometric_sampling(vs, min_distance_threshold):
+    print("Sampling points")
     if vs is None or len(vs) == 0:
         logging.error('No trajectories data provided to geometric_sampling.')
         return []
@@ -104,6 +105,7 @@ def geometric_sampling(vs, min_distance_threshold):
 
 
 def create_nodes(sampled_trajectories):
+    print("Creating Nodes")
     """
         Receives the geometrically sampled AIS points, assigns them with a avg_depth
         by intersecting with a grid layer. The function then returns the a graph
@@ -155,6 +157,7 @@ def create_nodes(sampled_trajectories):
 
 
 def create_edges(G, initial_edge_radius_threshold, bearing_threshold, nodes_file_path, edges_file_path):
+    print("Creating Edges")
     """
         Creates edges between nodes in the graph. The creation of an edge 
         is based on two criterias. Distance between nodes, and bearing between nodes.
@@ -215,11 +218,14 @@ def create_graphs_for_cells(node_threshold, edge_threshold, cog_threshold, graph
                 continue
 
         if os.path.isdir(folder_path):
+            print(f"Processing {cell_name}")
             if cell_name in cells_to_consider:
                 trajectories = extract_original_trajectories(folder_path)
 
                 if len(trajectories) == 0:
                         continue
+                
+                print(f"Number of points in folder {cell_name}:", len(trajectories))
 
                 if not os.path.exists(output_folder_path):
                     os.makedirs(output_folder_path)
@@ -232,9 +238,11 @@ def create_graphs_for_cells(node_threshold, edge_threshold, cog_threshold, graph
                 edges_file_path = os.path.join(output_subfolder, 'edges.geojson')
 
                 geometric_sampled_nodes = geometric_sampling(trajectories, node_threshold)
+                print(f"Number of nodes in folder {cell_name}:", len(geometric_sampled_nodes))
                 nodes = create_nodes(geometric_sampled_nodes)
                 edges = create_edges(nodes, edge_threshold, cog_threshold, nodes_file_path, edges_file_path) 
 
+                print(f"Number of edges in folder {cell_name}:", edges, "\n")
 
                 stats = {
                     'cell_name': cell_name,
