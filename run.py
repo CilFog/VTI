@@ -15,8 +15,11 @@ def run(node_dist_threshold, edge_dist_threshold, cog_angle_threshold, graph_out
     cells_data = pd.read_csv(CELLS, index_col='cell_id')
 
     create_graphs_for_cells(node_dist_threshold, edge_dist_threshold, cog_angle_threshold, graph_output_name)
-    process_all_cells(cells_data, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, graph_output_name)
     print("Graph Creation Done")
+    process_all_cells(cells_data, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, graph_output_name)
+    print("Graph Connection Done")
+
+    return
 
     """
         Perform imputation

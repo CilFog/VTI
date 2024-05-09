@@ -291,7 +291,7 @@ def get_neighbors(cell_id, cells_df):
     return neighbors
 
 def process_all_cells(cells_df, threshold_distance, edge_threhsold, cog_threshold, graph_output_name):
-    graph_output_folder = os.path.dirname(os.path.dirname(__file__)) + f'\\graph_construction_module\\output\\{graph_output_name}_{threshold_distance}_{edge_threhsold}_{cog_threshold}'
+    graph_output_folder = os.path.dirname(os.path.dirname(__file__)) + f'//graph_construction_module//output//{graph_output_name}_{threshold_distance}_{edge_threhsold}_{cog_threshold}'
     processed_cells = set() 
 
     for cell_id in cells_df.index:
@@ -301,8 +301,8 @@ def process_all_cells(cells_df, threshold_distance, edge_threhsold, cog_threshol
 def connect_graphs(base_cell_id, cells_df, graph_output_folder, threshold_distance, processed_cells, edge_threhsold, cog_threshold, graph_output_name):
 
     base_graph = create_graph_from_geojson(
-        os.path.join(graph_output_folder, f"{base_cell_id}\\nodes.geojson"),
-        os.path.join(graph_output_folder, f"{base_cell_id}\\edges.geojson")
+        os.path.join(graph_output_folder, f"{base_cell_id}//nodes.geojson"),
+        os.path.join(graph_output_folder, f"{base_cell_id}//edges.geojson")
     )
     if not base_graph:
         return
@@ -312,8 +312,8 @@ def connect_graphs(base_cell_id, cells_df, graph_output_folder, threshold_distan
 
     for neighbor_id in neighbors:
         if neighbor_id not in processed_cells:  
-            neighbor_nodes_path = os.path.join(graph_output_folder, f"{neighbor_id}\\nodes.geojson")
-            neighbor_edges_path = os.path.join(graph_output_folder, f"{neighbor_id}\\edges.geojson")
+            neighbor_nodes_path = os.path.join(graph_output_folder, f"{neighbor_id}//nodes.geojson")
+            neighbor_edges_path = os.path.join(graph_output_folder, f"{neighbor_id}//edges.geojson")
             if os.path.exists(neighbor_nodes_path) and os.path.exists(neighbor_edges_path):
                 neighbor_graph = create_graph_from_geojson(neighbor_nodes_path, neighbor_edges_path)
                 if neighbor_graph:
@@ -342,7 +342,7 @@ def connect_two_graphs(G1, G2, base_cell_id, neighbor_id, threshold_distance, ed
     for node2, node1, dist in new_edges_G2:
         G2.add_edge(node2, node1, weight=dist)
     OUTPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'graph_construction_module')
-    OUTPUT_FOLDER_PATH = os.path.join(OUTPUT_FOLDER, f'output\\{graph_output_name}_{threshold_distance}_{edge_threhsold}_{cog_threshold}')
+    OUTPUT_FOLDER_PATH = os.path.join(OUTPUT_FOLDER, f'output//{graph_output_name}_{threshold_distance}_{edge_threhsold}_{cog_threshold}')
 
     output_subfolder = os.path.join(OUTPUT_FOLDER_PATH, f'{base_cell_id}')
     output_subfolder1 = os.path.join(OUTPUT_FOLDER_PATH, f'{neighbor_id}')
