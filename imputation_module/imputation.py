@@ -277,6 +277,53 @@ def best_fit(segment:List[Tuple[float,float]]):
 
     return fitted_segment, residuals[0]
 
+def refine_trajectory_double(trajectory: List[Tuple[float,float]], epsilon=1e-7): # includes the last point of previous fit in the next fit
+    if len(trajectory) < 3:
+        return gpd.GeoDataFrame(geometry=[Point(y, x) for x, y in trajectory])
+    
+    anchor: int = 0
+    window_size: int = 3
+    final_trajectory = []
+    previous_fit = trajectory[:2]
+    turn_detected = False
+
+    while anchor + window_size <= len(trajectory):
+        # extract the current segment
+        current_segment:list = trajectory[anchor:anchor + window_size]
+
+        # compute best fit for the current segment
+        best_fit_segment, residual = best_fit(current_segment)
+
+        if residual > epsilon and anchor + window_size < len(trajectory):
+            extended_segment = trajectory[anchor:anchor + window_size - 1]
+            extended_segment = np.append(extended_segment, [trajectory[anchor + window_size]], axis=0)
+
+            _, residual = best_fit(extended_segment)
+
+            if residual > epsilon:
+                turn_detected = True 
+            else:
+                new_point = calculate_center_position([extended_segment[-2], current_segment[-1], extended_segment[-1]])
+                current_segment[-1] = new_point
+                best_fit_segment, residual = best_fit(current_segment)
+
+        if residual > epsilon:
+            turn_detected = False
+            final_trajectory.extend(previous_fit[:-1])
+            anchor += window_size - 1
+            window_size = 3
+            previous_fit = [previous_fit[-1]] + trajectory[anchor:anchor + 1]
+        else:
+            previous_fit = best_fit_segment
+            window_size += 1
+
+    # Add the last refined sub-trajectory
+    final_trajectory.extend(previous_fit)
+    # Convert refined points back to a GeoDataFrame
+    refined_geometries = [Point(y, x) for x, y in final_trajectory]
+
+    return gpd.GeoDataFrame(geometry=refined_geometries)
+
 def refine_trajectory(trajectory: List[Tuple[float,float]], epsilon=1e-7):
     if len(trajectory) < 3:
         return gpd.GeoDataFrame(geometry=[Point(y, x) for x, y in trajectory])
