@@ -261,21 +261,32 @@ def calculate_center_position(positions:List[Tuple[float,float]]):
     )
     return center_pos
 
-def best_fit(segment:List[Tuple[float,float]]):
+def best_fit(segment: List[Tuple[float, float]]):
     """Perform linear least squares regression on a segment of positions."""
-    # extract X and Y coordinates for the segment
-    y_coords = [position[1] for position in segment]
-    x_coords = [position[0] for position in segment]
-    matrix = np.vstack([y_coords, np.ones(len(y_coords))]).T
-    regression_result = np.linalg.lstsq(matrix, x_coords, rcond=None)
-
+    # extract X (longitude) and Y (latitude) coordinates
+    x_coords = np.array([position[0] for position in segment])
+    y_coords = np.array([position[1] for position in segment])
+    
+    # stack X coordinates with a column of ones for the intercept term
+    matrix = np.vstack([x_coords, np.ones(len(x_coords))]).T
+    
+    # calculate the least squares solution
+    regression_result = np.linalg.lstsq(matrix, y_coords, rcond=None)
+    
+    # unpack the slope and intercept
     slope, intercept = regression_result[0]
+    
+    # calculate the residual sum of squares, handle cases with no residuals
     residuals = regression_result[1]
+    if residuals.size == 0:
+        residuals_value = 0
+    else:
+        residuals_value = residuals[0]
 
-    # compute the predicted y-values based on the best-fit line
-    fitted_segment = [(y, slope * y + intercept) for y in y_coords]
+    # compute the predicted Y-values based on the best-fit line
+    fitted_segment = [(slope * x + intercept, x) for x in x_coords]
 
-    return fitted_segment, residuals[0]
+    return fitted_segment, residuals_value
 
 def refine_trajectory_double(trajectory: List[Tuple[float,float]], epsilon=1e-7): # includes the last point of previous fit in the next fit
     if len(trajectory) < 3:
@@ -423,5 +434,3 @@ def process_imputated_trajectory(filepath_nodes:str):
     new_filepath = os.path.join(new_filepath, f'{filename}_refined.geojson')
 
     nodes_refined_gdf.to_file(new_filepath, driver='GeoJSON')
-
-process_imputated_trajectory('/Users/ceciliew.fog/Documents/KandidatSpeciale/VTI/imputation_module/output/raw/209525000_15-01-2024_00-05-59.txt/209525000_15-01-2024_00-05-59.txt_nodes.geojson')
