@@ -81,20 +81,20 @@ def geometric_sampling(trajectories, min_distance_threshold):
     # This set will store indices that are too close to already selected points and should be skipped
     excluded_indices = set()
 
-    for i in range(len(coordinates)):
-        if i in excluded_indices:
+    for coord_index in range(len(coordinates)):
+        if coord_index in excluded_indices or coord_index in sampled_indices:
             continue
 
         # Initially add the current point to the list of sampled indices
-        sampled_indices.append(i)
-        indices = kdtree.query_ball_point(coordinates[i], min_distance_threshold)
+        sampled_indices.append(coord_index)
+        indices = kdtree.query_ball_point(coordinates[coord_index], min_distance_threshold)
 
         # Track if an opposite COG point has been kept
         opposite_cog_point_kept = False
 
         for j in indices:
-            if j != i:
-                cog_diff = calculate_cog_difference(trajectories[i][4], trajectories[j][4]) 
+            if j != coord_index:
+                cog_diff = calculate_cog_difference(trajectories[coord_index][4], trajectories[j][4]) 
                 if cog_diff > 160 and cog_diff < 205:  
                     if not opposite_cog_point_kept:  
                         sampled_indices.append(j)
