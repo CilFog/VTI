@@ -33,7 +33,6 @@ def get_trajectory_df(filepath) -> gpd.GeoDataFrame:
     
     except Exception as e:
         logging.warning(f'Error occurred trying to retrieve trajectory csv: {repr(e)}')
-
         
 def extract_original_trajectories(input_folder) -> list:
     try: 
@@ -73,7 +72,9 @@ def geometric_sampling(trajectories, min_distance_threshold):
         return []
 
     # Create a KDTree from the trajectories
+
     coordinates = np.array([point[:2] for point in trajectories])
+
     kdtree = cKDTree(coordinates)
     
     # This list will store the indices of the points that are kept
@@ -84,7 +85,7 @@ def geometric_sampling(trajectories, min_distance_threshold):
     for coord_index in range(len(coordinates)):
         if coord_index in excluded_indices or coord_index in sampled_indices:
             continue
-
+        
         # Initially add the current point to the list of sampled indices
         sampled_indices.append(coord_index)
         indices = kdtree.query_ball_point(coordinates[coord_index], min_distance_threshold)
@@ -107,6 +108,12 @@ def geometric_sampling(trajectories, min_distance_threshold):
 
     return sampled_trajectories
 
+# Function to find the maximum depth within 50 meters
+def max_draught_within_radius(point, all_points, radius=50):
+    buffer = point.buffer(radius)
+    within_buffer = all_points[all_points.intersects(buffer)]
+    return within_buffer['draught'].max()*-1
+
 def create_nodes(sampled_trajectories):
     print("Creating Nodes")
     """
@@ -124,34 +131,16 @@ def create_nodes(sampled_trajectories):
     config = load_config()
     engine = create_engine(f"postgresql://{config['user']}:{config['password']}@{config['host']}:{config['port']}/{config['database']}")
     
-    # query = """
-    #     SELECT a.index, a.geometry AS ais_geometry, b.depth, b.geometry AS depth_geometry
-    #     FROM (SELECT row_number() OVER () AS index, geometry FROM ais_points) AS a
-    #     CROSS JOIN LATERAL (
-    #         SELECT depth, geometry
-    #         FROM depth_points
-    #         WHERE a.geometry <-> geometry <= 50
-    #         ORDER BY a.geometry <-> geometry
-    #         LIMIT 1
-    #     ) AS b;
-    # """
     query = """
-        SELECT a.index, a.geometry AS ais_geometry, 
-            COALESCE(b.max_depth, c.max_draught) AS depth
-        FROM (SELECT row_number() OVER () AS index, geometry, draught FROM ais_points) AS a
-        LEFT JOIN LATERAL (
-            SELECT MIN(depth) AS max_depth
+        SELECT a.index, a.geometry AS ais_geometry, b.depth AS avg_depth
+        FROM (SELECT row_number() OVER () AS index, geometry FROM ais_points) AS a
+        CROSS JOIN LATERAL (
+            SELECT depth
             FROM depth_points
-            WHERE depth < 0
-            ANE a.geometry <-> geometry <= 50
-        ) AS b ON true
-        LEFT JOIN LATERAL (
-            SELECT MAX(draught) * -1 AS max_draught  -- Modified this line to multiply by -1
-            FROM ais_points
-            WHERE a.geometry <-> geometry <= 50 AND a.index != ais_points.index
-        ) AS c ON b.max_depth IS NULL
-        GROUP BY a.index, a.geometry;
-    """
+            WHERE a.geometry <-> geometry <= 50
+            LIMIT 1
+        ) AS b
+        """
 
     # Load AIS points into temporary table for query performance
     ais_points_gdf.to_postgis("ais_points", engine, if_exists="replace", index=False)
@@ -162,11 +151,18 @@ def create_nodes(sampled_trajectories):
     # Join nearest depths back to original AIS points DataFrame using the index for correct alignment
     ais_points_gdf = ais_points_gdf.merge(nearest_depths_df, left_index=True, right_on='index')
 
-    # Assign the nearest depth directly
-    ais_points_gdf['avg_depth'] = ais_points_gdf['depth']
-
     ais_points_gdf = ais_points_gdf[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'avg_depth', 'geometry']]
     
+    ais_points_gdf = ais_points_gdf.to_crs(epsg=3857)  # Convert to a projected system for meter-based analysis
+    null_avg_depth_df = ais_points_gdf[ais_points_gdf['avg_depth'].isna()].copy()
+
+    if not null_avg_depth_df.empty:
+        # Apply the function to each row with NaN avg_depth
+        for row in null_avg_depth_df.itertuples():
+            max_depth = max_draught_within_radius(row.geometry, ais_points_gdf)
+            ais_points_gdf.at[row.Index, 'avg_depth'] = max_depth
+
+    ais_points_gdf = ais_points_gdf.to_crs(epsg=4326)  # Convert to a projected system for meter-based analysis
 
     G = nx.Graph()
     for index, row in ais_points_gdf.iterrows():
@@ -239,40 +235,40 @@ def create_graphs_for_cells(node_threshold, edge_threshold, cog_threshold, graph
 
         if os.path.isdir(folder_path):
             
-            if cell_name in cells_to_consider:
-                print(f"Processing {cell_name}")
-                trajectories = extract_original_trajectories(folder_path)
+            # if cell_name in cells_to_consider:
+            print(f"Processing {cell_name}")
+            trajectories = extract_original_trajectories(folder_path)
 
-                if len(trajectories) == 0:
-                        continue
-                
-                print(f"Number of points in folder {cell_name}:", len(trajectories))
+            if len(trajectories) == 0:
+                    continue
+            
+            print(f"Number of points in folder {cell_name}:", len(trajectories))
 
-                if not os.path.exists(GRAPH_OUTPUT_path):
-                    os.makedirs(GRAPH_OUTPUT_path)
-                
-                output_subfolder = os.path.join(GRAPH_OUTPUT_path, cell_name)
+            if not os.path.exists(GRAPH_OUTPUT_path):
+                os.makedirs(GRAPH_OUTPUT_path)
+            
+            output_subfolder = os.path.join(GRAPH_OUTPUT_path, cell_name)
 
-                os.makedirs(output_subfolder)
+            os.makedirs(output_subfolder)
 
-                nodes_file_path = os.path.join(output_subfolder, 'nodes.geojson')
-                edges_file_path = os.path.join(output_subfolder, 'edges.geojson')
+            nodes_file_path = os.path.join(output_subfolder, 'nodes.geojson')
+            edges_file_path = os.path.join(output_subfolder, 'edges.geojson')
 
-                geometric_sampled_nodes = geometric_sampling(trajectories, node_threshold)
-                print(f"Number of nodes in folder {cell_name}:", len(geometric_sampled_nodes))
-                nodes = create_nodes(geometric_sampled_nodes)
-                edges = create_edges(nodes, edge_threshold, cog_threshold, nodes_file_path, edges_file_path) 
+            geometric_sampled_nodes = geometric_sampling(trajectories, node_threshold)
+            print(f"Number of nodes in folder {cell_name}:", len(geometric_sampled_nodes))
+            nodes = create_nodes(geometric_sampled_nodes)
+            edges = create_edges(nodes, edge_threshold, cog_threshold, nodes_file_path, edges_file_path) 
 
-                print(f"Number of edges in folder {cell_name}:", edges, "\n")
+            print(f"Number of edges in folder {cell_name}:", edges, "\n")
 
-                stats = {
-                    'cell_name': cell_name,
-                    'original_node_count': len(trajectories),
-                    'sampled_node_count': len(geometric_sampled_nodes),
-                    'edge_count': edges
-                }
-                stats_list.append(stats)
-    
+            stats = {
+                'cell_name': cell_name,
+                'original_node_count': len(trajectories),
+                'sampled_node_count': len(geometric_sampled_nodes),
+                'edge_count': edges
+            }
+            stats_list.append(stats)
+
     stats_df = pd.DataFrame(stats_list)
 
     stats_df.to_csv(os.path.join(STATS_OUTPUT, f'solution_stats//{node_threshold}_{edge_threshold}_{cog_threshold}_graph.csv'), index=False)

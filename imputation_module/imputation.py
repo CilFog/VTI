@@ -48,7 +48,6 @@ def create_graph_from_geojson(nodes_geojson_path, edges_geojson_path):
     except Exception as e:
         logging.warning(f'Error occurred trying to retrieve graph: {repr(e)}')
 
-
 # Load GeoJSON files and create a graph
 def load_geojson_to_graph(file_path):
     with open(file_path, 'r') as f:
@@ -86,7 +85,6 @@ def find_relevant_cells(trajectory_points, cells_df):
             if cell_polygon.contains(point):
                 relevant_cell_ids.add(row['cell_id'])
     return list(relevant_cell_ids)
-
 
 def impute_trajectory(file_name, file_path, graphs, node_dist_threshold, edge_dist_threshold, cog_angle_threshold):
     start_time = time.time()
