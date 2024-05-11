@@ -107,7 +107,6 @@ def geometric_sampling(trajectories, min_distance_threshold):
 
     return sampled_trajectories
 
-
 def create_nodes(sampled_trajectories):
     print("Creating Nodes")
     """
@@ -120,20 +119,38 @@ def create_nodes(sampled_trajectories):
         columns=['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type'],
         geometry=gpd.points_from_xy([item[1] for item in sampled_trajectories], [item[0] for item in sampled_trajectories]),
         crs='EPSG:4326'
-        )
+    )
 
     config = load_config()
     engine = create_engine(f"postgresql://{config['user']}:{config['password']}@{config['host']}:{config['port']}/{config['database']}")
     
+    # query = """
+    #     SELECT a.index, a.geometry AS ais_geometry, b.depth, b.geometry AS depth_geometry
+    #     FROM (SELECT row_number() OVER () AS index, geometry FROM ais_points) AS a
+    #     CROSS JOIN LATERAL (
+    #         SELECT depth, geometry
+    #         FROM depth_points
+    #         WHERE a.geometry <-> geometry <= 50
+    #         ORDER BY a.geometry <-> geometry
+    #         LIMIT 1
+    #     ) AS b;
+    # """
     query = """
-        SELECT a.index, a.geometry AS ais_geometry, b.depth, b.geometry AS depth_geometry
-        FROM (SELECT row_number() OVER () AS index, geometry FROM ais_points) AS a
-        CROSS JOIN LATERAL (
-            SELECT depth, geometry
+        SELECT a.index, a.geometry AS ais_geometry, 
+            COALESCE(b.max_depth, c.max_draught) AS depth
+        FROM (SELECT row_number() OVER () AS index, geometry, draught FROM ais_points) AS a
+        LEFT JOIN LATERAL (
+            SELECT MIN(depth) AS max_depth
             FROM depth_points
-            ORDER BY a.geometry <-> geometry
-            LIMIT 1
-        ) AS b;
+            WHERE depth < 0
+            ANE a.geometry <-> geometry <= 50
+        ) AS b ON true
+        LEFT JOIN LATERAL (
+            SELECT MAX(draught) * -1 AS max_draught  -- Modified this line to multiply by -1
+            FROM ais_points
+            WHERE a.geometry <-> geometry <= 50 AND a.index != ais_points.index
+        ) AS c ON b.max_depth IS NULL
+        GROUP BY a.index, a.geometry;
     """
 
     # Load AIS points into temporary table for query performance
@@ -158,7 +175,6 @@ def create_nodes(sampled_trajectories):
         G.add_node(node, **attributes)
 
     return G
-
 
 def create_edges(G, initial_edge_radius_threshold, bearing_threshold, nodes_file_path, edges_file_path):
     print("Creating Edges")
