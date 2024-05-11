@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import networkx as nx
 import geopandas as gpd
+from pathlib import Path
 from scipy.spatial import cKDTree
 from sqlalchemy import create_engine
 from data.logs.logging import setup_logger
@@ -21,9 +22,9 @@ LOG_PATH = 'graph_log.txt'
 
 logging = setup_logger(name=LOG_PATH, log_file=LOG_PATH)
 
-def get_trajectory_df(file_path) -> gpd.GeoDataFrame:
+def get_trajectory_df(filepath) -> gpd.GeoDataFrame:
     try:
-        df = pd.read_csv(file_path, header=0)
+        df = pd.read_csv(filepath, header=0)
         if (df.empty):
             logging.warning('No coordinates to extract')
 
@@ -37,17 +38,20 @@ def get_trajectory_df(file_path) -> gpd.GeoDataFrame:
 def extract_original_trajectories(input_folder) -> list:
     try: 
         ais_points = []
-        for dirpath, dirnames, filenames in os.walk(input_folder):
-            for filename in filenames:
-                file_path = os.path.join(dirpath, filename)
-                gdf_curr:gpd.GeoDataFrame = get_trajectory_df(file_path=file_path)
+        trajectory_files = list(Path(input_folder).rglob('*.txt')) # List all files in the directory recursively
+        trajectory_files = [str(path) for path in trajectory_files]
 
-                if (gdf_curr.empty):
-                    continue
-                
-                if len(gdf_curr) >= 2:
-                    points_with_metadata = gdf_curr[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].itertuples(index=False, name=None)
-                    ais_points.extend(points_with_metadata)
+        for file in trajectory_files:
+            gdf_trajectory:gpd.GeoDataFrame = get_trajectory_df(filepath=file)
+
+            if (gdf_trajectory is None or gdf_trajectory.empty):
+                continue
+            
+            filtered_gdf_trajectory = gdf_trajectory[gdf_trajectory['draught'] > 0]
+
+            if len(filtered_gdf_trajectory) >= 2:
+                points = filtered_gdf_trajectory[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type']].itertuples(index=False, name=None)
+                ais_points.extend(points)
 
         return ais_points
     
