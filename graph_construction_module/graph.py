@@ -72,7 +72,7 @@ def geometric_sampling(trajectories, min_distance_threshold):
         return []
 
     # Create a KDTree from the trajectories
-
+    trajectories = np.array(trajectories, dtype='object')  # Use 'object' to accommodate mixed types
     coordinates = np.array([point[:2] for point in trajectories])
 
     kdtree = cKDTree(coordinates)
@@ -85,26 +85,51 @@ def geometric_sampling(trajectories, min_distance_threshold):
     for coord_index in range(len(coordinates)):
         if coord_index in excluded_indices or coord_index in sampled_indices:
             continue
-        
-        # Initially add the current point to the list of sampled indices
-        sampled_indices.append(coord_index)
-        indices = kdtree.query_ball_point(coordinates[coord_index], min_distance_threshold)
 
-        # Track if an opposite COG point has been kept
-        opposite_cog_point_kept = False
+        indices = kdtree.query_ball_point(coordinates[coord_index], min_distance_threshold)
+        unit_circle = [False, False, False]
+
+        # Initially add the current point to the list of sampled indices
+        max_draught = max(trajectories[indices][:, 5].max(), trajectories[coord_index][5])
+        points_within_90 = np.array([neighbor for neighbor in trajectories[indices] if calculate_cog_difference(trajectories[coord_index][4], neighbor[4]) < 90])
+        avg_cog = np.append(points_within_90[:, 4], trajectories[coord_index][4]).mean()
+        trajectories[coord_index][4] = avg_cog
+        trajectories[coord_index][5] = max_draught
+        sampled_indices.append(coord_index)
 
         for j in indices:
             if j != coord_index:
+                if all(unit_circle):
+                    break
+
+                if (j in excluded_indices) or (j in sampled_indices):
+                    continue
+
                 cog_diff = calculate_cog_difference(trajectories[coord_index][4], trajectories[j][4]) 
-                if cog_diff > 160 and cog_diff < 205:  
-                    if not opposite_cog_point_kept:  
-                        sampled_indices.append(j)
-                        opposite_cog_point_kept = True
+    
+                # Determine which quadrant the point falls into based on COG difference
+                if 90 <= cog_diff < 180:
+                    quadrant = 0
+                elif 180 <= cog_diff < 270:
+                    quadrant = 1
+                elif 270 <= cog_diff < 360:
+                    quadrant = 2
+                else:
+                    continue
+
+                if not unit_circle[quadrant]:
+                    neighbours =  np.array([neighbor for neighbor in trajectories[indices] if (quadrant * 90) <= calculate_cog_difference(trajectories[coord_index][4], neighbor[4])  < (quadrant + 1) * 90])
+                    unit_circle[quadrant] = True
+                    trajectories[j][4] = neighbours[:,4].mean()
+                    trajectories[j][5] = max_draught
+                    sampled_indices.append(j)
 
         excluded_indices.update(indices)
 
+    print(len(sampled_indices))
     # Filter the trajectories to only include sampled points
-    sampled_trajectories = [trajectories[i] for i in sampled_indices]
+    sampled_trajectories = trajectories[sampled_indices]
+    print(len(sampled_trajectories))
 
     return sampled_trajectories
 
@@ -235,39 +260,38 @@ def create_graphs_for_cells(node_threshold, edge_threshold, cog_threshold, graph
 
         if os.path.isdir(folder_path):
             
-            # if cell_name in cells_to_consider:
-            print(f"Processing {cell_name}")
-            trajectories = extract_original_trajectories(folder_path)
+            if cell_name in cells_to_consider:
+                trajectories = extract_original_trajectories(folder_path)
 
-            if len(trajectories) == 0:
-                    continue
-            
-            print(f"Number of points in folder {cell_name}:", len(trajectories))
+                if len(trajectories) == 0:
+                        continue
+                
+                print(f"Number of points in folder {cell_name}:", len(trajectories))
 
-            if not os.path.exists(GRAPH_OUTPUT_path):
-                os.makedirs(GRAPH_OUTPUT_path)
-            
-            output_subfolder = os.path.join(GRAPH_OUTPUT_path, cell_name)
+                if not os.path.exists(GRAPH_OUTPUT_path):
+                    os.makedirs(GRAPH_OUTPUT_path)
+                
+                output_subfolder = os.path.join(GRAPH_OUTPUT_path, cell_name)
 
-            os.makedirs(output_subfolder)
+                os.makedirs(output_subfolder)
 
-            nodes_file_path = os.path.join(output_subfolder, 'nodes.geojson')
-            edges_file_path = os.path.join(output_subfolder, 'edges.geojson')
+                nodes_file_path = os.path.join(output_subfolder, 'nodes.geojson')
+                edges_file_path = os.path.join(output_subfolder, 'edges.geojson')
 
-            geometric_sampled_nodes = geometric_sampling(trajectories, node_threshold)
-            print(f"Number of nodes in folder {cell_name}:", len(geometric_sampled_nodes))
-            nodes = create_nodes(geometric_sampled_nodes)
-            edges = create_edges(nodes, edge_threshold, cog_threshold, nodes_file_path, edges_file_path) 
+                geometric_sampled_nodes = geometric_sampling(trajectories, node_threshold)
+                print(f"Number of nodes in folder {cell_name}:", len(geometric_sampled_nodes))
+                nodes = create_nodes(geometric_sampled_nodes)
+                edges = create_edges(nodes, edge_threshold, cog_threshold, nodes_file_path, edges_file_path) 
 
-            print(f"Number of edges in folder {cell_name}:", edges, "\n")
+                print(f"Number of edges in folder {cell_name}:", edges, "\n")
 
-            stats = {
-                'cell_name': cell_name,
-                'original_node_count': len(trajectories),
-                'sampled_node_count': len(geometric_sampled_nodes),
-                'edge_count': edges
-            }
-            stats_list.append(stats)
+                stats = {
+                    'cell_name': cell_name,
+                    'original_node_count': len(trajectories),
+                    'sampled_node_count': len(geometric_sampled_nodes),
+                    'edge_count': edges
+                }
+                stats_list.append(stats)
 
     stats_df = pd.DataFrame(stats_list)
 
