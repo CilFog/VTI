@@ -101,25 +101,33 @@ def geometric_sampling(trajectories, min_distance_threshold):
             if j != coord_index:
                 if all(unit_circle):
                     break
+                print("HERE")
 
                 if (j in excluded_indices) or (j in sampled_indices):
+                    print("HERE1")
                     continue
-
+                
+                print("HERE2")
                 cog_diff = calculate_cog_difference(trajectories[coord_index][4], trajectories[j][4]) 
     
                 # Determine which quadrant the point falls into based on COG difference
                 if 90 <= cog_diff < 180:
+                    print("HERE3")
                     quadrant = 0
                 elif 180 <= cog_diff < 270:
+                    print("HERE4")
                     quadrant = 1
                 elif 270 <= cog_diff < 360:
+                    print("HERE5")
                     quadrant = 2
                 else:
                     continue
 
                 if not unit_circle[quadrant]:
+                    print("HERE6")
                     neighbours =  np.array([neighbor for neighbor in trajectories[indices] if (quadrant * 90) <= calculate_cog_difference(trajectories[coord_index][4], neighbor[4])  < (quadrant + 1) * 90])
                     if neighbours.ndim > 1 and len(neighbours) > 0:
+                        print("HERE7")
                         unit_circle[quadrant] = True
                         trajectories[j][4] = neighbours[:,4].mean()
                         trajectories[j][5] = max_draught
