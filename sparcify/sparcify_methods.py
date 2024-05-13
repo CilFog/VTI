@@ -78,69 +78,67 @@ def sparcify_trajectories_randomly_using_threshold(filepath:str, folderpath: str
     try:
         os_split = '/' if '/' in filepath else '\\'
         reduced_points:int = 0
-        number_of_points:int = 0
+        number_of_vessel_samples:int = 0
                                 
-        trajectory_df:gpd.GeoDataFrame = get_trajectory_df_from_txt(file_path=filepath)
+        trajectory_filtered_df:gpd.GeoDataFrame = get_trajectory_df_from_txt(file_path=filepath)
         filename = os.path.basename(filepath)
         folderpath = os.path.join(folderpath, f'random_{threshold}'.replace('.', '_'))
         vessel_folder = filepath.split(os_split)[-3]
         vessel_folder_path = os.path.join(folderpath, vessel_folder)
         new_filepath = os.path.join(vessel_folder_path, filename)
         
-        trajectory_df['group'] = 0
+        trajectory_filtered_df['group'] = 0
         
         if boundary_box:
             gdf_bbox = gpd.GeoDataFrame([1], geometry=[boundary_box], crs="EPSG:4326").geometry.iloc[0] 
-            trajectory_df['within_boundary_box'] = trajectory_df.within(gdf_bbox)               
-            change_detected = trajectory_df['within_boundary_box'] != trajectory_df['within_boundary_box'].shift(1)
-            trajectory_df['group'] = change_detected.cumsum()
+            trajectory_filtered_df['within_boundary_box'] = trajectory_filtered_df.within(gdf_bbox)               
+            change_detected = trajectory_filtered_df['within_boundary_box'] != trajectory_filtered_df['within_boundary_box'].shift(1)
+            trajectory_filtered_df['group'] = change_detected.cumsum()
             
             # Find the largest group within the boundary box
-            group_sizes = trajectory_df[trajectory_df['within_boundary_box']].groupby('group').size()
+            group_sizes = trajectory_filtered_df[trajectory_filtered_df['within_boundary_box']].groupby('group').size()
             valid_groups = group_sizes[group_sizes >= 2]
 
             if not valid_groups.empty:
                 largest_group_id = valid_groups.idxmax()
 
                 # Filter trajectory points based on the largest group within the boundary box
-                trajectory_filtered = trajectory_df[(trajectory_df['group'] == largest_group_id) & trajectory_df['within_boundary_box']]
+                trajectory_filtered = trajectory_filtered_df[(trajectory_filtered_df['group'] == largest_group_id) & trajectory_filtered_df['within_boundary_box']]
 
                 # Update total number of points
-                number_of_points = len(trajectory_filtered)
+                number_of_vessel_samples = len(trajectory_filtered)
             else:
                 # No valid groups within the boundary box
-                return SparsifyResult(reduced_points=reduced_points, number_of_points=number_of_points, trajectory_was_used=False)
+                return SparsifyResult(reduced_points=reduced_points, number_of_points=number_of_vessel_samples, trajectory_was_used=False)
         else:
             # If no boundary box is provided, use the original dataframe
-            trajectory_filtered = trajectory_df
-            number_of_points = len(trajectory_filtered)
+            trajectory_filtered = trajectory_filtered_df
+            number_of_vessel_samples = len(trajectory_filtered)
         
-        if number_of_points < 2:
-            return SparsifyResult(reduced_points=reduced_points, number_of_points=number_of_points, trajectory_was_used=False)        
-           
-        # Mark ~80% rows for removal
-        rows_to_remove = np.random.choice([True, False], size=len(trajectory_filtered), p=[threshold, 1-threshold])
-        
-        # Ensure first and last isn't removed
-        rows_to_remove[0] = rows_to_remove[-1] = False
-        
-        # Convert rows_to_remove to a Pandas Series
-        rows_to_remove_series = pd.Series(rows_to_remove, index=trajectory_filtered.index)
-        
-        # Reindex rows_to_remove to match trajectory_filtered's index
-        rows_to_remove_series = rows_to_remove_series.reindex_like(trajectory_filtered)
-        
-        # Sparsify
-        sparse_trajectory = trajectory_filtered[~rows_to_remove]
-        sparse_trajectory.reset_index(drop=True, inplace=True)
-        
-        os.makedirs(vessel_folder_path, exist_ok=True)  # Create the folder if it doesn't exist
+        if number_of_vessel_samples < 2:
+            return SparsifyResult(reduced_points=reduced_points, number_of_points=number_of_vessel_samples, trajectory_was_used=False)        
 
-        sparse_trajectory[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'navigational_status', 'speed_mps', 'speed_knots']].reset_index(drop=True).to_csv(new_filepath, sep=',', index=True, header=True, mode='w')
+        keep = np.full(shape=number_of_vessel_samples, fill_value=False, dtype=bool)
+        distances = trajectory_filtered_df['geometry'].distance(trajectory_filtered_df['geometry'].shift(1))
+   
+        curr_distance = 0
+        for i in range(1, len(number_of_vessel_samples)):
+            curr_distance += distances[i]
+
+            if (curr_distance > threshold):
+                keep[i] = True
+                curr_distance = 0
+
+        keep[0] = keep[-1] = True # keep first and last
+
+        os.makedirs(vessel_folder_path, exist_ok=True)  # Create the folder if it doesn't exist
+        
+        sparse_trajectory_df = trajectory_filtered_df[keep]
+        sparse_trajectory_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'navigational_status', 'speed_mps', 'speed_knots']].reset_index(drop=True).to_csv(new_filepath, sep=',', index=True, header=True, mode='w')
 
         reduced_points = len(trajectory_filtered) - len(sparse_trajectory)    
         
-        return SparsifyResult(reduced_points=reduced_points, number_of_points=number_of_points, trajectory_was_used=True)  
+        return SparsifyResult(reduced_points=reduced_points, number_of_points=number_of_vessel_samples, trajectory_was_used=True)  
     except Exception as e:
         logging.error(f'Error occurred with: {repr(e)}')
         quit()
@@ -354,7 +352,7 @@ def sparcify_large_time_gap_with_threshold_percentage(filepath:str, folderpath: 
     try:
         os_split = '/' if '/' in filepath else '\\'
         reduced_points = 0
-        number_of_points = 0
+        number_of_vessel_samples = 0
           
         trajectory_df = get_trajectory_df_from_txt(file_path=filepath)
         filename = os.path.basename(filepath)
@@ -379,50 +377,41 @@ def sparcify_large_time_gap_with_threshold_percentage(filepath:str, folderpath: 
                 largest_group_id = valid_groups.idxmax()
 
                 # Filter trajectory points based on the largest group within the boundary box
-                trajectory_filtered = trajectory_df[(trajectory_df['group'] == largest_group_id) & trajectory_df['within_boundary_box']]
+                trajectory_filtered_df = trajectory_df[(trajectory_df['group'] == largest_group_id) & trajectory_df['within_boundary_box']]
 
                 # Update total number of points
-                number_of_points = len(trajectory_filtered)
+                number_of_vessel_samples = len(trajectory_filtered_df)
             else:
                 # No valid groups within the boundary box
-                return SparsifyResult(reduced_points=reduced_points, number_of_points=number_of_points, trajectory_was_used=False)
+                return SparsifyResult(reduced_points=reduced_points, number_of_points=number_of_vessel_samples, trajectory_was_used=False)
         else:
             # If no boundary box is provided, use the original dataframe
-            trajectory_filtered = trajectory_df
-            number_of_points = len(trajectory_filtered)
+            trajectory_filtered_df = trajectory_df
+            number_of_vessel_samples = len(trajectory_filtered_df)
             
-        if number_of_points < 2:
-            return SparsifyResult(reduced_points=reduced_points, number_of_points=number_of_points, trajectory_was_used=False)        
+        if number_of_vessel_samples < 2:
+            return SparsifyResult(reduced_points=reduced_points, number_of_points=number_of_vessel_samples, trajectory_was_used=False)        
         
-        # Step 1: Select a random row, excluding the first and last rows
-        # Slice the DataFrame to exclude the first and last rows
-        trajectory_df_sliced = trajectory_filtered.iloc[1:-1]
+        keep = np.full(shape=number_of_vessel_samples, fill_value=False, dtype=bool)
+        distances = trajectory_df['geometry'].distance(trajectory_df['geometry'].shift(1))
 
-        # Sample from the sliced DataFrame and ensure that start index is chosen such that removing removal_percentage is possible
-        random_row_index = int(len(trajectory_df_sliced) * (1-threshold)) + 1
+        curr_distance = 0
+        for i in range(1, len(number_of_vessel_samples)):
+            curr_distance += distances[i]
 
-        # Step 2: Determine the range of rows to remove
-        # Calculate the number of rows to remove as threshold_percentage% of the total number of rows
-        # Ensure it does not exceed the number of rows after the random row
-        num_rows_to_remove = int(len(trajectory_filtered) * threshold)
-        start_index = max(1, random.randint(1, random_row_index))            
-        end_index = min(start_index + num_rows_to_remove, len(trajectory_filtered) - 1)
+            if (curr_distance > threshold):
+                keep[i] = True
+                curr_distance = 0
 
-        # Step 3: Remove the consecutive rows
-        rows_to_remove = np.zeros(len(trajectory_filtered), dtype=bool)
-        rows_to_remove[start_index:end_index] = True
-
-        # Apply the sparsification
-        sparse_trajectory_df = trajectory_filtered[~rows_to_remove]
-        sparse_trajectory_df.reset_index(drop=True, inplace=True)
+        keep[0] = keep[-1] = True # keep first and last
 
         os.makedirs(vessel_folder_path, exist_ok=True)  # Create the folder if it doesn't exist
-
-        # Save the sparsified trajectory as before
+        
+        sparse_trajectory_df = trajectory_filtered_df[keep]
         sparse_trajectory_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'navigational_status', 'speed_mps', 'speed_knots']].reset_index(drop=True).to_csv(new_filepath, sep=',', index=True, header=True, mode='w')
 
-        reduced_points = len(trajectory_filtered) - len(sparse_trajectory_df)
-        return SparsifyResult(reduced_points=reduced_points, number_of_points=number_of_points, trajectory_was_used=True)  
+        reduced_points = len(trajectory_filtered_df) - len(sparse_trajectory_df)
+        return SparsifyResult(reduced_points=reduced_points, number_of_points=number_of_vessel_samples, trajectory_was_used=True)  
     except Exception as e:
         logging.error(f'Error occurred with: {repr(e)}')
         quit()
