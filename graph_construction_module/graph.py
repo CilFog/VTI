@@ -119,17 +119,18 @@ def geometric_sampling(trajectories, min_distance_threshold):
 
                 if not unit_circle[quadrant]:
                     neighbours =  np.array([neighbor for neighbor in trajectories[indices] if (quadrant * 90) <= calculate_cog_difference(trajectories[coord_index][4], neighbor[4])  < (quadrant + 1) * 90])
-                    unit_circle[quadrant] = True
-                    trajectories[j][4] = neighbours[:,4].mean()
-                    trajectories[j][5] = max_draught
-                    sampled_indices.append(j)
+                    if neighbours.ndim > 1 and len(neighbours) > 0:
+                        unit_circle[quadrant] = True
+                        trajectories[j][4] = neighbours[:,4].mean()
+                        trajectories[j][5] = max_draught
+                        sampled_indices.append(j)
+                    else:
+                        continue
 
         excluded_indices.update(indices)
 
-    print(len(sampled_indices))
     # Filter the trajectories to only include sampled points
     sampled_trajectories = trajectories[sampled_indices]
-    print(len(sampled_trajectories))
 
     return sampled_trajectories
 
@@ -157,15 +158,16 @@ def create_nodes(sampled_trajectories):
     engine = create_engine(f"postgresql://{config['user']}:{config['password']}@{config['host']}:{config['port']}/{config['database']}")
     
     query = """
-        SELECT a.index, a.geometry AS ais_geometry, b.depth AS avg_depth
+        SELECT a.index, a.geometry AS ais_geometry, b.depth, b.geometry AS depth_geometry
         FROM (SELECT row_number() OVER () AS index, geometry FROM ais_points) AS a
         CROSS JOIN LATERAL (
-            SELECT depth
+            SELECT depth, geometry
             FROM depth_points
-            WHERE a.geometry <-> geometry <= 50
+            WHERE ST_DWithin(a.geometry, geometry, 100)
+            ORDER BY a.geometry <-> geometry
             LIMIT 1
-        ) AS b
-        """
+        ) AS b;
+    """
 
     # Load AIS points into temporary table for query performance
     ais_points_gdf.to_postgis("ais_points", engine, if_exists="replace", index=False)
@@ -176,18 +178,23 @@ def create_nodes(sampled_trajectories):
     # Join nearest depths back to original AIS points DataFrame using the index for correct alignment
     ais_points_gdf = ais_points_gdf.merge(nearest_depths_df, left_index=True, right_on='index')
 
+    # Assign the nearest depth directly
+    ais_points_gdf['avg_depth'] = ais_points_gdf['depth']
+
     ais_points_gdf = ais_points_gdf[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'avg_depth', 'geometry']]
     
-    ais_points_gdf = ais_points_gdf.to_crs(epsg=3857)  # Convert to a projected system for meter-based analysis
-    null_avg_depth_df = ais_points_gdf[ais_points_gdf['avg_depth'].isna()].copy()
+    # ais_points_gdf = ais_points_gdf.to_crs(epsg=3857)  # Convert to a projected system for meter-based analysis
 
-    if not null_avg_depth_df.empty:
-        # Apply the function to each row with NaN avg_depth
-        for row in null_avg_depth_df.itertuples():
-            max_depth = max_draught_within_radius(row.geometry, ais_points_gdf)
-            ais_points_gdf.at[row.Index, 'avg_depth'] = max_depth
+    # # Find rows where avg_depth is exactly 0.0
+    # zero_avg_depth_df = ais_points_gdf[ais_points_gdf['avg_depth'] == 0.0].copy()
 
-    ais_points_gdf = ais_points_gdf.to_crs(epsg=4326)  # Convert to a projected system for meter-based analysis
+    # if not zero_avg_depth_df.empty:
+    #     # Apply the function to each row with avg_depth == 0.0
+    #     for row in zero_avg_depth_df.itertuples():
+    #         max_depth = max_draught_within_radius(row.geometry, ais_points_gdf)
+    #         ais_points_gdf.at[row.Index, 'avg_depth'] = max_depth
+
+    # ais_points_gdf = ais_points_gdf.to_crs(epsg=4326) 
 
     G = nx.Graph()
     for index, row in ais_points_gdf.iterrows():
@@ -240,8 +247,8 @@ def create_edges(G, initial_edge_radius_threshold, bearing_threshold, nodes_file
 def create_graphs_for_cells(node_threshold, edge_threshold, cog_threshold, graph_output_name):
 
     stats_list = []
-    cells_to_consider = ["9_9", "9_10",  "9_11", "10_9", "10_10", "10_11", "11_9", "11_10", "11_11"]
-
+    cells_to_consider = ["9_9", "9_10", "9_11", "10_9", "10_10", "10_11", "11_9", "11_10", "11_11"]
+ 
 
     for cell_name in os.listdir(GRAPH_INPUT):
         folder_path = os.path.join(GRAPH_INPUT, cell_name)

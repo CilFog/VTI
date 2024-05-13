@@ -165,8 +165,8 @@ def adjust_edge_weights_for_draught(G, start_point, end_point, max_draught, base
                 u_depth = G.nodes[node].get('avg_depth', float('inf'))
                 v_depth = G.nodes[neighbor].get('avg_depth', float('inf'))
 
-                u_depth = u_depth if not math.isnan(u_depth) else G.nodes[node].get('draught', float('inf'))
-                v_depth = v_depth if not math.isnan(v_depth) else G.nodes[neighbor].get('draught', float('inf'))
+                u_depth = G.nodes[node].get('draught', float('inf')) if math.isnan(u_depth) or u_depth == 0 else u_depth
+                v_depth = G.nodes[neighbor].get('draught', float('inf')) if math.isnan(v_depth) or v_depth == 0 else v_depth
 
                 min_depth = min(u_depth, v_depth)
                 # Determine penalty based on depth comparison with max_draught
