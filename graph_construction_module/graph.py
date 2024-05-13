@@ -183,18 +183,18 @@ def create_nodes(sampled_trajectories):
 
     ais_points_gdf = ais_points_gdf[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'avg_depth', 'geometry']]
     
-    # ais_points_gdf = ais_points_gdf.to_crs(epsg=3857)  # Convert to a projected system for meter-based analysis
+    ais_points_gdf = ais_points_gdf.to_crs(epsg=3857)  # Convert to a projected system for meter-based analysis
 
-    # # Find rows where avg_depth is exactly 0.0
-    # zero_avg_depth_df = ais_points_gdf[ais_points_gdf['avg_depth'] == 0.0].copy()
+    # Find rows where avg_depth is exactly 0.0
+    zero_avg_depth_df = ais_points_gdf[ais_points_gdf['avg_depth'] == 0.0].copy()
 
-    # if not zero_avg_depth_df.empty:
-    #     # Apply the function to each row with avg_depth == 0.0
-    #     for row in zero_avg_depth_df.itertuples():
-    #         max_depth = max_draught_within_radius(row.geometry, ais_points_gdf)
-    #         ais_points_gdf.at[row.Index, 'avg_depth'] = max_depth
+    if not zero_avg_depth_df.empty:
+        # Apply the function to each row with avg_depth == 0.0
+        for row in zero_avg_depth_df.itertuples():
+            max_depth = max_draught_within_radius(row.geometry, ais_points_gdf)
+            ais_points_gdf.at[row.Index, 'avg_depth'] = max_depth
 
-    # ais_points_gdf = ais_points_gdf.to_crs(epsg=4326) 
+    ais_points_gdf = ais_points_gdf.to_crs(epsg=4326) 
 
     G = nx.Graph()
     for index, row in ais_points_gdf.iterrows():
