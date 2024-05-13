@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import numpy as np
 import pandas as pd
 import networkx as nx
@@ -65,72 +66,80 @@ def calculate_cog_difference(cog1, cog2):
         diff = 360 - diff
     return diff
 
+def process_geometric_vessel_sample(indices, coord_index, trajectories, sampled_indices, excluded_indices):
+    # Initially add the current point to the list of sampled indices
+    vessel_samples = np.array([coord_index, -1, -1, -1])
+    vessel_cogs = np.array([trajectories[coord_index][4], 0, 0, 0])
+    max_vessel_draughts = np.array([trajectories[coord_index][5], 0, 0, 0])
+    total_samples = np.array([1, 0, 0, 0])
+
+    for j in indices:
+        if j == coord_index or j in excluded_indices or j in sampled_indices:
+            continue
+
+        cog_diff = calculate_cog_difference(trajectories[coord_index][4], trajectories[j][4])
+
+        # Determine which quadrant the point falls into based on COG difference
+        if cog_diff < 90:
+            quadrant = 0
+        elif cog_diff < 180:
+            quadrant = 1
+        elif cog_diff < 270:
+            quadrant = 2
+        elif cog_diff < 360:
+            quadrant = 3
+        else:
+            continue # Just in case, but should not happen
+            
+        if vessel_samples[quadrant] == -1:
+            vessel_samples[quadrant] = j
+        
+        if trajectories[j][4] != None:
+            vessel_cogs[quadrant] += trajectories[j][4] or 0
+            max_vessel_draughts[quadrant] = max(max_vessel_draughts[quadrant], trajectories[j][5] or 0)
+        
+            total_samples[quadrant] += 1
+
+    for quadrant in range(len(vessel_samples)):
+        if vessel_samples[quadrant] != -1:
+            idx = vessel_samples[quadrant]
+            sampled_indices.add(idx)
+            
+            if total_samples[quadrant] > 0:
+                trajectories[idx][5] = max_vessel_draughts[quadrant]
+                trajectories[idx][4] = vessel_cogs[quadrant]/total_samples[quadrant]
+
+    excluded_indices.update(indices)
+
 def geometric_sampling(trajectories, min_distance_threshold):
     print("Sampling points")
     if trajectories is None or len(trajectories) == 0:
         logging.error('No trajectories data provided to geometric_sampling.')
         return []
-
+   
     # Create a KDTree from the trajectories
     trajectories = np.array(trajectories, dtype='object')  # Use 'object' to accommodate mixed types
     coordinates = np.array([point[:2] for point in trajectories])
 
     kdtree = cKDTree(coordinates)
     
-    # This list will store the indices of the points that are kept
-    sampled_indices = []
-    # This set will store indices that are too close to already selected points and should be skipped
+    sampled_indices = set()
     excluded_indices = set()
-
+    time_start = time.time()
+    print('Iterating through coordinates')
     for coord_index in range(len(coordinates)):
         if coord_index in excluded_indices or coord_index in sampled_indices:
             continue
 
         indices = kdtree.query_ball_point(coordinates[coord_index], min_distance_threshold)
-        unit_circle = [False, False, False]
+        
+        process_geometric_vessel_sample(indices, coord_index, trajectories, sampled_indices, excluded_indices)
 
-        # Initially add the current point to the list of sampled indices
-        max_draught = max(trajectories[indices][:, 5].max(), trajectories[coord_index][5])
-        points_within_90 = np.array([neighbor for neighbor in trajectories[indices] if calculate_cog_difference(trajectories[coord_index][4], neighbor[4]) < 90])
-        avg_cog = np.append(points_within_90[:, 4], trajectories[coord_index][4]).mean()
-        trajectories[coord_index][4] = avg_cog
-        trajectories[coord_index][5] = max_draught
-        sampled_indices.append(coord_index)
-
-        for j in indices:
-            if j != coord_index:
-                if all(unit_circle):
-                    break
-
-                if (j in excluded_indices) or (j in sampled_indices):
-                    continue
-
-                cog_diff = calculate_cog_difference(trajectories[coord_index][4], trajectories[j][4]) 
-    
-                # Determine which quadrant the point falls into based on COG difference
-                if 90 <= cog_diff < 180:
-                    quadrant = 0
-                elif 180 <= cog_diff < 270:
-                    quadrant = 1
-                elif 270 <= cog_diff < 360:
-                    quadrant = 2
-                else:
-                    continue
-
-                if not unit_circle[quadrant]:
-                    neighbours =  np.array([neighbor for neighbor in trajectories[indices] if (quadrant * 90) <= calculate_cog_difference(trajectories[coord_index][4], neighbor[4])  < (quadrant + 1) * 90])
-                    if neighbours.ndim > 1 and len(neighbours) > 0:
-                        unit_circle[quadrant] = True
-                        trajectories[j][4] = neighbours[:,4].mean()
-                        trajectories[j][5] = max_draught
-                        sampled_indices.append(j)
-                    else:
-                        continue
-
-        excluded_indices.update(indices)
-
+    print(f"Took {time.time() - time_start} seconds")
     # Filter the trajectories to only include sampled points
-    sampled_trajectories = trajectories[sampled_indices]
+    
+    sampled_indices_list = sorted(sampled_indices)
+    sampled_trajectories = trajectories[sampled_indices_list]
 
     return sampled_trajectories
 
