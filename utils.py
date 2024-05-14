@@ -150,29 +150,28 @@ def adjust_edge_weights_for_draught(G, start_point, end_point, max_draught, base
     relevant_nodes_end = set(nodes_within_radius(G, end_point, radiusNew))
 
     relevant_nodes = relevant_nodes_start.union(relevant_nodes_end)
-    
-    # Process only edges between relevant nodes
+
     processed_edges = set()
     for node in relevant_nodes:
         for neighbor in G.neighbors(node):
-            # Create a unique identifier for each edge, assuming an undirected graph
             edge = tuple(sorted([node, neighbor]))
             if edge not in processed_edges and neighbor in relevant_nodes:
                 processed_edges.add(edge)
                 data = G.get_edge_data(node, neighbor)
                 
                 # Calculate minimum depth between nodes
-                u_depth = G.nodes[node].get('avg_depth', float('inf'))
-                v_depth = G.nodes[neighbor].get('avg_depth', float('inf'))
+                u_depth = G.nodes[node].get('avg_depth', G.nodes[node].get('draught'))
+                v_depth = G.nodes[neighbor].get('avg_depth', G.nodes[neighbor].get('draught'))
 
-                u_depth = G.nodes[node].get('draught', float('inf')) if math.isnan(u_depth) or u_depth == 0 else u_depth
-                v_depth = G.nodes[neighbor].get('draught', float('inf')) if math.isnan(v_depth) or v_depth == 0 else v_depth
-
-                min_depth = min(u_depth, v_depth)
-                # Determine penalty based on depth comparison with max_draught
-                penalty = base_penalty if min_depth < max_draught else 0
+                difference = abs(u_depth - v_depth)
+                threshold = abs(v_depth * 0.2)
+                
+                if difference < threshold:
+                    penalty = base_penalty
+                else:
+                    penalty = 0
                 # Apply the penalty to the edge's weight
-                initial_weight = data.get('weight')  # Provide a default weight if missing
+                initial_weight = data.get('weight')
                 G[node][neighbor]['weight'] = initial_weight + penalty
 
     return G
