@@ -1,18 +1,18 @@
 import os
 import sys
-import random
 import shutil
-import time as t
+import random
 import pandas as pd
 import geopandas as gpd
 from pathlib import Path
-from typing import Callable, List
-from shapely.geometry import Polygon, box
+import concurrent.futures
+from typing import List
+from shapely.geometry import box
 from multiprocessing import freeze_support
 from data.logs.logging import setup_logger
-from concurrent.futures import ProcessPoolExecutor
+from data.stats.statistics import Sparse_Statistics
 from .classes import SparsifyResult, brunsbuettel_to_kiel_polygon, aalborg_harbor_to_kattegat_bbox, doggersbank_to_lemvig_bbox, skagens_harbor_bbox
-from .sparcify_methods import sparcify_realisticly_strict_trajectories, sparcify_trajectories_realisticly, sparcify_large_time_gap_with_threshold_percentage, sparcify_trajectories_randomly_using_threshold, get_trajectory_df_from_txt, check_if_trajectory_is_dense
+from .sparcify_methods import sparcify_realisticly_strict_trajectories, sparcify_trajectories_realisticly, sparcify_large_meter_gap_by_threshold, sparcify_trajectories_with_meters_gaps_by_treshold, get_trajectory_df_from_txt, check_if_trajectory_is_dense
 
 DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 CELL_TXT = os.path.join(DATA_FOLDER, 'cells.txt')
@@ -30,90 +30,95 @@ INPUT_VALIDATION_DATA_ORIGINAL_FOLDER = os.path.join(INPUT_VALIDATION_DATA_FOLDE
 INPUT_VALIDATION_SPARSED_FOLDER = os.path.join(INPUT_VALIDATION_DATA_FOLDER, 'sparsed')
 INPUT_VALIDATION_SPARSED_ALL_FOLDER = os.path.join(INPUT_VALIDATION_SPARSED_FOLDER, 'all')
 INPUT_VALIDATION_SPARSED_AREA_FOLDER = os.path.join(INPUT_VALIDATION_SPARSED_FOLDER, 'area')
+STATS_FOLDER = os.path.join(DATA_FOLDER, 'stats')
+STATS_FOLDER_TEST = os.path.join(STATS_FOLDER, 'test')
+STATS_FOLDER_VALIDATION = os.path.join(STATS_FOLDER, 'validation')
 SPARCIFY_LOG = 'sparcify_log.txt'
 
 logging = setup_logger(name=SPARCIFY_LOG, log_file=SPARCIFY_LOG)
 
-def write_trajectories_for_area(input_folder:str, output_folder: str):
-    # Wrap the code in if __name__ == '__main__': block and call freeze_support()
-    if __name__ == '__main__':
-        freeze_support()
+def write_trajectories_for_area(inputfolder:str, outputfolder: str):
+    filepaths = list(Path(inputfolder).rglob('*.txt'))
+    filepaths = [str(path) for path in filepaths]
 
-        brunsbuettel_to_kiel_path = os.path.join(output_folder, 'brunsbuettel_to_kiel')
-
-        sparcify_trajectories_with_action_for_folder(input_folder=input_folder, folder_path=brunsbuettel_to_kiel_path, action=sparcify_realisticly_strict_trajectories, threshold=0.0, boundary_box=brunsbuettel_to_kiel_polygon)
-        sparcify_trajectories_with_action_for_folder(input_folder=input_folder, folder_path=brunsbuettel_to_kiel_path, action=sparcify_trajectories_realisticly, threshold=0.0, boundary_box=brunsbuettel_to_kiel_polygon)
-        sparcify_trajectories_with_action_for_folder(input_folder=input_folder, folder_path=brunsbuettel_to_kiel_path, action=sparcify_large_time_gap_with_threshold_percentage, threshold=0.5, boundary_box=brunsbuettel_to_kiel_polygon)
-        sparcify_trajectories_with_action_for_folder(input_folder=input_folder, folder_path=brunsbuettel_to_kiel_path, action=sparcify_trajectories_randomly_using_threshold, threshold=0.5, boundary_box=brunsbuettel_to_kiel_polygon)
-
-        aalborg_harbor_to_kattegat_path = os.path.join(output_folder, 'aalborg_harbor_to_kattegat')
-
-        sparcify_trajectories_with_action_for_folder(input_folder=input_folder, folder_path=aalborg_harbor_to_kattegat_path, action=sparcify_realisticly_strict_trajectories, threshold=0.0, boundary_box=aalborg_harbor_to_kattegat_bbox)
-        sparcify_trajectories_with_action_for_folder(input_folder=input_folder, folder_path=aalborg_harbor_to_kattegat_path, action=sparcify_trajectories_realisticly, threshold=0.0, boundary_box=aalborg_harbor_to_kattegat_bbox)
-        sparcify_trajectories_with_action_for_folder(input_folder=input_folder, folder_path=aalborg_harbor_to_kattegat_path, action=sparcify_large_time_gap_with_threshold_percentage, threshold=0.5, boundary_box=aalborg_harbor_to_kattegat_bbox)
-        sparcify_trajectories_with_action_for_folder(input_folder=input_folder, folder_path=aalborg_harbor_to_kattegat_path, action=sparcify_trajectories_randomly_using_threshold, threshold=0.5, boundary_box=aalborg_harbor_to_kattegat_bbox)
-
-        doggersbank_to_lemvig_path = os.path.join(output_folder, 'doggersbank_to_lemvig')
-
-        sparcify_trajectories_with_action_for_folder(input_folder=input_folder,folder_path=doggersbank_to_lemvig_path, action=sparcify_realisticly_strict_trajectories, threshold=0.0, boundary_box=doggersbank_to_lemvig_bbox)
-        sparcify_trajectories_with_action_for_folder(input_folder=input_folder, folder_path=doggersbank_to_lemvig_path, action=sparcify_trajectories_realisticly, threshold=0.0, boundary_box=doggersbank_to_lemvig_bbox)
-        sparcify_trajectories_with_action_for_folder(input_folder=input_folder, folder_path=doggersbank_to_lemvig_path, action=sparcify_large_time_gap_with_threshold_percentage, threshold=0.5, boundary_box=doggersbank_to_lemvig_bbox)
-        sparcify_trajectories_with_action_for_folder(input_folder=input_folder, folder_path=doggersbank_to_lemvig_path, action=sparcify_trajectories_randomly_using_threshold, threshold=0.5, boundary_box=doggersbank_to_lemvig_bbox)
-
-        skagen_harbor_path = os.path.join(output_folder, 'skagen_harbor')
-
-        sparcify_trajectories_with_action_for_folder(input_folder=input_folder, folder_path=skagen_harbor_path, action=sparcify_realisticly_strict_trajectories, threshold=0.0, boundary_box=doggersbank_to_lemvig_bbox)
-        sparcify_trajectories_with_action_for_folder(input_folder=input_folder, folder_path=skagen_harbor_path, action=sparcify_trajectories_realisticly, threshold=0.0, boundary_box=doggersbank_to_lemvig_bbox)
-        sparcify_trajectories_with_action_for_folder(input_folder=input_folder, folder_path=skagen_harbor_path, action=sparcify_large_time_gap_with_threshold_percentage, threshold=0.5, boundary_box=doggersbank_to_lemvig_bbox)
-        sparcify_trajectories_with_action_for_folder(input_folder=input_folder, folder_path=skagen_harbor_path, action=sparcify_trajectories_randomly_using_threshold, threshold=0.5, boundary_box=doggersbank_to_lemvig_bbox)
-
-def write_trajectories_for_all(input_folder: str, output_folder:str):
-
-    # Wrap the code in if __name__ == '__main__': block and call freeze_support()
-    if __name__ == '__main__':
-        freeze_support()
-
-        sparcify_trajectories_with_action_for_folder(input_folder=input_folder, folder_path=output_folder, action=sparcify_realisticly_strict_trajectories, threshold=0.0, boundary_box=None)
-        sparcify_trajectories_with_action_for_folder(input_folder=input_folder, folder_path=output_folder, action=sparcify_trajectories_realisticly, threshold=0.0, boundary_box=None)
-        sparcify_trajectories_with_action_for_folder(input_folder=input_folder, folder_path=output_folder, action=sparcify_large_time_gap_with_threshold_percentage, threshold=0.5, boundary_box=None)
-        sparcify_trajectories_with_action_for_folder(input_folder=input_folder, folder_path=output_folder, action=sparcify_trajectories_randomly_using_threshold, threshold=0.5, boundary_box=None)
-
-def sparcify_trajectories_with_action_for_folder(
-    input_folder: str,
-    folder_path: str, 
-    action: Callable[[str, float, Polygon], SparsifyResult], 
-    threshold: float = 0.0,  # Example default value for threshold
-    boundary_box: Polygon = None  # Default None, assuming Polygon is from Shapely or a similar library
-):
-    initial_time = t.perf_counter()
-    total_reduced_points = 0
-    total_number_of_points = 0
-    total_trajectories = 0
-    reduced_avg = 0
-
-    logging.info(f'Began sparcifying trajectories with {str(action)}')
-
-    # List all files in the directory recursively
-    file_paths = list(Path(input_folder).rglob('*.txt'))
-
-    # Convert Path objects to strings 
-    file_paths = [str(path) for path in file_paths]
-
-    # Process files in parallel
-    with ProcessPoolExecutor() as executor:
-        results = executor.map(action, file_paths, [folder_path] * len(file_paths), [threshold] * len(file_paths), [boundary_box] * len(file_paths))        
-        for result in results:
-            total_reduced_points += result.reduced_points
-            total_number_of_points += result.number_of_points
-            total_trajectories += 1 if result.trajectory_was_used else 0
+    aalborg_harbor_to_kattegat_path = os.path.join(outputfolder, 'aalborg_harbor_to_kattegat')
+    skagen_harbor_path = os.path.join(outputfolder, 'skagen_harbor')
     
-    if total_trajectories == 0:
-        print('No trajectories were used')
-    else:
-        reduced_avg = total_reduced_points/total_trajectories
+    outputfolders = [
+        (aalborg_harbor_to_kattegat_path, aalborg_harbor_to_kattegat_bbox),
+        (skagen_harbor_path, skagens_harbor_bbox)]
     
-    finished_time = t.perf_counter() - initial_time
-    logging.info(f'Reduced on avg. pr trajectory: {reduced_avg} for {total_trajectories} trajectories. Reduced points in total: {total_reduced_points}/{total_number_of_points}. Elapsed time: {finished_time:0.4f} seconds')   
+    if ('test' not in inputfolder):
+        brunsbuettel_to_kiel_path = os.path.join(outputfolder, 'brunsbuettel_to_kiel')
+        doggersbank_to_lemvig_path = os.path.join(outputfolder, 'doggersbank_to_lemvig')
+
+        outputfolders.append((brunsbuettel_to_kiel_path, brunsbuettel_to_kiel_polygon))
+        outputfolders.append((doggersbank_to_lemvig_path, doggersbank_to_lemvig_bbox))
+    
+    stats = Sparse_Statistics()
+    for (outputfolder, boundary_box) in outputfolders:
+        for filepath in filepaths:
+            sparcify_realisticly_strict_trajectories(filepath=filepath, folderpath=outputfolder, stats=stats, boundary_box=boundary_box)
+            sparcify_trajectories_realisticly(filepath=filepath, folderpath=outputfolder, stats=stats, boundary_box=boundary_box)
+
+    stats.make_statistics_no_threshold()
+
+    logging.info(f'Finished all area in output folder {outputfolder}')   
+
+def write_trajectories_for_all(inputfolder: str, outputfolder:str):
+    filepaths = list(Path(inputfolder).rglob('*.txt'))
+    filepaths = [str(path) for path in filepaths]
+    # data = [['Output Folder', 'Threshold', 'Vessel Samples', 'Reduced', 'Total Distance', 'Vessel Type']]
+    stats = Sparse_Statistics()
+    for filepath in filepaths:
+        sparcify_realisticly_strict_trajectories(filepath=filepath, folderpath=outputfolder, stats=stats, boundary_box=None)
+        sparcify_trajectories_realisticly(filepath=filepath, folderpath=outputfolder, stats=stats, boundary_box=None)
+
+    stats.make_statistics_no_threshold()    
+
+    logging.info(f'Finished all for in output folder {outputfolder}')   
+
+def write_trajectories_for_area_with_threshold(inputfolder:str, outputfolder: str, threshold:float):
+    filepaths = list(Path(inputfolder).rglob('*.txt'))
+    filepaths = [str(path) for path in filepaths]
+
+    aalborg_harbor_to_kattegat_path = os.path.join(outputfolder, 'aalborg_harbor_to_kattegat')
+    skagen_harbor_path = os.path.join(outputfolder, 'skagen_harbor')
+    
+    outputfolders = [
+        (aalborg_harbor_to_kattegat_path, aalborg_harbor_to_kattegat_bbox),
+        (skagen_harbor_path, skagens_harbor_bbox)]
+    
+    if ('test' not in inputfolder):
+        brunsbuettel_to_kiel_path = os.path.join(outputfolder, 'brunsbuettel_to_kiel')
+        doggersbank_to_lemvig_path = os.path.join(outputfolder, 'doggersbank_to_lemvig')
+
+        outputfolders.append((brunsbuettel_to_kiel_path, brunsbuettel_to_kiel_polygon))
+        outputfolders.append((doggersbank_to_lemvig_path, doggersbank_to_lemvig_bbox))
+    
+    # data = [['Output Folder', 'Threshold', 'Vessel Samples', 'Reduced', 'Total Distance', 'Vessel Type']]
+    stats = Sparse_Statistics()
+    for (outputfolder, boundary_box) in outputfolders:
+        for filepath in filepaths:
+            sparcify_large_meter_gap_by_threshold(filepath=filepath, folderpath=outputfolder, stats=stats, threshold=threshold, boundary_box=boundary_box)
+            sparcify_trajectories_with_meters_gaps_by_treshold(filepath=filepath, folderpath=outputfolder, stats=stats, threshold=threshold, boundary_box=boundary_box)
+
+    stats.make_statistics_with_threshold()
+
+    logging.info(f'Finished all area for threshold {threshold} in output folder {outputfolder}')   
+
+def write_trajectories_for_all_with_threshold(inputfolder: str, outputfolder:str, threshold:float):
+    filepaths = list(Path(inputfolder).rglob('*.txt'))
+    filepaths = [str(path) for path in filepaths]
+    # data = [['Output Folder', 'Threshold', 'Vessel Samples', 'Reduced', 'Total Distance', 'Vessel Type']]
+    stats = Sparse_Statistics()
+    for filepath in filepaths:
+        sparcify_large_meter_gap_by_threshold(filepath=filepath, folderpath=outputfolder, stats=stats, threshold=threshold, boundary_box=None)
+        sparcify_trajectories_with_meters_gaps_by_treshold(filepath=filepath, folderpath=outputfolder, stats=stats, threshold=threshold, boundary_box=None)
+
+    stats.make_statistics_with_threshold()    
+
+    logging.info(f'Finished all for threshold {threshold} in output folder {outputfolder}')   
 
 def find_cell_txt_files(directories: List[str]):
     cell_txt_files:list[str] = []
@@ -422,97 +427,22 @@ def find_cell_input_files():
 
     logging.info('Finished finding area input files')        
 
-def move_test_and_validation_back():
-    os_path_split = '/' if '/' in INPUT_GRAPH_FOLDER else '\\'
-    directories_with_moved_files = set()
 
-    cells_df = pd.read_csv(CELL_TXT)
-    cells_df['geometry'] = cells_df.apply(lambda row: box(row['min_lon'], row['min_lat'], row['max_lon'], row['max_lat']), axis=1)
-    cells_gdf = gpd.GeoDataFrame(cells_df, geometry='geometry', crs="EPSG:4326")
+threshold_values = [50, 100, 200, 400, 800, 1600, 3200, 6400]
 
-    validation_files = list(Path(INPUT_VALIDATION_DATA_ORIGINAL_FOLDER).rglob('*.txt')) # List all files in the directory recursively
-    test_files = list(Path(INPUT_TEST_DATA_FOLDER_ORIGINAL_FOLDER).rglob('*.txt')) # List all files in the directory recursively
-    all_files = [str(path) for path in (validation_files+test_files)] # Convert Path objects to strings
-    num_files_to_move = len(all_files)
 
-    brunsbuettel_to_kiel_gdf = gpd.GeoDataFrame([1], geometry=[brunsbuettel_to_kiel_polygon], crs="EPSG:4326").geometry.iloc[0]
-    aalborg_harbor_to_kattegat_gdf = gpd.GeoDataFrame([1], geometry=[aalborg_harbor_to_kattegat_bbox], crs="EPSG:4326").geometry.iloc[0]
-    doggersbank_to_lemvig_gdf = gpd.GeoDataFrame([1], geometry=[doggersbank_to_lemvig_bbox], crs="EPSG:4326").geometry.iloc[0] 
-    skagen_gdf = gpd.GeoDataFrame([1], geometry=[skagens_harbor_bbox], crs="EPSG:4326").geometry.iloc[0]
+print('making data for test')
+for threshold in threshold_values:
+    write_trajectories_for_all_with_threshold(INPUT_TEST_DATA_FOLDER_ORIGINAL_FOLDER, INPUT_TEST_SPARSED_ALL_FOLDER, threshold=threshold)
+    write_trajectories_for_area_with_threshold(INPUT_TEST_DATA_FOLDER_ORIGINAL_FOLDER, INPUT_TEST_SPARSED_AREA_FOLDER, threshold=threshold)
 
-    areas = [
-        (brunsbuettel_to_kiel_gdf, 'brunsbuettel_to_kiel'), 
-        (aalborg_harbor_to_kattegat_gdf, 'aalborg_harbor_to_kattegat'), 
-        (doggersbank_to_lemvig_gdf, 'doggersbank_to_lemvig'),
-        (skagen_gdf, 'skagen_harbor')]
+write_trajectories_for_all(INPUT_TEST_DATA_FOLDER_ORIGINAL_FOLDER, INPUT_TEST_SPARSED_ALL_FOLDER)
+write_trajectories_for_area(INPUT_TEST_DATA_FOLDER_ORIGINAL_FOLDER, INPUT_TEST_SPARSED_AREA_FOLDER)
 
-    for i, file_path in enumerate(all_files, start=1):
-        vessel_mmsi_folder = f'{file_path.split(os_path_split)[-3]}/{file_path.split(os_path_split)[-2]}'
-        cell_trajectory_df = get_trajectory_df_from_txt(file_path)
-        area_trajectory_df = cell_trajectory_df.copy(deep=True)
+print('making data for validation')
+for threshold in threshold_values:
+    write_trajectories_for_area_with_threshold(INPUT_VALIDATION_DATA_ORIGINAL_FOLDER, INPUT_VALIDATION_SPARSED_AREA_FOLDER, threshold=threshold)
+    write_trajectories_for_all_with_threshold(INPUT_VALIDATION_DATA_ORIGINAL_FOLDER, INPUT_VALIDATION_SPARSED_ALL_FOLDER, threshold=threshold)
 
-        # For grid cells
-        points_cells_harbors = gpd.sjoin(cell_trajectory_df, cells_gdf, how="left", predicate="intersects", lsuffix='left', rsuffix='right')
-
-        for (cell_id, group) in points_cells_harbors.groupby('cell_id'):
-            if group.empty:
-                continue
-
-            output_folder = INPUT_GRAPH_CELLS_FOLDER
-            output_folder = os.path.join(output_folder, str(cell_id))
-            output_folder = os.path.join(output_folder, vessel_mmsi_folder)
-
-            os.makedirs(output_folder, exist_ok=True)
-
-            output_path = os.path.join(output_folder, os.path.basename(file_path))
-            group[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'navigational_status']].reset_index(drop=True).to_csv(output_path, sep=',', index=True, header=True, mode='w') 
-
-        # for input area
-        for (area, name) in areas:
-                area_trajectory_df['within_boundary_box'] = area_trajectory_df.within(area)            
-                change_detected = area_trajectory_df['within_boundary_box'] != area_trajectory_df['within_boundary_box'].shift(1)
-                area_trajectory_df['group'] = change_detected.cumsum()
-                
-                # Find the largest group within the boundary box
-                group_sizes = area_trajectory_df[area_trajectory_df['within_boundary_box']].groupby('group').size()
-                valid_groups = group_sizes[group_sizes >= 2]
-
-                if valid_groups.empty:
-                    continue
-            
-                largest_group_id = valid_groups.idxmax()
-
-                # Filter trajectory points based on the largest group within the boundary box
-                trajectory_filtered_df = area_trajectory_df[(area_trajectory_df['group'] == largest_group_id) & area_trajectory_df['within_boundary_box']]
-                output_folder = INPUT_GRAPH_AREA_FOLDER
-                output_folder = os.path.join(output_folder, name)
-                output_folder = os.path.join(output_folder, vessel_mmsi_folder)
-
-                os.makedirs(output_folder, exist_ok=True)
-
-                output_path = os.path.join(output_folder, os.path.basename(file_path))
-                trajectory_filtered_df.reset_index(drop=True).to_csv(output_path, sep=',', index=True, header=True, mode='w') 
-
-        # move the back to original folder
-        end_dir = os.path.join(INPUT_GRAPH_FOLDER, vessel_mmsi_folder)
-        os.makedirs(end_dir, exist_ok=True)
-        shutil.move(file_path, end_dir)
-        directories_with_moved_files.add(os.path.dirname(file_path))
-        sys.stdout.write(f"\rMoved {i}/{num_files_to_move}")
-        sys.stdout.flush()
-    
-    # Remove empty directories
-    empty_folders_removed = 0
-    for dir_path in directories_with_moved_files:
-        if not os.listdir(dir_path):  # Check if directory is empty
-            os.rmdir(dir_path)  # Remove empty directory
-            empty_folders_removed += 1
-
-    logging.info(f'Finished moving {num_files_to_move} files\n Removed {empty_folders_removed} empty directories from input graph')
-
-print('began creating test and validation data for cells')
-move_random_files_to_test_and_validation()
-#write_trajectories_for_area(INPUT_VALIDATION_DATA_ORIGINAL_FOLDER, INPUT_VALIDATION_SPARSED_AREA_FOLDER)
-#write_trajectories_for_all(INPUT_VALIDATION_DATA_ORIGINAL_FOLDER, INPUT_VALIDATION_SPARSED_ALL_FOLDER)
-#write_trajectories_for_area(INPUT_TEST_DATA_FOLDER_ORIGINAL_FOLDER, INPUT_TEST_SPARSED_AREA_FOLDER)
-#write_trajectories_for_all(INPUT_TEST_DATA_FOLDER_ORIGINAL_FOLDER, INPUT_TEST_SPARSED_ALL_FOLDER)
+write_trajectories_for_all(INPUT_VALIDATION_DATA_ORIGINAL_FOLDER, INPUT_VALIDATION_SPARSED_ALL_FOLDER)
+write_trajectories_for_area(INPUT_VALIDATION_DATA_ORIGINAL_FOLDER, INPUT_VALIDATION_SPARSED_AREA_FOLDER)
