@@ -1,3 +1,4 @@
+import math
 import os
 import json
 import time
@@ -172,38 +173,25 @@ def create_nodes(sampled_trajectories):
         CROSS JOIN LATERAL (
             SELECT depth, geometry
             FROM depth_points
-            WHERE ST_DWithin(a.geometry, geometry, 50)
+            WHERE ST_DWithin(a.geometry, geometry, 0.001)
             ORDER BY a.geometry <-> geometry
             LIMIT 1
         ) AS b;
     """
 
-    # Load AIS points into temporary table for query performance
     ais_points_gdf.to_postgis("ais_points", engine, if_exists="replace", index=False)
-
-    # Execute query and load results
     nearest_depths_df = pd.read_sql(query, engine)
 
-    # Join nearest depths back to original AIS points DataFrame using the index for correct alignment
-    ais_points_gdf = ais_points_gdf.merge(nearest_depths_df, left_index=True, right_on='index')
+    if not nearest_depths_df.empty:
+        ais_points_gdf = ais_points_gdf.merge(nearest_depths_df, left_index=True, right_on='index')
 
-    # Assign the nearest depth directly
-    ais_points_gdf['avg_depth'] = ais_points_gdf['depth']
+        ais_points_gdf['avg_depth'] = ais_points_gdf['depth']
+
+        ais_points_gdf['avg_depth'] = ais_points_gdf['avg_depth'].fillna(-ais_points_gdf['draught'])
+    else:
+        ais_points_gdf['avg_depth'] = -ais_points_gdf['draught']
 
     ais_points_gdf = ais_points_gdf[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'avg_depth', 'geometry']]
-    
-    ais_points_gdf = ais_points_gdf.to_crs(epsg=3857)  # Convert to a projected system for meter-based analysis
-
-    # Find rows where avg_depth is exactly 0.0
-    zero_avg_depth_df = ais_points_gdf[ais_points_gdf['avg_depth'] == 0.0].copy()
-
-    if not zero_avg_depth_df.empty:
-        # Apply the function to each row with avg_depth == 0.0
-        for row in zero_avg_depth_df.itertuples():
-            max_depth = max_draught_within_radius(row.geometry, ais_points_gdf)
-            ais_points_gdf.at[row.Index, 'avg_depth'] = max_depth
-
-    ais_points_gdf = ais_points_gdf.to_crs(epsg=4326) 
 
     G = nx.Graph()
     for index, row in ais_points_gdf.iterrows():
@@ -213,12 +201,57 @@ def create_nodes(sampled_trajectories):
 
     return G
 
-def create_edges(G, initial_edge_radius_threshold, bearing_threshold, nodes_file_path, edges_file_path):
-    print("Creating Edges")
-    """
-        Creates edges between nodes in the graph. The creation of an edge 
-        is based on two criterias. Distance between nodes, and bearing between nodes.
-    """
+def angular_penalty(angle_difference, max_angle=180, penalty_rate=0.01):
+    """ Calculate additional distance penalty based on the angle difference. """
+    # Normalize the angle difference between 0 and 180
+    angle_difference = min(angle_difference, 360 - angle_difference)
+    # Scale penalty linearly with the angle difference up to the max_angle
+    return (angle_difference / max_angle) * penalty_rate
+
+def degree_distance(lat1, lon1, lat2, lon2):
+    """Calculate the Euclidean distance in degrees between two points."""
+    return math.sqrt((lat2 - lat1) ** 2 + (lon2 - lon1) ** 2)
+
+def GTI_edge_method(G, initial_edge_radius_threshold, bearing_threshold, nodes_file_path, edges_file_path):
+    node_coords_list = [(node, data) for node, data in G.nodes(data=True)]
+    node_array = np.array([node for node, data in node_coords_list])
+    
+    kdtree = cKDTree(node_array)
+    edge_count = 0
+    total_edge_count = 0
+
+    for i, (node, data) in enumerate(node_coords_list):
+            edge_radius_threshold = initial_edge_radius_threshold
+            edge_found = False
+            
+            while not edge_found:
+                nearby_indices = kdtree.query_ball_point(node, edge_radius_threshold)
+                
+                for nearby_index in nearby_indices:
+                    if nearby_index != i:
+                        nearby_node, nearby_data = node_coords_list[nearby_index]
+                        nearby_cog = nearby_data['cog']
+                        
+                        cog_diff = calculate_bearing_difference(data['cog'], nearby_cog)
+                        
+                        distance = degree_distance(node[0], node[1], nearby_node[0], nearby_node[1])
+                        
+                        penalty = angular_penalty(cog_diff)
+                        adjusted_distance = distance + penalty
+                        
+                        # Create an edge if the adjusted distance is within the threshold
+                        if adjusted_distance <= edge_radius_threshold:
+                            G.add_edge(node, nearby_node, weight=adjusted_distance)
+                            edge_found = True
+                            total_edge_count += 1
+
+                edge_radius_threshold = edge_radius_threshold * 1.1
+
+    export_graph_to_geojson(G, nodes_file_path, edges_file_path)
+
+    return total_edge_count
+
+def VTI_edge_method(G, initial_edge_radius_threshold, bearing_threshold, nodes_file_path, edges_file_path):
     node_coords_list = [(node, data) for node, data in G.nodes(data=True)]
     node_array = np.array([node for node, data in node_coords_list])
     
@@ -230,7 +263,7 @@ def create_edges(G, initial_edge_radius_threshold, bearing_threshold, nodes_file
         edge_radius_threshold = initial_edge_radius_threshold
         while edge_count == 0:
             nearby_indices = kdtree.query_ball_point(node, edge_radius_threshold)
-
+            
             for nearby_index in nearby_indices:
                 if nearby_index != i: 
                     nearby_node, nearby_data = node_coords_list[nearby_index]
@@ -252,6 +285,21 @@ def create_edges(G, initial_edge_radius_threshold, bearing_threshold, nodes_file
     export_graph_to_geojson(G, nodes_file_path, edges_file_path)
 
     return total_edge_count
+
+def create_edges(G, initial_edge_radius_threshold, bearing_threshold, nodes_file_path, edges_file_path):
+    print("Creating Edges")
+    """
+        Creates edges between nodes in the graph. The creation of an edge 
+        is based on two criterias. Distance between nodes, and bearing between nodes.
+    """
+    
+    #total_edge_count = GTI_edge_method(G, initial_edge_radius_threshold, bearing_threshold, nodes_file_path, edges_file_path)
+    total_edge_count = VTI_edge_method(G, initial_edge_radius_threshold, bearing_threshold, nodes_file_path, edges_file_path)
+
+    return total_edge_count
+    
+
+    
 
 def create_graphs_for_cells(node_threshold, edge_threshold, cog_threshold, graph_output_name):
 

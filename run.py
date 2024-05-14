@@ -37,7 +37,7 @@ def run(node_dist_threshold, edge_dist_threshold, cog_angle_threshold, graph_out
     print("Evaluation of Trajectories Done")
 
 node_dist_threshold = 0.001
-edge_dist_threshold = [0.001, 0.002, 0.003, 0.004, 0.005]
+edge_dist_threshold = [0.005]
 cog_angle_threshold = 45
 graph_output_name = 'skagen'
 graph_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI//data//output_graph//{graph_output_name}_{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}')
