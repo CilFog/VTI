@@ -157,7 +157,6 @@ def impute_trajectory(file_name, file_path, graphs, node_dist_threshold, edge_di
         relevant_nodes_end = set(nodes_within_radius(G, end_point, edge_dist_threshold))
 
         relevant_nodes = relevant_nodes_start.union(relevant_nodes_end)
-        print(relevant_nodes)
 
         gg = G.subgraph(relevant_nodes).copy()
         g = gg.copy()
