@@ -174,7 +174,9 @@ def adjust_edge_weights_for_draught(G, start_point, end_point, max_draught, base
                 initial_weight = data.get('weight')
                 G[node][neighbor]['weight'] = initial_weight + penalty
 
-    return G
+    subgraph = G.subgraph(relevant_nodes)
+
+    return subgraph
 
 def cog_penalty(cog1, cog2, threshold=30, large_penalty=1000):
     angle_difference = abs(cog1 - cog2)
