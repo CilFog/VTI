@@ -426,7 +426,7 @@ def find_cell_input_files():
     logging.info('Finished finding area input files')        
 
 
-threshold_values = [50, 100, 200, 400, 800, 1600, 3200, 6400]
+threshold_values = [100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600]
 test_all_threshold = os.path.join(STATS_TEST_ALL, 'all_threshold.json')
 test_area_threshold = os.path.join(STATES_TEST_AREA, 'area_threshold.json')
 test_all_realistic = os.path.join(STATS_TEST_ALL, 'all_realistic.json')
@@ -442,23 +442,23 @@ os.makedirs(STATS_VALIDATION_ALL, exist_ok=True)
 os.makedirs(STATS_VALIDATIOM_AREA, exist_ok=True)
 stats = Sparse_Statistics()
 
-# print('making data for test with thresholds')
-# for threshold in threshold_values:
-#     print('currently at threshold', threshold)
-#     write_trajectories_for_all_with_threshold(INPUT_TEST_DATA_FOLDER_ORIGINAL_FOLDER, INPUT_TEST_SPARSED_ALL_FOLDER, threshold=threshold, output_json=test_all_threshold)
-#     write_trajectories_for_area_with_threshold(INPUT_TEST_DATA_FOLDER_ORIGINAL_FOLDER, INPUT_TEST_SPARSED_AREA_FOLDER, threshold=threshold, output_json=test_area_threshold)
+print('making data for test with thresholds')
+for threshold in threshold_values:
+    print('currently at threshold', threshold)
+    write_trajectories_for_all_with_threshold(INPUT_TEST_DATA_FOLDER_ORIGINAL_FOLDER, INPUT_TEST_SPARSED_ALL_FOLDER, threshold=threshold, output_json=test_all_threshold)
+    write_trajectories_for_area_with_threshold(INPUT_TEST_DATA_FOLDER_ORIGINAL_FOLDER, INPUT_TEST_SPARSED_AREA_FOLDER, threshold=threshold, output_json=test_area_threshold)
 
-# print('making stats for test with thresholds')
-# stats.make_statistics_with_threshold(test_all_threshold)
-# stats.make_statistics_with_threshold(test_area_threshold)
+print('making stats for test with thresholds')
+stats.make_statistics_with_threshold(test_all_threshold)
+stats.make_statistics_with_threshold(test_area_threshold)
 
-# print('making data for test realistic')
-# write_trajectories_for_all(INPUT_TEST_DATA_FOLDER_ORIGINAL_FOLDER, INPUT_TEST_SPARSED_ALL_FOLDER, output_json=test_all_realistic)
-# write_trajectories_for_area(INPUT_TEST_DATA_FOLDER_ORIGINAL_FOLDER, INPUT_TEST_SPARSED_AREA_FOLDER, output_json=test_area_realistic)
+print('making data for test realistic')
+write_trajectories_for_all(INPUT_TEST_DATA_FOLDER_ORIGINAL_FOLDER, INPUT_TEST_SPARSED_ALL_FOLDER, output_json=test_all_realistic)
+write_trajectories_for_area(INPUT_TEST_DATA_FOLDER_ORIGINAL_FOLDER, INPUT_TEST_SPARSED_AREA_FOLDER, output_json=test_area_realistic)
 
-# print('making stats for test realistic')
-# stats.make_statistics_no_threshold(test_all_realistic)
-# stats.make_statistics_no_threshold(test_area_realistic)
+print('making stats for test realistic')
+stats.make_statistics_no_threshold(test_all_realistic)
+stats.make_statistics_no_threshold(test_area_realistic)
 
 print('making data for validation')
 for threshold in threshold_values:
