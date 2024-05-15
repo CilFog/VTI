@@ -52,7 +52,7 @@ def create_graph_from_geojson(nodes_geojson_path, edges_geojson_path):
 def load_geojson_to_graph(file_path):
     with open(file_path, 'r') as f:
         data = json.load(f)
-    G = nx.Graph()
+    G = nx.DiGraph()
     for feature in data['features']:
         coords = tuple(feature['geometry']['coordinates'])
         G.add_node(coords, **feature['properties'])

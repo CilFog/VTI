@@ -193,7 +193,7 @@ def create_nodes(sampled_trajectories):
 
     ais_points_gdf = ais_points_gdf[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'avg_depth', 'geometry']]
 
-    G = nx.Graph()
+    G = nx.DiGraph()
     for index, row in ais_points_gdf.iterrows():
         node = (row['latitude'], row['longitude'])
         attributes = row.drop(['geometry']).to_dict()
@@ -201,7 +201,7 @@ def create_nodes(sampled_trajectories):
 
     return G
 
-def angular_penalty(angle_difference, max_angle=180, penalty_rate=0.01):
+def angular_penalty(angle_difference, max_angle=45, penalty_rate=0.01):
     """ Calculate additional distance penalty based on the angle difference. """
     # Normalize the angle difference between 0 and 180
     angle_difference = min(angle_difference, 360 - angle_difference)
