@@ -198,6 +198,8 @@ data/stats/stats.ndjson
 data/stats/stats_after_cleansing.ndjson
 data/stats/stats_after_cleansing_total.ndjson
 data/stats/solution_stats
+data/stats/evaluation
+data/stats/imputation_stats
 graph_construction_module/output
 imputation_module/output
 

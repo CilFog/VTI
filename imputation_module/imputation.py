@@ -86,7 +86,7 @@ def find_relevant_cells(trajectory_points, cells_df):
                 relevant_cell_ids.add(row['cell_id'])
     return list(relevant_cell_ids)
 
-def impute_trajectory(file_name, file_path, graphs, node_dist_threshold, edge_dist_threshold, cog_angle_threshold):
+def impute_trajectory(file_name, file_path, graphs, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size):
     start_time = time.time()
 
     G = nx.Graph()
@@ -134,7 +134,7 @@ def impute_trajectory(file_name, file_path, graphs, node_dist_threshold, edge_di
         
         if i % 50 == 0:
             print(f"Done with {i} out of {len(trajectory_points)}")
-
+        
         if start_point not in G:
             G.add_node(start_point, **start_props) 
         if end_point not in G:
@@ -160,32 +160,11 @@ def impute_trajectory(file_name, file_path, graphs, node_dist_threshold, edge_di
         
         else:
             max_draught = start_props.get("draught", None)
-            G_apply_draught_penalty = adjust_edge_weights_for_draught(G, start_point, end_point, max_draught)
-            G_apply_cog_penalty = adjust_edge_weights_for_cog(G_apply_draught_penalty, start_point, end_point)
+            #G_apply_draught_penalty = adjust_edge_weights_for_draught(G, start_point, end_point, max_draught)
+            G_apply_cog_penalty = G #adjust_edge_weights_for_cog(G_apply_draught_penalty, start_point, end_point)
             
             try:
                 path = nx.astar_path(G_apply_cog_penalty, start_point, end_point, heuristic=heuristics, weight='weight')
-
-                start_timestamp_unix = start_props["timestamp"]  
-                end_timestamp_unix = end_props["timestamp"]  
-                
-                nodes_within_path = [(start_props["latitude"], start_props["longitude"])] + \
-                                    [(G_apply_cog_penalty.nodes[n]["latitude"], G_apply_cog_penalty.nodes[n]["longitude"]) for n in path[1:-1]] + \
-                                    [(end_props["latitude"], end_props["longitude"])]
-                
-                interpolated_timestamps = calculate_interpolated_timestamps(nodes_within_path, start_timestamp_unix, end_timestamp_unix)
-                
-                for index, node_coordinate in enumerate(nodes_within_path):
-                    node = path[index]  
-                    if node in G_apply_cog_penalty:
-                        node_props = G_apply_cog_penalty.nodes[node]
-                        node_props.update({
-                            'timestamp': interpolated_timestamps[index],  
-                            'sog': start_props["sog"], 
-                        })
-                    else:
-                        print(f"Node {node} not found in graph.")
-                
                 imputed_paths.append(path)
 
             except nx.NetworkXNoPath:
@@ -193,7 +172,7 @@ def impute_trajectory(file_name, file_path, graphs, node_dist_threshold, edge_di
                 G_apply_cog_penalty.add_edge(start_point, end_point, weight=distance)
                 imputed_paths.append([start_point, end_point]) 
                     
-
+    print("Imputation done")
     unique_nodes = []
     seen_nodes = set()
     edges = []
@@ -206,7 +185,7 @@ def impute_trajectory(file_name, file_path, graphs, node_dist_threshold, edge_di
         for i in range(len(path)-1):
             edges.append((path[i], path[i+1]))
 
-    IMPUTATION_OUTPUT_path = os.path.join(IMPUTATION_OUTPUT, f'{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}//raw//{file_name}')
+    IMPUTATION_OUTPUT_path = os.path.join(IMPUTATION_OUTPUT, f'{type}//{size}//{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}//{file_name}')
 
     if not os.path.exists(IMPUTATION_OUTPUT_path):
         os.makedirs(IMPUTATION_OUTPUT_path)
@@ -227,7 +206,8 @@ def impute_trajectory(file_name, file_path, graphs, node_dist_threshold, edge_di
         'execution_time_seconds': execution_time
     }
 
-    output_directory  = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data//stats//solution_stats')
+    output_directory  = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'data//stats//imputation_stats//{type}//{size}')
+    os.makedirs(output_directory, exist_ok=True)
     stats_file = os.path.join(output_directory, f'{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}_imputation.csv')
 
     write_header = not os.path.exists(stats_file)

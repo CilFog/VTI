@@ -217,7 +217,6 @@ def GTI_edge_method(G, initial_edge_radius_threshold, bearing_threshold, nodes_f
     node_array = np.array([node for node, data in node_coords_list])
     
     kdtree = cKDTree(node_array)
-    edge_count = 0
     total_edge_count = 0
 
     for i, (node, data) in enumerate(node_coords_list):
@@ -278,7 +277,7 @@ def VTI_edge_method(G, initial_edge_radius_threshold, bearing_threshold, nodes_f
                         total_edge_count += 1
 
             # Increase edge_radius_threshold if no edges were found
-            edge_radius_threshold = edge_radius_threshold * 1.1
+            edge_radius_threshold = edge_radius_threshold * 2.0
 
         edge_count = 0
 
