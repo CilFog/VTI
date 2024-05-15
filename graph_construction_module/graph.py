@@ -292,8 +292,8 @@ def create_edges(G, initial_edge_radius_threshold, bearing_threshold, nodes_file
         is based on two criterias. Distance between nodes, and bearing between nodes.
     """
     
-    #total_edge_count = GTI_edge_method(G, initial_edge_radius_threshold, bearing_threshold, nodes_file_path, edges_file_path)
-    total_edge_count = VTI_edge_method(G, initial_edge_radius_threshold, bearing_threshold, nodes_file_path, edges_file_path)
+    total_edge_count = GTI_edge_method(G, initial_edge_radius_threshold, bearing_threshold, nodes_file_path, edges_file_path)
+    #total_edge_count = VTI_edge_method(G, initial_edge_radius_threshold, bearing_threshold, nodes_file_path, edges_file_path)
 
     return total_edge_count
     
