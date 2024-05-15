@@ -124,6 +124,7 @@ def impute_trajectory(file_name, file_path, graphs, node_dist_threshold, edge_di
     G_apply_cog_penalty = None
     
     imputed_paths = []
+    imputed_graph = nx.Graph()
 
     for i in range(len(trajectory_points) - 1):
         start_props = trajectory_points[i]["properties"]
@@ -151,26 +152,38 @@ def impute_trajectory(file_name, file_path, graphs, node_dist_threshold, edge_di
                 distance = haversine_distance(end_point[0], end_point[1], node[0], node[1])
                 G.add_edge(end_point, node, weight=distance)
                 G.add_edge(node, end_point, weight=distance)
+
+        relevant_nodes_start = set(nodes_within_radius(G, start_point, edge_dist_threshold))
+        relevant_nodes_end = set(nodes_within_radius(G, end_point, edge_dist_threshold))
+
+        relevant_nodes = relevant_nodes_start.union(relevant_nodes_end)
+        print(relevant_nodes)
+
+        gg = G.subgraph(relevant_nodes).copy()
+        g = gg.copy()
         
-        direct_path_exists = G.has_edge(start_point, end_point)
+        direct_path_exists = g.has_edge(start_point, end_point)
         
         if direct_path_exists:
             path = [start_point, end_point]
             imputed_paths.append(path)
+            merge_graphs(imputed_graph, G_apply_cog_penalty)
         
         else:
             max_draught = start_props.get("draught", None)
-            G_apply_draught_penalty = adjust_edge_weights_for_draught(G, start_point, end_point, max_draught)
-            G_apply_cog_penalty = adjust_edge_weights_for_cog(G_apply_draught_penalty, start_point, end_point)
+            G_apply_draught_penalty = adjust_edge_weights_for_draught(g, start_point, end_point, max_draught, relevant_nodes)
+            G_apply_cog_penalty = adjust_edge_weights_for_cog(G_apply_draught_penalty, start_point, end_point, relevant_nodes)
             
             try:
                 path = nx.astar_path(G_apply_cog_penalty, start_point, end_point, heuristic=heuristics, weight='weight')
                 imputed_paths.append(path)
+                merge_graphs(imputed_graph, G_apply_cog_penalty)
 
             except nx.NetworkXNoPath:
                 distance = haversine_distance(start_props["latitude"], start_props["longitude"], end_props["latitude"], end_props["longitude"])
                 G_apply_cog_penalty.add_edge(start_point, end_point, weight=distance)
-                imputed_paths.append([start_point, end_point]) 
+                imputed_paths.append([start_point, end_point])
+                merge_graphs(imputed_graph, G_apply_cog_penalty) 
                     
     print("Imputation done")
     unique_nodes = []
@@ -193,8 +206,8 @@ def impute_trajectory(file_name, file_path, graphs, node_dist_threshold, edge_di
     imputed_nodes_file_path = os.path.join(IMPUTATION_OUTPUT_path, f'{file_name}_nodes.geojson')
     imputed_edges_file_path = os.path.join(IMPUTATION_OUTPUT_path, f'{file_name}_edges.geojson')
 
-    nodes_to_geojson(G_apply_cog_penalty, unique_nodes, imputed_nodes_file_path)
-    edges_to_geojson(G_apply_cog_penalty, edges, imputed_edges_file_path)
+    nodes_to_geojson(imputed_graph, unique_nodes, imputed_nodes_file_path)
+    edges_to_geojson(imputed_graph, edges, imputed_edges_file_path)
 
     end_time = time.time()
     execution_time = end_time - start_time  

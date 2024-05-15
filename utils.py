@@ -141,15 +141,15 @@ def nodes_within_radius(G, point, radius):
     
     return nodes_within
 
-def adjust_edge_weights_for_draught(G, start_point, end_point, max_draught, base_penalty=1000, depth_penalty_factor=1):
-    radius = haversine_distance(start_point[0], start_point[1], end_point[0], end_point[1])
+def adjust_edge_weights_for_draught(G, start_point, end_point, max_draught, relevant_nodes, base_penalty=1000, depth_penalty_factor=1):
+    # radius = haversine_distance(start_point[0], start_point[1], end_point[0], end_point[1])
 
-    radiusNew = radius / 100 
+    # radiusNew = radius / 100 
 
-    relevant_nodes_start = set(nodes_within_radius(G, start_point, radiusNew))
-    relevant_nodes_end = set(nodes_within_radius(G, end_point, radiusNew))
+    # relevant_nodes_start = set(nodes_within_radius(G, start_point, radiusNew))
+    # relevant_nodes_end = set(nodes_within_radius(G, end_point, radiusNew))
 
-    relevant_nodes = relevant_nodes_start.union(relevant_nodes_end)
+    # relevant_nodes = relevant_nodes_start.union(relevant_nodes_end)
 
     processed_edges = set()
     for node in relevant_nodes:
@@ -174,7 +174,8 @@ def adjust_edge_weights_for_draught(G, start_point, end_point, max_draught, base
                 initial_weight = data.get('weight')
                 G[node][neighbor]['weight'] = initial_weight + penalty
 
-    subgraph = G.subgraph(relevant_nodes)
+
+    subgraph = G
 
     return subgraph
 
@@ -188,16 +189,16 @@ def cog_penalty(cog1, cog2, threshold=30, large_penalty=1000):
     else:
         return 0
 
-def adjust_edge_weights_for_cog(G, start_point, end_point):
-    radius = haversine_distance(start_point[0], start_point[1], end_point[0], end_point[1])
+def adjust_edge_weights_for_cog(G, start_point, end_point, relevant_nodes):
+    # radius = haversine_distance(start_point[0], start_point[1], end_point[0], end_point[1])
     
-    radiusNew = radius / 100 
+    # radiusNew = radius / 100 
 
-    relevant_nodes_start = set(nodes_within_radius(G, start_point, radiusNew))
-    relevant_nodes_end = set(nodes_within_radius(G, end_point, radiusNew))
+    # relevant_nodes_start = set(nodes_within_radius(G, start_point, radiusNew))
+    # relevant_nodes_end = set(nodes_within_radius(G, end_point, radiusNew))
     
-    # Union of nodes near start and end points for all relevant nodes.
-    relevant_nodes = relevant_nodes_start.union(relevant_nodes_end)
+    # # Union of nodes near start and end points for all relevant nodes.
+    # relevant_nodes = relevant_nodes_start.union(relevant_nodes_end)
     
     # Dictionary to cache penalties between COG values
     penalty_cache = {}
