@@ -3,7 +3,7 @@ import json
 import os
 import networkx as nx
 from data.logs.logging import setup_logger
-from utils import calculate_interpolated_timestamps, haversine_distance, heuristics, adjust_edge_weights_for_draught, adjust_edge_weights_for_cog, nodes_within_radius, nodes_to_geojson, edges_to_geojson
+from utils import calculate_interpolated_timestamps, haversine_distance, heuristics, adjust_edge_weights_for_draught, adjust_edge_weights_for_cog, nodes_within_radius, nodes_to_geojson, edges_to_geojson, export_graph_to_geojson
 import time
 from shapely.geometry import Point, box
 import pandas as pd
@@ -205,8 +205,9 @@ def impute_trajectory(file_name, file_path, graphs, node_dist_threshold, edge_di
     imputed_nodes_file_path = os.path.join(IMPUTATION_OUTPUT_path, f'{file_name}_nodes.geojson')
     imputed_edges_file_path = os.path.join(IMPUTATION_OUTPUT_path, f'{file_name}_edges.geojson')
 
-    nodes_to_geojson(imputed_graph, unique_nodes, imputed_nodes_file_path)
-    edges_to_geojson(imputed_graph, edges, imputed_edges_file_path)
+    export_graph_to_geojson(imputed_graph, imputed_nodes_file_path,imputed_edges_file_path)
+    #nodes_to_geojson(imputed_graph, unique_nodes, imputed_nodes_file_path)
+    #edges_to_geojson(imputed_graph, edges, imputed_edges_file_path)
 
     end_time = time.time()
     execution_time = end_time - start_time  
