@@ -33,7 +33,7 @@ for edge_dist_threshold in edge_dist_threshold:
         Create graphs and connect them
     """
     create_graphs_for_cells(node_dist_threshold, edge_dist_threshold, cog_angle_threshold, graph_output_name)
-    process_all_cells(cells_data, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, graph_output_name)
+    #process_all_cells(cells_data, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, graph_output_name)
 
     """
         Impute all trajectories in test folder
