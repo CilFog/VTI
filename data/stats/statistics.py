@@ -197,27 +197,56 @@ class Trajectory_Statistics:
 
 class Sparse_Statistics:
     def __init__(self):
-        self.data =[['Output Folder', 'Threshold', 'Vessel Samples', 'Reduced', 'Total Distance', 'Vessel Type']]
+        self.output_folder: str = ''
+        self.threshold: int = 0
+        self.vessel_samples: int = 0
+        self.reduced: int = 0
+        self.total_distance: float = 0
+        self.vessel_type: str = ''
 
-    def make_statistics_with_threshold(self):
+    def to_dict(self) -> Dict[str, Any]:
+        '''Converts the class attributes to a dictionary.'''
+        return {
+            'Output Folder': self.output_folder,
+            'Threshold': self.threshold,
+            'Vessel Samples': self.vessel_samples,
+            'Reduced': self.reduced,
+            'Total Distance': self.total_distance,
+            'Vessel Type': self.vessel_type
+        }
+
+    def add_to_file(self, filepath:str) -> None:
+        '''Adds latest parsed csv file'''
+        with open(filepath, 'a') as file:
+            json.dump(self.to_dict(), file)
+            file.write('\n') 
+        self = Trajectory_Statistics()
+
+    def make_statistics_with_threshold(self, input_file:str):
         columns_to_calculate = ['Vessel Samples', 'Reduced', 'Total Distance']
-        df = pd.DataFrame(self.data[1:], columns=self.data[0])
+        df = pd.read_json(input_file, lines=True)
 
         grouped = df.groupby('Output Folder')
 
-        for outoutfolder, group in grouped:
-            folder_name = outoutfolder.split('/')[-2]
-            threshold = outoutfolder.split('/')[-1].split('.')[0]
+        for outputfolder, group in grouped:
+            folder_name = outputfolder.split('/')[-2]
+            threshold = outputfolder.split('/')[-1].split('.')[0]
             
-            stats = {col: calculate_cleansing_statistics(df, col) for col in columns_to_calculate}
-            total_number_of_trajectories_files = df['Output Folder'].count()
+            stats = {col: calculate_cleansing_statistics(group, col) for col in columns_to_calculate}
+            total_number_of_trajectories_files = group['Output Folder'].count()
             stats['trajectories'] = {'total': total_number_of_trajectories_files, 'average': 0, 'median': 0, 'max': 0, 'min': 0, 'quantile 25%': 0, 'quantile 50%': 0, 'quantile 75%': 0}
             df_stats = pd.DataFrame.from_dict(stats, orient='index', 
                                         columns=['total', 'average', 'median', 'max', 'min', 'quantile 25%', 'quantile 50%', 'quantile 75%'])
             
             filepath = os.path.join(STATS_FOLDER, f'input_imputation')
-            filepath = os.path.join(filepath, 'test' if 'test' in outoutfolder else 'validation')
-            filepath = os.path.join(filepath, 'area' if 'area' in outoutfolder else 'all')
+            filepath = os.path.join(filepath, 'test' if 'test' in outputfolder else 'validation')
+            filepath = os.path.join(filepath, 'area' if 'area' in outputfolder else 'all')
+
+            if 'area' in filepath:
+                area_name = outputfolder.split('/')[-3]
+                filepath = os.path.join(filepath, area_name)
+
+            filepath = os.path.join(filepath, folder_name)
             filepath = os.path.join(filepath, threshold)
 
             os.makedirs(filepath, exist_ok=True)
@@ -241,24 +270,29 @@ class Sparse_Statistics:
 
             df_vessel.to_csv(vessel_file)
 
-    def make_statistics_no_threshold(self):
+    def make_statistics_no_threshold(self, input_file:str):
+        df = pd.read_json(input_file, lines=True)
         columns_to_calculate = ['Vessel Samples', 'Reduced', 'Total Distance']
-        df = pd.DataFrame(self.data[1:], columns=self.data[0])
 
         grouped = df.groupby('Output Folder')
 
-        for output, group in grouped:
-            folder_name = output.split('/')[-1]
+        for outputfolder, group in grouped:
+            folder_name = outputfolder.split('/')[-1]
             
-            stats = {col: calculate_cleansing_statistics(df, col) for col in columns_to_calculate}
-            total_number_of_trajectories_files = df['Output Folder'].count()
+            stats = {col: calculate_cleansing_statistics(group, col) for col in columns_to_calculate}
+            total_number_of_trajectories_files = group['Output Folder'].count()
             stats['trajectories'] = {'total': total_number_of_trajectories_files, 'average': 0, 'median': 0, 'max': 0, 'min': 0, 'quantile 25%': 0, 'quantile 50%': 0, 'quantile 75%': 0}
             df_stats = pd.DataFrame.from_dict(stats, orient='index', 
                                         columns=['total', 'average', 'median', 'max', 'min', 'quantile 25%', 'quantile 50%', 'quantile 75%'])
             
             filepath = os.path.join(STATS_FOLDER, f'input_imputation')
-            filepath = os.path.join(filepath, 'test' if 'test' in output else 'validation')
-            filepath = os.path.join(filepath, 'area' if 'area' in output else 'all')
+            filepath = os.path.join(filepath, 'test' if 'test' in outputfolder else 'validation')
+            filepath = os.path.join(filepath, 'area' if 'area' in outputfolder else 'all')
+    
+            if 'area' in filepath:
+                area_name = outputfolder.split('/')[-2]
+                filepath = os.path.join(filepath, area_name)
+
             filepath = os.path.join(filepath, folder_name)
 
             os.makedirs(filepath, exist_ok=True)

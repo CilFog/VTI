@@ -17,6 +17,17 @@ INPUT_ALL_TEST_FOLDER = os.path.join(INPUT_ALL_FOLDER, 'test')
 INPUT_AREA_FOLDER = os.path.join(INPUT_IMPUTATION_FOLDER, 'area')
 INPUT_AREA_VALIDATION_FOLDER = os.path.join(INPUT_AREA_FOLDER, 'validation')
 INPUT_AREA_TEST_FOLDER = os.path.join(INPUT_AREA_FOLDER, 'test')
+
+STATS_FOLDER = os.path.join(DATA_FOLDER, 'stats')
+STATS_INPUT_IMPUTATION = os.path.join(STATS_FOLDER, 'input_imputation')
+STATS_TEST = os.path.join(STATS_INPUT_IMPUTATION, 'test')
+STATS_TEST_THRESHOLD = os.path.join(STATS_TEST, 'stats_threshold.csv')
+STATS_TEST_REALISTIC = os.path.join(STATS_TEST, 'stats_realistic.csv')
+
+STATS_VALIDATIOM = os.path.join(STATS_INPUT_IMPUTATION, 'validation')
+STATS_VALIDATION_THRESHOLD = os.path.join(STATS_VALIDATIOM, 'stats_threshold.csv')
+STATS_VALIDATION_REALISTIC = os.path.join(STATS_VALIDATIOM, 'stats_realistic.csv')
+
 SPARCIFY_LOG = 'sparcify_log.txt'
 
 logging = setup_logger(name=SPARCIFY_LOG, log_file=SPARCIFY_LOG)
@@ -69,7 +80,7 @@ def add_meta_data(trajectory_df: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     
     return trajectory_df
 
-def sparcify_trajectories_with_meters_gaps_by_treshold(filepath:str, folderpath: str, stats, threshold:float = 0.0, boundary_box:Polygon = None):
+def sparcify_trajectories_with_meters_gaps_by_treshold(filepath:str, folderpath: str, stats, output_json:str, threshold:float = 0.0, boundary_box:Polygon = None):
     try:
         os_split = '/' if '/' in filepath else '\\'
         reduced_points:int = 0
@@ -147,14 +158,19 @@ def sparcify_trajectories_with_meters_gaps_by_treshold(filepath:str, folderpath:
 
         reduced_points = len(trajectory_filtered_df) - len(sparse_trajectory_df)    
         
-        data = [gaps_folder, threshold, number_of_vessel_samples, reduced_points, total_dist, vessel_folder]
-        stats.data.append(data)
+        stats.output_folder = gaps_folder
+        stats.threshold = threshold
+        stats.vessel_samples = number_of_vessel_samples
+        stats.reduced = reduced_points
+        stats.total_distance = total_dist
+        stats.vessel_type = vessel_folder
+        stats.add_to_file(output_json)
 
     except Exception as e:
         logging.error(f'Error occurred with: {repr(e)}')
         quit()
     
-def sparcify_trajectories_realisticly(filepath:str, folderpath: str, stats, boundary_box:Polygon = None):
+def sparcify_trajectories_realisticly(filepath:str, folderpath: str, stats, output_json:str, boundary_box:Polygon = None):
     try:    
         os_split = '/' if '/' in filepath else '\\'
         reduced_vessel_samples:int = 0
@@ -259,14 +275,19 @@ def sparcify_trajectories_realisticly(filepath:str, folderpath: str, stats, boun
         else:
             trajectory_filtered_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'navigational_status', 'speed_mps', 'speed_knots']].to_csv(new_filepath, sep=',', index=True, header=True, mode='w')     
         
-        data = [folderpath, 0, number_of_vessel_samples, reduced_vessel_samples, total_dist, vessel_folder]
-        stats.data.append(data)
+        stats.output_folder = folderpath
+        stats.threshold = 0
+        stats.vessel_samples = number_of_vessel_samples
+        stats.reduced = reduced_vessel_samples
+        stats.total_distance = total_dist
+        stats.vessel_type = vessel_folder
+        stats.add_to_file(output_json)
 
     except Exception as e:
         logging.error(f'Error occurred with: {repr(e)}')    
         quit()
 
-def sparcify_realisticly_strict_trajectories(filepath:str, folderpath: str, stats,boundary_box:Polygon = None):
+def sparcify_realisticly_strict_trajectories(filepath:str, folderpath: str, stats, output_json:str, boundary_box:Polygon = None):
     try:
         os_split = '/' if '/' in filepath else '\\'
         reduced_vessel_samples:int = 0
@@ -360,13 +381,18 @@ def sparcify_realisticly_strict_trajectories(filepath:str, folderpath: str, stat
             if number_of_vessel_samples == 2:
                 trajectory_filtered_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'navigational_status', 'speed_mps', 'speed_knots']].to_csv(new_filepath, sep=',', index=True, header=True, mode='w')     
                 
-        data = [folderpath, 0, number_of_vessel_samples, reduced_vessel_samples, total_dist, vessel_folder]
-        stats.data.append(data)
+        stats.output_folder = folderpath
+        stats.threshold = 0
+        stats.vessel_samples = number_of_vessel_samples
+        stats.reduced = reduced_vessel_samples
+        stats.total_distance = total_dist
+        stats.vessel_type = vessel_folder
+        stats.add_to_file(output_json)
     except Exception as e:
         print(e)
         quit()
 
-def sparcify_large_meter_gap_by_threshold(filepath:str, folderpath: str, stats, threshold:float = 0.0, boundary_box:Polygon = None):
+def sparcify_large_meter_gap_by_threshold(filepath:str, folderpath: str, stats, output_json:str, threshold:float = 0.0, boundary_box:Polygon = None):
     try:
         os_split = '/' if '/' in filepath else '\\'
         reduced_vessel_samples = 0
@@ -444,8 +470,15 @@ def sparcify_large_meter_gap_by_threshold(filepath:str, folderpath: str, stats, 
         sparse_trajectory_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'navigational_status', 'speed_mps', 'speed_knots']].reset_index(drop=True).to_csv(new_filepath, sep=',', index=True, header=True, mode='w')
 
         reduced_vessel_samples = len(trajectory_filtered_df) - len(sparse_trajectory_df)
-        data = [gap_folder, 0, number_of_vessel_samples, reduced_vessel_samples, total_dist, vessel_folder]
-        stats.data.append(data)
+        
+        stats.output_folder = gap_folder
+        stats.threshold = threshold
+        stats.vessel_samples = number_of_vessel_samples
+        stats.reduced = reduced_vessel_samples
+        stats.total_distance = total_dist
+        stats.vessel_type = vessel_folder
+        stats.add_to_file(output_json)
+
     except Exception as e:
         logging.error(f'Error occurred with: {repr(e)}')
         quit()
