@@ -73,7 +73,9 @@ def heuristics(coord1, coord2):
     return total_cost
 
 def nodes_to_geojson(G, nodes, file_path):
-    features = []    
+    features = []
+    print(G)
+    print(len(nodes))    
     for node in nodes:
         node_properties = G.nodes[node]
 

@@ -160,7 +160,7 @@ def impute_trajectory(file_name, file_path, graphs, node_dist_threshold, edge_di
 
         gg = G.subgraph(relevant_nodes).copy()
         g = gg.copy()
-        
+        print(g)
         direct_path_exists = g.has_edge(start_point, end_point)
         
         if direct_path_exists:
