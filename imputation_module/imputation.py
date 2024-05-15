@@ -27,7 +27,7 @@ def load_geojson(file_path):
     
 def create_graph_from_geojson(nodes_geojson_path, edges_geojson_path):
     try: 
-        G = nx.DiGraph()
+        G = nx.Graph()
         
         # Load GeoJSON files
         nodes_geojson = load_geojson(nodes_geojson_path)
@@ -52,7 +52,7 @@ def create_graph_from_geojson(nodes_geojson_path, edges_geojson_path):
 def load_geojson_to_graph(file_path):
     with open(file_path, 'r') as f:
         data = json.load(f)
-    G = nx.DiGraph()
+    G = nx.Graph()
     for feature in data['features']:
         coords = tuple(feature['geometry']['coordinates'])
         G.add_node(coords, **feature['properties'])
@@ -89,7 +89,7 @@ def find_relevant_cells(trajectory_points, cells_df):
 def impute_trajectory(file_name, file_path, graphs, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size):
     start_time = time.time()
 
-    G = nx.DiGraph()
+    G = nx.Graph()
     cells_df = pd.read_csv(CELLS) 
 
     trajectory_points = []
@@ -160,8 +160,8 @@ def impute_trajectory(file_name, file_path, graphs, node_dist_threshold, edge_di
         
         else:
             max_draught = start_props.get("draught", None)
-            #G_apply_draught_penalty = adjust_edge_weights_for_draught(G, start_point, end_point, max_draught)
-            G_apply_cog_penalty = G #adjust_edge_weights_for_cog(G_apply_draught_penalty, start_point, end_point)
+            G_apply_draught_penalty = adjust_edge_weights_for_draught(G, start_point, end_point, max_draught)
+            G_apply_cog_penalty = adjust_edge_weights_for_cog(G_apply_draught_penalty, start_point, end_point)
             
             try:
                 path = nx.astar_path(G_apply_cog_penalty, start_point, end_point, heuristic=heuristics, weight='weight')
