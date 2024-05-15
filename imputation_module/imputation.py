@@ -176,7 +176,6 @@ def impute_trajectory(file_name, file_path, graphs, node_dist_threshold, edge_di
             try:
                 path = nx.astar_path(G_apply_cog_penalty, start_point, end_point, heuristic=heuristics, weight='weight')
                 imputed_paths.append(path)
-                imputed_graph.add_node(G_apply_cog_penalty)
                 merge_graphs(imputed_graph, G_apply_cog_penalty)
 
             except nx.NetworkXNoPath:
