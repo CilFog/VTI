@@ -277,7 +277,7 @@ def VTI_edge_method(G, initial_edge_radius_threshold, bearing_threshold, nodes_f
                         total_edge_count += 1
 
             # Increase edge_radius_threshold if no edges were found
-            edge_radius_threshold = edge_radius_threshold * 2.0
+            edge_radius_threshold = edge_radius_threshold * 1.1
 
         edge_count = 0
 
@@ -303,7 +303,7 @@ def create_edges(G, initial_edge_radius_threshold, bearing_threshold, nodes_file
 def create_graphs_for_cells(node_threshold, edge_threshold, cog_threshold, graph_output_name):
 
     stats_list = []
-    cells_to_consider = ["9_9", "9_10", "9_11", "10_9", "10_10", "10_11", "11_9", "11_10", "11_11"]
+    cells_to_consider = ["11_9"] #"9_9", "9_10", "9_11", "10_9", "10_10", "10_11", "11_9", "11_10", "11_11"
  
 
     for cell_name in os.listdir(GRAPH_INPUT):
@@ -369,7 +369,7 @@ def create_graph_from_geojson(nodes_geojson_path, edges_geojson_path):
     if not os.path.exists(nodes_geojson_path) or not os.path.exists(edges_geojson_path):
         return None
 
-    G = nx.Graph()
+    G = nx.DiGraph()
     
     # Load GeoJSON files
     nodes_geojson = load_geojson(nodes_geojson_path)

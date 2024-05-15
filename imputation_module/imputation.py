@@ -27,7 +27,7 @@ def load_geojson(file_path):
     
 def create_graph_from_geojson(nodes_geojson_path, edges_geojson_path):
     try: 
-        G = nx.Graph()
+        G = nx.DiGraph()
         
         # Load GeoJSON files
         nodes_geojson = load_geojson(nodes_geojson_path)
@@ -89,7 +89,7 @@ def find_relevant_cells(trajectory_points, cells_df):
 def impute_trajectory(file_name, file_path, graphs, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size):
     start_time = time.time()
 
-    G = nx.Graph()
+    G = nx.DiGraph()
     cells_df = pd.read_csv(CELLS) 
 
     trajectory_points = []
