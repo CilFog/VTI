@@ -160,7 +160,7 @@ def impute_trajectory(file_name, file_path, graphs, node_dist_threshold, edge_di
 
         gg = G.subgraph(relevant_nodes).copy()
         g = gg.copy()
-        print(g)
+        
         direct_path_exists = g.has_edge(start_point, end_point)
         
         if direct_path_exists:
@@ -176,6 +176,7 @@ def impute_trajectory(file_name, file_path, graphs, node_dist_threshold, edge_di
             try:
                 path = nx.astar_path(G_apply_cog_penalty, start_point, end_point, heuristic=heuristics, weight='weight')
                 imputed_paths.append(path)
+                imputed_graph.add_node(G_apply_cog_penalty)
                 merge_graphs(imputed_graph, G_apply_cog_penalty)
 
             except nx.NetworkXNoPath:
@@ -188,7 +189,7 @@ def impute_trajectory(file_name, file_path, graphs, node_dist_threshold, edge_di
     unique_nodes = []
     seen_nodes = set()
     edges = []
-
+    
     for path in imputed_paths:
         for node in path:
             if node not in seen_nodes:
@@ -204,7 +205,7 @@ def impute_trajectory(file_name, file_path, graphs, node_dist_threshold, edge_di
 
     imputed_nodes_file_path = os.path.join(IMPUTATION_OUTPUT_path, f'{file_name}_nodes.geojson')
     imputed_edges_file_path = os.path.join(IMPUTATION_OUTPUT_path, f'{file_name}_edges.geojson')
-
+    print(imputed_graph)
     export_graph_to_geojson(imputed_graph, imputed_nodes_file_path,imputed_edges_file_path)
     #nodes_to_geojson(imputed_graph, unique_nodes, imputed_nodes_file_path)
     #edges_to_geojson(imputed_graph, edges, imputed_edges_file_path)
