@@ -11,8 +11,7 @@ from multiprocessing import freeze_support
 from data.logs.logging import setup_logger
 from data.stats.statistics import Sparse_Statistics
 from .classes import brunsbuettel_to_kiel_polygon, aalborg_harbor_to_kattegat_bbox, doggersbank_to_lemvig_bbox, skagens_harbor_bbox
-from .sparcify_methods import sparcify_realisticly_strict_trajectories, sparcify_trajectories_realisticly, sparcify_large_meter_gap_by_threshold, sparcify_trajectories_with_meters_gaps_by_treshold, get_trajectory_df_from_txt, check_if_trajectory_is_dense
-
+from .sparcify_methods import sparcify_trajectories_realisticly, sparcify_large_meter_gap_by_threshold, sparcify_trajectories_with_meters_gaps_by_treshold, get_trajectory_df_from_txt, check_if_trajectory_is_dense
 
 DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 CELL_TXT = os.path.join(DATA_FOLDER, 'cells.txt')
@@ -43,10 +42,7 @@ SPARCIFY_LOG = 'sparcify_log.txt'
 
 logging = setup_logger(name=SPARCIFY_LOG, log_file=SPARCIFY_LOG)
 
-def write_trajectories_for_area(inputfolder:str, outputfolder: str, output_json:str):
-    filepaths = list(Path(inputfolder).rglob('*.txt'))
-    filepaths = [str(path) for path in filepaths]
-
+def write_trajectories_for_area(file:str, outputfolder: str, output_json:str):
     aalborg_harbor_to_kattegat_path = os.path.join(outputfolder, 'aalborg_harbor_to_kattegat')
     skagen_harbor_path = os.path.join(outputfolder, 'skagen_harbor')
     
@@ -54,7 +50,7 @@ def write_trajectories_for_area(inputfolder:str, outputfolder: str, output_json:
         (aalborg_harbor_to_kattegat_path, aalborg_harbor_to_kattegat_bbox),
         (skagen_harbor_path, skagens_harbor_bbox)]
     
-    if ('test' not in inputfolder):
+    if ('test' not in file):
         brunsbuettel_to_kiel_path = os.path.join(outputfolder, 'brunsbuettel_to_kiel')
         doggersbank_to_lemvig_path = os.path.join(outputfolder, 'doggersbank_to_lemvig')
 
@@ -63,27 +59,15 @@ def write_trajectories_for_area(inputfolder:str, outputfolder: str, output_json:
     
     stats = Sparse_Statistics()
     for (outputfolder, boundary_box) in outputfolders:
-        for filepath in filepaths:
-            sparcify_realisticly_strict_trajectories(filepath=filepath, folderpath=outputfolder, stats=stats, output_json=output_json, boundary_box=boundary_box)
-            sparcify_trajectories_realisticly(filepath=filepath, folderpath=outputfolder, stats=stats, output_json=output_json, boundary_box=boundary_box)
+        sparcify_trajectories_realisticly(filepath=file, folderpath=outputfolder, stats=stats, output_json=output_json, boundary_box=boundary_box)
 
     logging.info(f'Finished all area in output folder {outputfolder}')   
 
-def write_trajectories_for_all(inputfolder: str, outputfolder:str, output_json:str):
-    filepaths = list(Path(inputfolder).rglob('*.txt'))
-    filepaths = [str(path) for path in filepaths]
-    # data = [['Output Folder', 'Threshold', 'Vessel Samples', 'Reduced', 'Total Distance', 'Vessel Type']]
+def write_trajectories_for_all(file: str, outputfolder:str, output_json:str):
     stats = Sparse_Statistics()
-    for filepath in filepaths:
-        sparcify_realisticly_strict_trajectories(filepath=filepath, folderpath=outputfolder, stats=stats, output_json=output_json, boundary_box=None)
-        sparcify_trajectories_realisticly(filepath=filepath, folderpath=outputfolder, stats=stats, output_json=output_json, boundary_box=None)
+    sparcify_trajectories_realisticly(filepath=file, folderpath=outputfolder, stats=stats, output_json=output_json, boundary_box=None)
 
-    logging.info(f'Finished all for in output folder {outputfolder}')   
-
-def write_trajectories_for_area_with_threshold(inputfolder:str, outputfolder: str, threshold:float, output_json:str):
-    filepaths = list(Path(inputfolder).rglob('*.txt'))
-    filepaths = [str(path) for path in filepaths]
-
+def write_trajectories_for_area_with_threshold(file:str, outputfolder: str, threshold:float, output_json:str):
     aalborg_harbor_to_kattegat_path = os.path.join(outputfolder, 'aalborg_harbor_to_kattegat')
     skagen_harbor_path = os.path.join(outputfolder, 'skagen_harbor')
     
@@ -91,30 +75,23 @@ def write_trajectories_for_area_with_threshold(inputfolder:str, outputfolder: st
         (aalborg_harbor_to_kattegat_path, aalborg_harbor_to_kattegat_bbox),
         (skagen_harbor_path, skagens_harbor_bbox)]
     
-    if ('test' not in inputfolder):
+    if ('test' not in file):
         brunsbuettel_to_kiel_path = os.path.join(outputfolder, 'brunsbuettel_to_kiel')
         doggersbank_to_lemvig_path = os.path.join(outputfolder, 'doggersbank_to_lemvig')
 
         outputfolders.append((brunsbuettel_to_kiel_path, brunsbuettel_to_kiel_polygon))
         outputfolders.append((doggersbank_to_lemvig_path, doggersbank_to_lemvig_bbox))
     
-    # data = [['Output Folder', 'Threshold', 'Vessel Samples', 'Reduced', 'Total Distance', 'Vessel Type']]
     stats = Sparse_Statistics()
     for (outputfolder, boundary_box) in outputfolders:
-        for filepath in filepaths:
-            sparcify_large_meter_gap_by_threshold(filepath=filepath, folderpath=outputfolder, stats=stats, output_json=output_json, threshold=threshold, boundary_box=boundary_box)
-            sparcify_trajectories_with_meters_gaps_by_treshold(filepath=filepath, folderpath=outputfolder, stats=stats, output_json=output_json, threshold=threshold, boundary_box=boundary_box)
+        sparcify_large_meter_gap_by_threshold(filepath=file, folderpath=outputfolder, stats=stats, output_json=output_json, threshold=threshold, boundary_box=boundary_box)
+        sparcify_trajectories_with_meters_gaps_by_treshold(filepath=file, folderpath=outputfolder, stats=stats, output_json=output_json, threshold=threshold, boundary_box=boundary_box)
 
-    logging.info(f'Finished all area for threshold {threshold} in output folder {outputfolder}')   
-
-def write_trajectories_for_all_with_threshold(inputfolder: str, outputfolder:str, threshold:float, output_json:str):
-    filepaths = list(Path(inputfolder).rglob('*.txt'))
-    filepaths = [str(path) for path in filepaths]
-
+def write_trajectories_for_all_with_threshold(file: str, outputfolder:str, threshold:float, output_json:str):
     stats = Sparse_Statistics()
-    for filepath in filepaths:
-        sparcify_large_meter_gap_by_threshold(filepath=filepath, folderpath=outputfolder, stats=stats, output_json=output_json, threshold=threshold, boundary_box=None)
-        sparcify_trajectories_with_meters_gaps_by_treshold(filepath=filepath, folderpath=outputfolder, stats=stats, output_json=output_json, threshold=threshold, boundary_box=None)
+
+    sparcify_large_meter_gap_by_threshold(filepath=file, folderpath=outputfolder, stats=stats, output_json=output_json, threshold=threshold, boundary_box=None)
+    sparcify_trajectories_with_meters_gaps_by_treshold(filepath=file, folderpath=outputfolder, stats=stats, output_json=output_json, threshold=threshold, boundary_box=None)
 
     logging.info(f'Finished all for threshold {threshold} in output folder {outputfolder}')   
 
@@ -425,8 +402,7 @@ def find_cell_input_files():
 
     logging.info('Finished finding area input files')        
 
-
-threshold_values = [100, 200, 400, 800, 1600, 3200, 6400, 12800, 25600]
+threshold_values = [500, 1000, 2000, 4000, 8000]
 test_all_threshold = os.path.join(STATS_TEST_ALL, 'all_threshold.json')
 test_area_threshold = os.path.join(STATES_TEST_AREA, 'area_threshold.json')
 test_all_realistic = os.path.join(STATS_TEST_ALL, 'all_realistic.json')
@@ -442,39 +418,43 @@ os.makedirs(STATS_VALIDATION_ALL, exist_ok=True)
 os.makedirs(STATS_VALIDATIOM_AREA, exist_ok=True)
 stats = Sparse_Statistics()
 
-print('making data for test with thresholds')
-for threshold in threshold_values:
-    print('currently at threshold', threshold)
-    write_trajectories_for_all_with_threshold(INPUT_TEST_DATA_FOLDER_ORIGINAL_FOLDER, INPUT_TEST_SPARSED_ALL_FOLDER, threshold=threshold, output_json=test_all_threshold)
-    write_trajectories_for_area_with_threshold(INPUT_TEST_DATA_FOLDER_ORIGINAL_FOLDER, INPUT_TEST_SPARSED_AREA_FOLDER, threshold=threshold, output_json=test_area_threshold)
+test_files = list(Path(INPUT_TEST_DATA_FOLDER_ORIGINAL_FOLDER).rglob('*.txt')) # List all files in the directory recursively
+test_files = [str(path) for path in test_files] # Convert Path objects to strings
 
-print('making stats for test with thresholds')
+random_test_files_to_move = random.sample(test_files, 1000)
+
+print('making data for test')
+for file in random_test_files_to_move:
+    for threshold in threshold_values:
+        write_trajectories_for_all_with_threshold(file, INPUT_TEST_SPARSED_ALL_FOLDER, threshold=threshold, output_json=test_all_threshold)
+        write_trajectories_for_area_with_threshold(file, INPUT_TEST_SPARSED_AREA_FOLDER, threshold=threshold, output_json=test_area_threshold)
+
+    write_trajectories_for_all(file, INPUT_TEST_SPARSED_ALL_FOLDER, output_json=test_all_realistic)
+    write_trajectories_for_area(file, INPUT_TEST_SPARSED_AREA_FOLDER, output_json=test_area_realistic)
+
+print('making stats for test with')
 stats.make_statistics_with_threshold(test_all_threshold)
 stats.make_statistics_with_threshold(test_area_threshold)
-
-print('making data for test realistic')
-write_trajectories_for_all(INPUT_TEST_DATA_FOLDER_ORIGINAL_FOLDER, INPUT_TEST_SPARSED_ALL_FOLDER, output_json=test_all_realistic)
-write_trajectories_for_area(INPUT_TEST_DATA_FOLDER_ORIGINAL_FOLDER, INPUT_TEST_SPARSED_AREA_FOLDER, output_json=test_area_realistic)
-
-print('making stats for test realistic')
 stats.make_statistics_no_threshold(test_all_realistic)
 stats.make_statistics_no_threshold(test_area_realistic)
 
-print('making data for validation')
-for threshold in threshold_values:
-    print('currently at threshold', threshold)
-    write_trajectories_for_all_with_threshold(INPUT_VALIDATION_DATA_ORIGINAL_FOLDER, INPUT_VALIDATION_SPARSED_ALL_FOLDER, threshold=threshold, output_json=validation_all_threshold)
-    write_trajectories_for_area_with_threshold(INPUT_VALIDATION_DATA_ORIGINAL_FOLDER, INPUT_VALIDATION_SPARSED_AREA_FOLDER, threshold=threshold, output_json=validation_area_threshold)
 
-print('making stats for validation with thresholds')
+validation_files = list(Path(INPUT_VALIDATION_DATA_FOLDER).rglob('*.txt'))
+validation_files = [str(path) for path in validation_files]
+random_validation_files_to_move = random.sample(validation_files, 1000)
+print('making data for validation')
+for file in random_validation_files_to_move:
+    for threshold in threshold_values:
+        write_trajectories_for_all_with_threshold(file, INPUT_VALIDATION_SPARSED_ALL_FOLDER, threshold=threshold, output_json=validation_all_threshold)
+        write_trajectories_for_area_with_threshold(file, INPUT_VALIDATION_SPARSED_AREA_FOLDER, threshold=threshold, output_json=validation_area_threshold)
+
+    write_trajectories_for_all(file, INPUT_VALIDATION_SPARSED_ALL_FOLDER, output_json=validation_all_realistic)
+    write_trajectories_for_area(file, INPUT_VALIDATION_SPARSED_AREA_FOLDER, output_json=validation_area_realistic)
+
+
+print('making stats for validation')
 stats.make_statistics_with_threshold(validation_all_threshold)
 stats.make_statistics_with_threshold(validation_area_threshold)
-
-print('making data for validation realistic')
-write_trajectories_for_all(INPUT_VALIDATION_DATA_ORIGINAL_FOLDER, INPUT_VALIDATION_SPARSED_ALL_FOLDER, output_json=validation_all_realistic)
-write_trajectories_for_area(INPUT_VALIDATION_DATA_ORIGINAL_FOLDER, INPUT_VALIDATION_SPARSED_AREA_FOLDER, output_json=validation_area_realistic)
-
-print('making stats for validation realistic')
 stats.make_statistics_no_threshold(validation_all_realistic)
 stats.make_statistics_no_threshold(validation_area_realistic)
 

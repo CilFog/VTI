@@ -169,7 +169,7 @@ def sparcify_trajectories_with_meters_gaps_by_treshold(filepath:str, folderpath:
     except Exception as e:
         logging.error(f'Error occurred with: {repr(e)}')
         quit()
-    
+
 def sparcify_trajectories_realisticly(filepath:str, folderpath: str, stats, output_json:str, boundary_box:Polygon = None):
     try:    
         os_split = '/' if '/' in filepath else '\\'
