@@ -201,18 +201,22 @@ def create_nodes(sampled_trajectories):
 
     return G
 
-def angular_penalty(angle_difference, max_angle=180, penalty_rate=0.01):
+def angular_penalty(angle_difference, max_angle, penalty_rate=0.01):
     """ Calculate additional distance penalty based on the angle difference. """
-    # Normalize the angle difference between 0 and 180
     angle_difference = min(angle_difference, 360 - angle_difference)
-    # Scale penalty linearly with the angle difference up to the max_angle
     return (angle_difference / max_angle) * penalty_rate
 
 def degree_distance(lat1, lon1, lat2, lon2):
     """Calculate the Euclidean distance in degrees between two points."""
     return math.sqrt((lat2 - lat1) ** 2 + (lon2 - lon1) ** 2)
 
-def GTI_edge_method(G, initial_edge_radius_threshold, bearing_threshold, nodes_file_path, edges_file_path):
+
+def create_edges(G, initial_edge_radius_threshold, max_angle, nodes_file_path, edges_file_path):
+    print("Creating Edges")
+    """
+        Creates edges between nodes in the graph. The creation of an edge 
+        is based on two criterias. Distance between nodes, and angle between nodes.
+    """
     node_coords_list = [(node, data) for node, data in G.nodes(data=True)]
     node_array = np.array([node for node, data in node_coords_list])
     
@@ -235,7 +239,7 @@ def GTI_edge_method(G, initial_edge_radius_threshold, bearing_threshold, nodes_f
                         
                         distance = degree_distance(node[0], node[1], nearby_node[0], nearby_node[1])
                         
-                        penalty = angular_penalty(cog_diff)
+                        penalty = angular_penalty(cog_diff, max_angle)
                         adjusted_distance = distance + penalty
                         
                         # Create an edge if the adjusted distance is within the threshold
@@ -249,55 +253,6 @@ def GTI_edge_method(G, initial_edge_radius_threshold, bearing_threshold, nodes_f
     export_graph_to_geojson(G, nodes_file_path, edges_file_path)
 
     return total_edge_count
-
-def VTI_edge_method(G, initial_edge_radius_threshold, bearing_threshold, nodes_file_path, edges_file_path):
-    node_coords_list = [(node, data) for node, data in G.nodes(data=True)]
-    node_array = np.array([node for node, data in node_coords_list])
-    
-    kdtree = cKDTree(node_array)
-    edge_count = 0
-    total_edge_count = 0
-
-    for i, (node, data) in enumerate(node_coords_list):
-        edge_radius_threshold = initial_edge_radius_threshold
-        while edge_count == 0:
-            nearby_indices = kdtree.query_ball_point(node, edge_radius_threshold)
-            
-            for nearby_index in nearby_indices:
-                if nearby_index != i: 
-                    nearby_node, nearby_data = node_coords_list[nearby_index]
-                    nearby_cog = nearby_data['cog']
-
-                    cog_diff = calculate_bearing_difference(data['cog'], nearby_cog)
-
-                    if cog_diff <= bearing_threshold:
-                        distance = haversine_distance(node[0], node[1], nearby_node[0], nearby_node[1])
-                        G.add_edge(node, nearby_node, weight=distance)
-                        edge_count += 1
-                        total_edge_count += 1
-
-            # Increase edge_radius_threshold if no edges were found
-            edge_radius_threshold = edge_radius_threshold * 1.1
-
-        edge_count = 0
-
-    export_graph_to_geojson(G, nodes_file_path, edges_file_path)
-
-    return total_edge_count
-
-def create_edges(G, initial_edge_radius_threshold, bearing_threshold, nodes_file_path, edges_file_path):
-    print("Creating Edges")
-    """
-        Creates edges between nodes in the graph. The creation of an edge 
-        is based on two criterias. Distance between nodes, and bearing between nodes.
-    """
-    
-    total_edge_count = GTI_edge_method(G, initial_edge_radius_threshold, bearing_threshold, nodes_file_path, edges_file_path)
-    #total_edge_count = VTI_edge_method(G, initial_edge_radius_threshold, bearing_threshold, nodes_file_path, edges_file_path)
-
-    return total_edge_count
-    
-
     
 
 def create_graphs_for_cells(node_threshold, edge_threshold, cog_threshold, graph_output_name):
