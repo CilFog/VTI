@@ -139,6 +139,8 @@ def add_nodes_and_edges(G, trajectory_points, edge_dist_threshold):
     execution_time = end_time - start_time 
     print("Adding nodes and edges took:", execution_time)
 
+    return G
+
 
 def find_and_impute_paths_segment(trajectory_segment, G, lock, imputed_paths):
     local_paths = []
@@ -152,11 +154,14 @@ def find_and_impute_paths_segment(trajectory_segment, G, lock, imputed_paths):
         direct_path_exists = G.has_edge(start_point, end_point)
 
         if direct_path_exists:
+            print("Has direct edge")
             path = [start_point, end_point]
         else:
             try:
+                print("astar")
                 path = nx.astar_path(G, start_point, end_point, heuristic=heuristics, weight='weight')
             except nx.NetworkXNoPath:
+                print("No path found")
                 path = [start_point, end_point]
         
         local_paths.append(path)
@@ -209,7 +214,7 @@ def find_and_impute_paths(G, trajectory_points, file_name, node_dist_threshold, 
 
     nodes_to_geojson(G, unique_nodes, imputed_nodes_file_path)
     edges_to_geojson(G, edges, imputed_edges_file_path)
-    
+
     stats = {
         'file_name': file_name,
         'trajectory_points': len(trajectory_points),
@@ -272,7 +277,7 @@ def impute_trajectory(file_name, file_path, graphs, node_dist_threshold, edge_di
     execution_time = end_time - start_time 
     print("Reading graph took:", execution_time)
 
-    add_nodes_and_edges(G, trajectory_points, edge_dist_threshold)
+    new_g = add_nodes_and_edges(G, trajectory_points, edge_dist_threshold)
 
-    find_and_impute_paths(G, trajectory_points, file_name, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size)
+    find_and_impute_paths(new_g, trajectory_points, file_name, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size)
     print("Imputation done")
