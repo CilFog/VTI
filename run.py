@@ -106,7 +106,7 @@ for edge_dist_threshold in edge_dist_threshold:
         Impute all trajectories in test folder
     """
 
-    sparse = [500, 1000, 2000, 4000, 8000] # 50, 100, 200, 400, 800, 1600, 3200, 6400
+    sparse = [1000] # 500, 1000, 2000, 4000, 8000
     types = ['many_gap', 'single_gap', 'realistic'] #'many_gap', 'single_gap', 'realistic', 'realistic_strict'
     for size in sparse:
         for type in types:
