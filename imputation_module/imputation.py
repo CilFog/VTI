@@ -199,6 +199,7 @@ def find_and_impute_paths(G, trajectory_points, file_name, node_dist_threshold, 
             path = [start_point, end_point]
         else:
             try:
+                print("astar")
                 path = nx.astar_path(G, start_point, end_point, heuristic=heuristics, weight='weight')
             except nx.NetworkXNoPath:
                 path = [start_point, end_point]
