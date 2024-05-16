@@ -65,7 +65,7 @@ def load_all_graph_process_trajectories(type, size, sparse_trajectories, graph_p
             if file_name.endswith('.txt'):
                 file_path = os.path.join(root, file_name)
                 print(f"Imputing trajectory {file_name}")
-                load_graphs_and_impute_trajectory(file_name, file_path, deepcopy(original_graph), node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size)
+                load_graphs_and_impute_trajectory(file_name, file_path, original_graph, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size)
             
                 # imputed_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI/data/output_imputation/{type}/{size}/{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}')
                 # original_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'VTI/data/input_imputation/test/original')

@@ -107,6 +107,9 @@ def add_nodes_and_edges(G, trajectory_points, edge_dist_threshold):
     node_positions = np.array([(data['latitude'], data['longitude']) for node, data in G.nodes(data=True)])
     tree = cKDTree(node_positions)
 
+    added_nodes = []
+    added_edges = []
+
     for i in range(len(trajectory_points) - 1):
         start_props = trajectory_points[i]["properties"]
         end_props = trajectory_points[i + 1]["properties"]
@@ -116,8 +119,10 @@ def add_nodes_and_edges(G, trajectory_points, edge_dist_threshold):
 
         if start_point not in G:
             G.add_node(start_point, **start_props)
+            added_nodes.append(start_point)
         if end_point not in G:
             G.add_node(end_point, **end_props)
+            added_nodes.append(end_point)
 
         start_point_idx = tree.query_ball_point([start_point[0], start_point[1]], edge_dist_threshold)
         for idx in start_point_idx:
@@ -126,6 +131,8 @@ def add_nodes_and_edges(G, trajectory_points, edge_dist_threshold):
                 distance = haversine_distance(start_point[0], start_point[1], node_point[0], node_point[1])
                 G.add_edge(start_point, node_point, weight=distance)
                 G.add_edge(node_point, start_point, weight=distance)
+                added_edges.append((start_point, node_point))
+                added_edges.append((node_point, start_point))
 
             # Query for end point
         end_point_idx = tree.query_ball_point([end_point[0], end_point[1]], edge_dist_threshold)
@@ -135,12 +142,22 @@ def add_nodes_and_edges(G, trajectory_points, edge_dist_threshold):
                 distance = haversine_distance(end_point[0], end_point[1], node_point[0], node_point[1])
                 G.add_edge(end_point, node_point, weight=distance)
                 G.add_edge(node_point, end_point, weight=distance)
+                added_edges.append((end_point, node_point))
+                added_edges.append((node_point, end_point))
 
     end_time = time.time()
     execution_time = end_time - start_time 
     print("Adding nodes and edges took:", execution_time)
 
-    return G
+    return G, added_nodes, added_edges
+
+def revert_graph_changes(G, added_nodes, added_edges):
+    for edge in added_edges:
+        if G.has_edge(*edge):
+            G.remove_edge(*edge)
+    for node in added_nodes:
+        if G.has_node(node):
+            G.remove_node(node)
 
 def find_and_impute_paths(G, trajectory_points, file_name, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size):
     start_time = time.time()
@@ -242,10 +259,13 @@ def load_graphs_and_impute_trajectory(file_name, file_path, G, node_dist_thresho
     except Exception as e:
         logging.warning(f'Error occurred trying to retrieve trajectory to impute: {repr(e)}')
 
-    new_g = add_nodes_and_edges(G, trajectory_points, edge_dist_threshold)
+    new_g, added_nodes, added_edges = add_nodes_and_edges(G, trajectory_points, edge_dist_threshold)
 
     find_and_impute_paths(new_g, trajectory_points, file_name, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size)
     print("Imputation done")
+
+    revert_graph_changes(new_g, added_nodes, added_edges)
+
 
 def load_intersecting_graphs_and_impute_trajectory(file_name, file_path, graphs, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size):
     G = nx.Graph()
@@ -285,10 +305,11 @@ def load_intersecting_graphs_and_impute_trajectory(file_name, file_path, graphs,
     execution_time = end_time - start_time 
     print("Reading graph took:", execution_time)
 
-    new_g = add_nodes_and_edges(G, trajectory_points, edge_dist_threshold)
+    new_g, added_nodes, added_edges = add_nodes_and_edges(G, trajectory_points, edge_dist_threshold)
 
     find_and_impute_paths(new_g, trajectory_points, file_name, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size)
     print("Imputation done")
+
 
 
 
