@@ -142,11 +142,53 @@ def add_nodes_and_edges(G, trajectory_points, edge_dist_threshold):
     return G
 
 
-def find_and_impute_paths_segment(trajectory_segment, G, lock, imputed_paths, processed_counter):
-    local_paths = []
-    for i in range(len(trajectory_segment) - 1):
-        start_props = trajectory_segment[i]["properties"]
-        end_props = trajectory_segment[i + 1]["properties"]
+# def find_and_impute_paths_segment(trajectory_segment, G, lock, imputed_paths, processed_counter):
+#     local_paths = []
+#     for i in range(len(trajectory_segment) - 1):
+#         start_props = trajectory_segment[i]["properties"]
+#         end_props = trajectory_segment[i + 1]["properties"]
+
+#         start_point = (start_props["latitude"], start_props["longitude"])
+#         end_point = (end_props["latitude"], end_props["longitude"])
+
+#         direct_path_exists = G.has_edge(start_point, end_point)
+
+#         if direct_path_exists:
+#             path = [start_point, end_point]
+#         else:
+#             try:
+#                 path = nx.astar_path(G, start_point, end_point, heuristic=heuristics, weight='weight')
+#             except nx.NetworkXNoPath:
+#                 path = [start_point, end_point]
+        
+#         local_paths.append(path)
+    
+#     with lock:
+#         imputed_paths.extend(local_paths)
+#         processed_counter[0] += len(trajectory_segment)
+
+def find_and_impute_paths(G, trajectory_points, file_name, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size):
+    start_time = time.time()
+    
+    imputed_paths = []
+    # lock = threading.Lock()
+    # processed_counter = [0]
+    # segment_size = 10  # Choose a segment size that makes sense for your data
+
+    # with concurrent.futures.ThreadPoolExecutor() as executor:
+    #     futures = []
+    #     # Divide the trajectory points into segments and process each segment in a separate thread
+    #     for start_index in range(0, len(trajectory_points) - 1, segment_size):
+    #         end_index = min(start_index + segment_size, len(trajectory_points))
+    #         trajectory_segment = trajectory_points[start_index:end_index]
+    #         futures.append(executor.submit(find_and_impute_paths_segment, trajectory_segment, G, lock, imputed_paths, processed_counter))
+
+    #     # Wait for all futures to complete
+    #     concurrent.futures.wait(futures)
+
+    for i in range(len(trajectory_points) - 1):
+        start_props = trajectory_points[i]["properties"]
+        end_props = trajectory_points[i + 1]["properties"]
 
         start_point = (start_props["latitude"], start_props["longitude"])
         end_point = (end_props["latitude"], end_props["longitude"])
@@ -161,34 +203,10 @@ def find_and_impute_paths_segment(trajectory_segment, G, lock, imputed_paths, pr
             except nx.NetworkXNoPath:
                 path = [start_point, end_point]
         
-        local_paths.append(path)
-    
-    with lock:
-        imputed_paths.extend(local_paths)
-        processed_counter[0] += len(trajectory_segment)
-
-def find_and_impute_paths(G, trajectory_points, file_name, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size):
-    start_time = time.time()
-    
-    imputed_paths = []
-    lock = threading.Lock()
-    processed_counter = [0]
-    segment_size = 10  # Choose a segment size that makes sense for your data
-
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        futures = []
-        # Divide the trajectory points into segments and process each segment in a separate thread
-        for start_index in range(0, len(trajectory_points) - 1, segment_size):
-            end_index = min(start_index + segment_size, len(trajectory_points))
-            trajectory_segment = trajectory_points[start_index:end_index]
-            futures.append(executor.submit(find_and_impute_paths_segment, trajectory_segment, G, lock, imputed_paths, processed_counter))
-
-        # Wait for all futures to complete
-        concurrent.futures.wait(futures)
+        imputed_paths.append(path)
     
     end_time = time.time()
     execution_time = end_time - start_time 
-    print(f"Total trajectory points processed: {processed_counter[0]}")
     print("Imputation took:",execution_time)
 
 
