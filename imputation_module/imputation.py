@@ -157,7 +157,7 @@ def impute_trajectory(file_name, file_path, graphs, node_dist_threshold, edge_di
         if direct_path_exists:
             path = [start_point, end_point]
             imputed_paths.append(path)
-        
+
         else:
             max_draught = start_props.get("draught", None)
             #G_apply_draught_penalty = adjust_edge_weights_for_draught(G, start_point, end_point, max_draught)
