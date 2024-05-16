@@ -195,13 +195,14 @@ def find_and_impute_paths(G, trajectory_points, file_name, node_dist_threshold, 
 
         if direct_path_exists:
             path = [start_point, end_point]
+            imputed_paths.append(path)
         else:
             try:
                 path = nx.astar_path(G, start_point, end_point, heuristic=heuristics, weight='weight')
+                imputed_paths.append(path)
             except nx.NetworkXNoPath:
                 path = [start_point, end_point]
-        
-        imputed_paths.append(path)
+                imputed_paths.append(path)
     
     end_time = time.time()
     execution_time = end_time - start_time 
