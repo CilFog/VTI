@@ -193,7 +193,7 @@ def create_nodes(sampled_trajectories):
 
     ais_points_gdf = ais_points_gdf[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'avg_depth', 'geometry']]
 
-    G = nx.DiGraph()
+    G = nx.Graph()
     for index, row in ais_points_gdf.iterrows():
         node = (row['latitude'], row['longitude'])
         attributes = row.drop(['geometry']).to_dict()
@@ -201,7 +201,7 @@ def create_nodes(sampled_trajectories):
 
     return G
 
-def angular_penalty(angle_difference, max_angle=45, penalty_rate=0.01):
+def angular_penalty(angle_difference, max_angle=180, penalty_rate=0.01):
     """ Calculate additional distance penalty based on the angle difference. """
     # Normalize the angle difference between 0 and 180
     angle_difference = min(angle_difference, 360 - angle_difference)
@@ -303,7 +303,7 @@ def create_edges(G, initial_edge_radius_threshold, bearing_threshold, nodes_file
 def create_graphs_for_cells(node_threshold, edge_threshold, cog_threshold, graph_output_name):
 
     stats_list = []
-    cells_to_consider = ["11_9"] #"9_9", "9_10", "9_11", "10_9", "10_10", "10_11", "11_9", "11_10", "11_11"
+    cells_to_consider = ["9_9", "9_10", "9_11", "10_9", "10_10", "10_11", "11_9", "11_10", "11_11"]
  
 
     for cell_name in os.listdir(GRAPH_INPUT):
