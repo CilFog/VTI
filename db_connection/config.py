@@ -1,6 +1,9 @@
+import os
 from configparser import ConfigParser
 
-def load_config(filename=r'/srv/P-10/VTI/db_connection/database.ini', section='postgresql'):
+DATABASE_INI = os.path.join(os.path.dirname(__file__), 'database.ini')
+
+def load_config(filename=DATABASE_INI, section='postgresql'):
     parser = ConfigParser()
     parser.read(filename)
 

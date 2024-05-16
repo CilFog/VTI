@@ -1,33 +1,32 @@
 import os
 import csv
 import json
+import os
+import threading
+from typing import List
+import networkx as nx
+import numpy as np
+from sqlalchemy import Tuple
+from data.logs.logging import setup_logger
+from utils import haversine_distance, heuristics, adjust_edge_weights_for_draught, nodes_within_radius, nodes_to_geojson, edges_to_geojson
 import time
 import numpy as np
 import pandas as pd
-import networkx as nx
-import geopandas as gpd
-from typing import List, Tuple
-from data.logs.logging import setup_logger
-from shapely.geometry import Point, box, Polygon, LineString
-from utils import calculate_interpolated_timestamps, haversine_distance, heuristics, adjust_edge_weights_for_draught, adjust_edge_weights_for_cog, nodes_within_radius, nodes_to_geojson, edges_to_geojson
+import concurrent.futures
+from scipy.spatial import cKDTree
 
 LOG_PATH = 'imputation_log.txt'
 
-GRAPH_INPUT_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'graph_construction_module')
-IMPUTATION_MODULE_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'imputation_module')
-OUTPUT_FOLDER = os.path.join(IMPUTATION_MODULE_FOLDER, 'output')
-OUTPUT_FOLDER_RAW = os.path.join(OUTPUT_FOLDER, 'raw')
-OUTPUT_FOLDER_PROCESSED = os.path.join(OUTPUT_FOLDER, 'processed')
-DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
-CELLS_TXT = os.path.join(DATA_FOLDER, 'cells.txt')
+IMPUTATION_OUTPUT = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data//output_imputation')
+
+CELLS = os.path.join(os.path.join(os.path.dirname(os.path.dirname(__file__))), 'data//cells.txt')
+
+GRAPH_OUTPUT = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 
 logging = setup_logger(name=LOG_PATH, log_file=LOG_PATH)
 
-if not os.path.exists(OUTPUT_FOLDER_RAW):
-    os.makedirs(OUTPUT_FOLDER_RAW)
-
-if not os.path.exists(OUTPUT_FOLDER_PROCESSED):
-    os.makedirs(OUTPUT_FOLDER_PROCESSED)
+if not os.path.exists(IMPUTATION_OUTPUT):
+    os.makedirs(IMPUTATION_OUTPUT)
 
 def load_geojson(file_path):
     with open(file_path, 'r') as f:
@@ -94,12 +93,176 @@ def find_relevant_cells(trajectory_points, cells_df):
                 relevant_cell_ids.add(row['cell_id'])
     return list(relevant_cell_ids)
 
-# TODO output_folder_path should be corrected to the correct path
-def impute_trajectory(file_name, file_path, graphs, node_dist_threshold, edge_dist_threshold, cog_angle_threshold):
+
+
+
+
+
+
+
+
+def add_nodes_and_edges(G, trajectory_points, edge_dist_threshold):
     start_time = time.time()
 
+    node_positions = np.array([(data['latitude'], data['longitude']) for node, data in G.nodes(data=True)])
+    tree = cKDTree(node_positions)
+
+    for i in range(len(trajectory_points) - 1):
+        start_props = trajectory_points[i]["properties"]
+        end_props = trajectory_points[i + 1]["properties"]
+
+        start_point = (start_props["latitude"], start_props["longitude"])
+        end_point = (end_props["latitude"], end_props["longitude"])
+
+        if start_point not in G:
+            G.add_node(start_point, **start_props)
+        if end_point not in G:
+            G.add_node(end_point, **end_props)
+
+        start_point_idx = tree.query_ball_point([start_point[0], start_point[1]], edge_dist_threshold)
+        for idx in start_point_idx:
+            node_point = tuple(node_positions[idx])
+            if node_point != start_point:
+                distance = haversine_distance(start_point[0], start_point[1], node_point[0], node_point[1])
+                G.add_edge(start_point, node_point, weight=distance)
+                G.add_edge(node_point, start_point, weight=distance)
+
+            # Query for end point
+        end_point_idx = tree.query_ball_point([end_point[0], end_point[1]], edge_dist_threshold)
+        for idx in end_point_idx:
+            node_point = tuple(node_positions[idx])
+            if node_point != end_point:
+                distance = haversine_distance(end_point[0], end_point[1], node_point[0], node_point[1])
+                G.add_edge(end_point, node_point, weight=distance)
+                G.add_edge(node_point, end_point, weight=distance)
+
+    end_time = time.time()
+    execution_time = end_time - start_time 
+    print("Adding nodes and edges took:", execution_time)
+
+    return G
+
+
+# def find_and_impute_paths_segment(trajectory_segment, G, lock, imputed_paths, processed_counter):
+#     local_paths = []
+#     for i in range(len(trajectory_segment) - 1):
+#         start_props = trajectory_segment[i]["properties"]
+#         end_props = trajectory_segment[i + 1]["properties"]
+
+#         start_point = (start_props["latitude"], start_props["longitude"])
+#         end_point = (end_props["latitude"], end_props["longitude"])
+
+#         direct_path_exists = G.has_edge(start_point, end_point)
+
+#         if direct_path_exists:
+#             path = [start_point, end_point]
+#         else:
+#             try:
+#                 path = nx.astar_path(G, start_point, end_point, heuristic=heuristics, weight='weight')
+#             except nx.NetworkXNoPath:
+#                 path = [start_point, end_point]
+        
+#         local_paths.append(path)
+    
+#     with lock:
+#         imputed_paths.extend(local_paths)
+#         processed_counter[0] += len(trajectory_segment)
+
+def find_and_impute_paths(G, trajectory_points, file_name, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size):
+    start_time = time.time()
+    
+    imputed_paths = []
+    # lock = threading.Lock()
+    # processed_counter = [0]
+    # segment_size = 10  # Choose a segment size that makes sense for your data
+
+    # with concurrent.futures.ThreadPoolExecutor() as executor:
+    #     futures = []
+    #     # Divide the trajectory points into segments and process each segment in a separate thread
+    #     for start_index in range(0, len(trajectory_points) - 1, segment_size):
+    #         end_index = min(start_index + segment_size, len(trajectory_points))
+    #         trajectory_segment = trajectory_points[start_index:end_index]
+    #         futures.append(executor.submit(find_and_impute_paths_segment, trajectory_segment, G, lock, imputed_paths, processed_counter))
+
+    #     # Wait for all futures to complete
+    #     concurrent.futures.wait(futures)
+
+    for i in range(len(trajectory_points) - 1):
+        start_props = trajectory_points[i]["properties"]
+        end_props = trajectory_points[i + 1]["properties"]
+
+        start_point = (start_props["latitude"], start_props["longitude"])
+        end_point = (end_props["latitude"], end_props["longitude"])
+
+        direct_path_exists = G.has_edge(start_point, end_point)
+
+        if direct_path_exists:
+            path = [start_point, end_point]
+            imputed_paths.append(path)
+        else:
+            try:
+                path = nx.astar_path(G, start_point, end_point, heuristic=heuristics, weight='weight')
+                imputed_paths.append(path)
+            except nx.NetworkXNoPath:
+                path = [start_point, end_point]
+                imputed_paths.append(path)
+    
+    end_time = time.time()
+    execution_time = end_time - start_time 
+    print("Imputation took:",execution_time)
+
+
+    unique_nodes = []
+    seen_nodes = set()
+    edges = []
+
+    for path in imputed_paths:
+        for node in path:
+            if node not in seen_nodes:
+                unique_nodes.append(node)
+                seen_nodes.add(node) 
+        for i in range(len(path)-1):
+            edges.append((path[i], path[i+1]))
+
+    IMPUTATION_OUTPUT_path = os.path.join(IMPUTATION_OUTPUT, f'{type}//{size}//{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}//{file_name}')
+
+    if not os.path.exists(IMPUTATION_OUTPUT_path):
+        os.makedirs(IMPUTATION_OUTPUT_path)
+
+    imputed_nodes_file_path = os.path.join(IMPUTATION_OUTPUT_path, f'{file_name}_nodes.geojson')
+    imputed_edges_file_path = os.path.join(IMPUTATION_OUTPUT_path, f'{file_name}_edges.geojson')
+
+    nodes_to_geojson(G, unique_nodes, imputed_nodes_file_path)
+    edges_to_geojson(G, edges, imputed_edges_file_path)
+
+    stats = {
+        'file_name': file_name,
+        'trajectory_points': len(trajectory_points),
+        'imputed_paths': len(unique_nodes),
+        'execution_time_seconds': execution_time
+    }
+
+    output_directory  = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'data//stats//imputation_stats//{type}//{size}')
+    os.makedirs(output_directory, exist_ok=True)
+    stats_file = os.path.join(output_directory, f'{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}_imputation.csv')
+
+    write_header = not os.path.exists(stats_file)
+
+    with open(stats_file, mode='a', newline='') as csvfile:
+        fieldnames = ['file_name', 'trajectory_points', 'imputed_paths', 'execution_time_seconds']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        if write_header:
+            writer.writeheader()  
+        writer.writerow(stats)
+
+    return imputed_paths
+
+
+
+def impute_trajectory(file_name, file_path, graphs, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size):
     G = nx.Graph()
-    cells_df = pd.read_csv(CELLS_TXT) 
+    cells_df = pd.read_csv(CELLS) 
+    start_time = time.time()
 
     trajectory_points = []
     try:
@@ -125,130 +288,21 @@ def impute_trajectory(file_name, file_path, graphs, node_dist_threshold, edge_di
     relevant_cell_ids = find_relevant_cells(trajectory_points, cells_df)
     
     for cell_id in relevant_cell_ids:
-        node_path = os.path.join(GRAPH_INPUT_FOLDER, f"{graphs}\\{cell_id}\\nodes.geojson")
-        edge_path = os.path.join(GRAPH_INPUT_FOLDER, f"{graphs}\\{cell_id}\\edges.geojson")
+        node_path = os.path.join(GRAPH_OUTPUT, f"{graphs}//{cell_id}//nodes.geojson")
+        edge_path = os.path.join(GRAPH_OUTPUT, f"{graphs}//{cell_id}//edges.geojson")
         G_cell = create_graph_from_geojson(node_path, edge_path)
         G = merge_graphs(G, G_cell)
-
-    G_apply_cog_penalty = None
     
-    imputed_paths = []
-
-    for i in range(len(trajectory_points) - 1):
-        start_props = trajectory_points[i]["properties"]
-        end_props = trajectory_points[i + 1]["properties"]
-
-        start_point = (start_props["latitude"], start_props["longitude"])
-        end_point = (end_props["latitude"], end_props["longitude"])
-        
-        if i % 50 == 0:
-            print(f"Done with {i} out of {len(trajectory_points)}")
-
-        if start_point not in G:
-            G.add_node(start_point, **start_props) 
-        if end_point not in G:
-            G.add_node(end_point, **end_props)
-
-        for node in nodes_within_radius(G, start_point, edge_dist_threshold):
-            if node != start_point:  
-                distance = haversine_distance(start_point[0], start_point[1], node[0], node[1])
-                G.add_edge(start_point, node, weight=distance)
-                G.add_edge(node, start_point, weight=distance)
-
-        for node in nodes_within_radius(G, end_point, edge_dist_threshold): 
-            if node != end_point: 
-                distance = haversine_distance(end_point[0], end_point[1], node[0], node[1])
-                G.add_edge(end_point, node, weight=distance)
-                G.add_edge(node, end_point, weight=distance)
-        
-        direct_path_exists = G.has_edge(start_point, end_point)
-        
-        if direct_path_exists:
-            path = [start_point, end_point]
-            imputed_paths.append(path)
-        
-        else:
-            max_draught = start_props.get("draught", None)
-            G_apply_draught_penalty = adjust_edge_weights_for_draught(G, start_point, end_point, max_draught)
-            G_apply_cog_penalty = adjust_edge_weights_for_cog(G_apply_draught_penalty, start_point, end_point)
-            
-            try:
-                path = nx.astar_path(G_apply_cog_penalty, start_point, end_point, heuristic=heuristics, weight='weight')
-
-                start_timestamp_unix = start_props["timestamp"]  
-                end_timestamp_unix = end_props["timestamp"]  
-                
-                nodes_within_path = [(start_props["latitude"], start_props["longitude"])] + \
-                                    [(G_apply_cog_penalty.nodes[n]["latitude"], G_apply_cog_penalty.nodes[n]["longitude"]) for n in path[1:-1]] + \
-                                    [(end_props["latitude"], end_props["longitude"])]
-                
-                interpolated_timestamps = calculate_interpolated_timestamps(nodes_within_path, start_timestamp_unix, end_timestamp_unix)
-                
-                for index, node_coordinate in enumerate(nodes_within_path):
-                    node = path[index]  
-                    if node in G_apply_cog_penalty:
-                        node_props = G_apply_cog_penalty.nodes[node]
-                        node_props.update({
-                            'timestamp': interpolated_timestamps[index],  
-                            'sog': start_props["sog"], 
-                        })
-                    else:
-                        print(f"Node {node} not found in graph.")
-                
-                imputed_paths.append(path)
-
-            except nx.NetworkXNoPath:
-                distance = haversine_distance(start_props["latitude"], start_props["longitude"], end_props["latitude"], end_props["longitude"])
-                G_apply_cog_penalty.add_edge(start_point, end_point, weight=distance)
-                imputed_paths.append([start_point, end_point]) 
-                    
-
-    unique_nodes = []
-    seen_nodes = set()
-    edges = []
-
-    for path in imputed_paths:
-        for node in path:
-            if node not in seen_nodes:
-                unique_nodes.append(node)
-                seen_nodes.add(node) 
-        for i in range(len(path)-1):
-            edges.append((path[i], path[i+1]))
-
-    output_folder_path = os.path.join(OUTPUT_FOLDER_RAW, f'{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}//raw//{file_name}')
-
-    if not os.path.exists(output_folder_path):
-        os.makedirs(output_folder_path)
-
-    imputed_nodes_file_path = os.path.join(output_folder_path, f'{file_name}_nodes.geojson')
-    imputed_edges_file_path = os.path.join(output_folder_path, f'{file_name}_edges.geojson')
-
-    nodes_to_geojson(G_apply_cog_penalty, unique_nodes, imputed_nodes_file_path)
-    edges_to_geojson(G_apply_cog_penalty, edges, imputed_edges_file_path)
-
     end_time = time.time()
-    execution_time = end_time - start_time  
+    execution_time = end_time - start_time 
+    print("Reading graph took:", execution_time)
 
-    stats = {
-        'file_name': file_name,
-        'trajectory_points': len(trajectory_points),
-        'imputed_paths': len(unique_nodes),
-        'execution_time_seconds': execution_time
-    }
+    new_g = add_nodes_and_edges(G, trajectory_points, edge_dist_threshold)
 
-    output_directory  = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data//stats//solution_stats')
-    stats_file = os.path.join(output_directory, f'{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}_imputation.csv')
+    find_and_impute_paths(new_g, trajectory_points, file_name, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size)
+    print("Imputation done")
 
-    write_header = not os.path.exists(stats_file)
 
-    with open(stats_file, mode='a', newline='') as csvfile:
-        fieldnames = ['file_name', 'trajectory_points', 'imputed_paths', 'execution_time_seconds']
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        if write_header:
-            writer.writeheader()  
-        writer.writerow(stats)
-
-    return imputed_paths
 
 def calculate_center_position(positions:List[Tuple[float,float]]):
     """Calculate the center position of the trajectory segment."""

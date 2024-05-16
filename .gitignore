@@ -181,6 +181,8 @@ data/meta_trajectories/
 data/original/
 
 data/graph_input/
+data/output_graph/
+data/output_imputation/
 
 .vscode/
 db_connection/database.ini
@@ -196,9 +198,12 @@ data/stats/stats.ndjson
 data/stats/stats_after_cleansing.ndjson
 data/stats/stats_after_cleansing_total.ndjson
 data/stats/solution_stats
+data/stats/evaluation
+data/stats/imputation_stats
 graph_construction_module/output
 imputation_module/output
 
 data/stats/stats_after_cleansing.ndjson
 data/input_graph_area/
 data/input_graph_cells/
+data/stats/input_imputation

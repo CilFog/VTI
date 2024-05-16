@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import List, Dict, Any
 from utils import get_radian_and_radian_diff_columns, calculate_initial_compass_bearing, get_haversine_dist_df_in_meters
 
-
+STATS_FOLDER = os.path.dirname(__file__)
 STATISTIC_CLEANSING_JSON_FILE = os.path.join(os.path.dirname(__file__), 'stats_after_cleansing.ndjson')
 STATISTIC_CLEANSING_CSV_FILE = os.path.join(os.path.dirname(__file__), 'stats_after_cleansing.csv')
 
@@ -65,7 +65,6 @@ class CleansingStatistics:
         '''Instantiates a new Statistics object.'''
         return CleansingStatistics()
 
-
 def calculate_cleansing_statistics(df, column_name):
     '''Calculate required statistics for a given column.'''
     data = df[column_name]
@@ -107,7 +106,6 @@ def make_trajectory_cleansing_statistic_file(input_file:str, output_file:str):
 
     # Writing DataFrame to CSV
     df_stats.to_csv(STATISTIC_CLEANSING_CSV_FILE)
-
 
 class Trajectory_Statistics:
     def __init__(self):
@@ -197,5 +195,123 @@ class Trajectory_Statistics:
 
         df_vessel.to_csv(vessel_file)
 
-stats = Trajectory_Statistics()
-stats.make_statistics_for_input_folder(input_folder=INPUT_GRAPH_FOLDER, json_file=STATISTIC_AFTER_CLEANSING_TOTAL_JSON_FILE, stats_file=STATISTIC_AFTER_TOTAL_CSV_FILE, vessel_file=VESSEL_CSV_TOTAL)
+class Sparse_Statistics:
+    def __init__(self):
+        self.output_folder: str = ''
+        self.threshold: int = 0
+        self.vessel_samples: int = 0
+        self.reduced: int = 0
+        self.total_distance: float = 0
+        self.vessel_type: str = ''
+
+    def to_dict(self) -> Dict[str, Any]:
+        '''Converts the class attributes to a dictionary.'''
+        return {
+            'Output Folder': self.output_folder,
+            'Threshold': self.threshold,
+            'Vessel Samples': self.vessel_samples,
+            'Reduced': self.reduced,
+            'Total Distance': self.total_distance,
+            'Vessel Type': self.vessel_type
+        }
+
+    def add_to_file(self, filepath:str) -> None:
+        '''Adds latest parsed csv file'''
+        with open(filepath, 'a') as file:
+            json.dump(self.to_dict(), file)
+            file.write('\n') 
+        self = Trajectory_Statistics()
+
+    def make_statistics_with_threshold(self, input_file:str):
+        columns_to_calculate = ['Vessel Samples', 'Reduced', 'Total Distance']
+        df = pd.read_json(input_file, lines=True)
+
+        grouped = df.groupby('Output Folder')
+
+        for outputfolder, group in grouped:
+            folder_name = outputfolder.split('/')[-2]
+            threshold = outputfolder.split('/')[-1].split('.')[0]
+            
+            stats = {col: calculate_cleansing_statistics(group, col) for col in columns_to_calculate}
+            total_number_of_trajectories_files = group['Output Folder'].count()
+            stats['trajectories'] = {'total': total_number_of_trajectories_files, 'average': 0, 'median': 0, 'max': 0, 'min': 0, 'quantile 25%': 0, 'quantile 50%': 0, 'quantile 75%': 0}
+            df_stats = pd.DataFrame.from_dict(stats, orient='index', 
+                                        columns=['total', 'average', 'median', 'max', 'min', 'quantile 25%', 'quantile 50%', 'quantile 75%'])
+            
+            filepath = os.path.join(STATS_FOLDER, f'input_imputation')
+            filepath = os.path.join(filepath, 'test' if 'test' in outputfolder else 'validation')
+            filepath = os.path.join(filepath, 'area' if 'area' in outputfolder else 'all')
+
+            if 'area' in filepath:
+                area_name = outputfolder.split('/')[-3]
+                filepath = os.path.join(filepath, area_name)
+
+            filepath = os.path.join(filepath, folder_name)
+            filepath = os.path.join(filepath, threshold)
+
+            os.makedirs(filepath, exist_ok=True)
+
+            filepath_stats = os.path.join(filepath, f'{folder_name}.csv')
+            
+            # Writing DataFrame to CSV
+            df_stats.to_csv(filepath_stats)
+        
+            # Make file for vessels
+            vessel_counts = group.groupby('Vessel Type').size()
+
+            # Converting to dictionary
+            vessel_dict = vessel_counts.to_dict()
+
+            # Adding total count to the dictionary
+            vessel_dict['Total'] = group['Vessel Type'].count()
+
+            df_vessel = pd.DataFrame(vessel_dict, index=[0])
+            vessel_file = os.path.join(filepath, f'{folder_name}_vessels.csv')
+
+            df_vessel.to_csv(vessel_file)
+
+    def make_statistics_no_threshold(self, input_file:str):
+        df = pd.read_json(input_file, lines=True)
+        columns_to_calculate = ['Vessel Samples', 'Reduced', 'Total Distance']
+
+        grouped = df.groupby('Output Folder')
+
+        for outputfolder, group in grouped:
+            folder_name = outputfolder.split('/')[-1]
+            
+            stats = {col: calculate_cleansing_statistics(group, col) for col in columns_to_calculate}
+            total_number_of_trajectories_files = group['Output Folder'].count()
+            stats['trajectories'] = {'total': total_number_of_trajectories_files, 'average': 0, 'median': 0, 'max': 0, 'min': 0, 'quantile 25%': 0, 'quantile 50%': 0, 'quantile 75%': 0}
+            df_stats = pd.DataFrame.from_dict(stats, orient='index', 
+                                        columns=['total', 'average', 'median', 'max', 'min', 'quantile 25%', 'quantile 50%', 'quantile 75%'])
+            
+            filepath = os.path.join(STATS_FOLDER, f'input_imputation')
+            filepath = os.path.join(filepath, 'test' if 'test' in outputfolder else 'validation')
+            filepath = os.path.join(filepath, 'area' if 'area' in outputfolder else 'all')
+    
+            if 'area' in filepath:
+                area_name = outputfolder.split('/')[-2]
+                filepath = os.path.join(filepath, area_name)
+
+            filepath = os.path.join(filepath, folder_name)
+
+            os.makedirs(filepath, exist_ok=True)
+
+            filepath_stats = os.path.join(filepath, f'{folder_name}.csv')
+            
+            # Writing DataFrame to CSV
+            df_stats.to_csv(filepath_stats)
+        
+            # Make file for vessels
+            vessel_counts = group.groupby('Vessel Type').size()
+
+            # Converting to dictionary
+            vessel_dict = vessel_counts.to_dict()
+
+            # Adding total count to the dictionary
+            vessel_dict['Total'] = group['Vessel Type'].count()
+
+            df_vessel = pd.DataFrame(vessel_dict, index=[0])
+            vessel_file = os.path.join(filepath, f'{folder_name}_vessels_stats.csv')
+
+            df_vessel.to_csv(vessel_file)
