@@ -142,7 +142,7 @@ def add_nodes_and_edges(G, trajectory_points, edge_dist_threshold):
     return G
 
 
-def find_and_impute_paths_segment(trajectory_segment, G, lock, imputed_paths):
+def find_and_impute_paths_segment(trajectory_segment, G, lock, imputed_paths, processed_counter):
     local_paths = []
     for i in range(len(trajectory_segment) - 1):
         start_props = trajectory_segment[i]["properties"]
@@ -154,26 +154,25 @@ def find_and_impute_paths_segment(trajectory_segment, G, lock, imputed_paths):
         direct_path_exists = G.has_edge(start_point, end_point)
 
         if direct_path_exists:
-            print("Has direct edge")
             path = [start_point, end_point]
         else:
             try:
-                print("astar")
                 path = nx.astar_path(G, start_point, end_point, heuristic=heuristics, weight='weight')
             except nx.NetworkXNoPath:
-                print("No path found")
                 path = [start_point, end_point]
         
         local_paths.append(path)
     
     with lock:
         imputed_paths.extend(local_paths)
+        processed_counter[0] += len(trajectory_segment)
 
 def find_and_impute_paths(G, trajectory_points, file_name, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size):
     start_time = time.time()
     
     imputed_paths = []
     lock = threading.Lock()
+    processed_counter = [0]
     segment_size = 10  # Choose a segment size that makes sense for your data
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -182,14 +181,15 @@ def find_and_impute_paths(G, trajectory_points, file_name, node_dist_threshold, 
         for start_index in range(0, len(trajectory_points) - 1, segment_size):
             end_index = min(start_index + segment_size, len(trajectory_points))
             trajectory_segment = trajectory_points[start_index:end_index]
-            futures.append(executor.submit(find_and_impute_paths_segment, trajectory_segment, G, lock, imputed_paths))
+            futures.append(executor.submit(find_and_impute_paths_segment, trajectory_segment, G, lock, imputed_paths, processed_counter))
 
         # Wait for all futures to complete
         concurrent.futures.wait(futures)
     
     end_time = time.time()
     execution_time = end_time - start_time 
-    print(execution_time)
+    print(f"Total trajectory points processed: {processed_counter[0]}")
+    print("Imputation took:",execution_time)
 
 
     unique_nodes = []
