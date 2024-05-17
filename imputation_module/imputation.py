@@ -165,10 +165,10 @@ def find_and_impute_paths(G, trajectory_points, file_name, node_dist_threshold, 
     
     imputed_paths = []
     timeout_occurred = False
-
+    print("Started imputation inside function")
 
     for i in range(len(trajectory_points) - 1):
-
+        
         if time.time() - start_time > 240:
             print(f"Timeout occurred: Imputation for {file_name} exceeded {240} seconds and was skipped.")
             timeout_occurred = True
@@ -271,9 +271,9 @@ def load_graphs_and_impute_trajectory(file_name, file_path, G, node_dist_thresho
         logging.warning(f'Error occurred trying to retrieve trajectory to impute: {repr(e)}')
 
     new_g, added_nodes, added_edges = add_nodes_and_edges(G, trajectory_points, edge_dist_threshold)
-
+    print("Starting imputation")
     find_and_impute_paths(new_g, trajectory_points, file_name, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size, added_nodes, added_edges)
-    print("Imputation done")
+    print("Imputation done \n")
 
 
 
