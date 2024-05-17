@@ -201,10 +201,6 @@ def generate_output_files_and_stats(G, imputed_paths, file_name, type, size, nod
             writer.writeheader()
         writer.writerow(stats)
 
-def find_path(G, start_point, end_point, heuristic, weight):
-    return nx.astar_path(G, start_point, end_point, heuristic=heuristic, weight=weight)
-
-
 def find_and_impute_paths(G, trajectory_points, file_name, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size, added_nodes, added_edges, add_execution_time):
     start_time = time.time()
     

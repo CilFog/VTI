@@ -109,7 +109,7 @@ for edge_dist_threshold in edge_dist_threshold:
     """
 
     sparse = [1000] # 500, 1000, 2000, 4000, 8000
-    types = ['mangy_gap','single_gap', 'realistic'] #'many_gap', 'single_gap', 'realistic'
+    types = ['mangy_gap'] #'many_gap', 'single_gap', 'realistic'
     for size in sparse:
         for type in types:
             if types == 'realistic':
