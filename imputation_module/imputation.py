@@ -15,6 +15,7 @@ from data.logs.logging import setup_logger
 from shapely.geometry import Point, box
 from scipy.spatial import cKDTree
 import time
+import concurrent.futures
 
 LOG_PATH = 'imputation_log.txt'
 
@@ -148,9 +149,8 @@ def add_nodes_and_edges(G, trajectory_points, edge_dist_threshold):
 
     end_time = time.time()
     execution_time = end_time - start_time 
-    print("Adding nodes and edges took:", execution_time)
 
-    return G, added_nodes, added_edges
+    return G, added_nodes, added_edges, execution_time
 
 def revert_graph_changes(G, added_nodes, added_edges):
     for edge in added_edges:
@@ -160,87 +160,93 @@ def revert_graph_changes(G, added_nodes, added_edges):
         if G.has_node(node):
             G.remove_node(node)
 
-def find_and_impute_paths(G, trajectory_points, file_name, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size, added_nodes, added_edges):
+
+def generate_output_files_and_stats(G, imputed_paths, file_name, type, size, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, trajectory_points, execution_time, add_execution_time):
+    unique_nodes = set()
+    edges = []
+    for path in imputed_paths:
+        for node in path:
+            unique_nodes.add(node)
+        for j in range(len(path)-1):
+            edges.append((path[j], path[j+1]))
+
+    # Output path construction and file writing
+    IMPUTATION_OUTPUT_path = os.path.join(IMPUTATION_OUTPUT, f'{type}/{size}/{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}/{file_name}')
+    if not os.path.exists(IMPUTATION_OUTPUT_path):
+        os.makedirs(IMPUTATION_OUTPUT_path)
+
+    # GeoJSON output
+    imputed_nodes_file_path = os.path.join(IMPUTATION_OUTPUT_path, f'{file_name}_nodes.geojson')
+    imputed_edges_file_path = os.path.join(IMPUTATION_OUTPUT_path, f'{file_name}_edges.geojson')
+    nodes_to_geojson(G, list(unique_nodes), imputed_nodes_file_path)
+    edges_to_geojson(G, edges, imputed_edges_file_path)
+
+    # Statistics
+    stats = {
+        'file_name': file_name,
+        'trajectory_points': len(trajectory_points),
+        'imputed_paths': len(unique_nodes),
+        'execution_time_seconds': add_execution_time + execution_time
+    }
+
+    output_directory  = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data/stats/imputation_stats/{type}/{size}')
+    os.makedirs(output_directory, exist_ok=True)
+    stats_file = os.path.join(output_directory, f'{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}_imputation.csv')
+
+    write_header = not os.path.exists(stats_file)
+    with open(stats_file, mode='a', newline='') as csvfile:
+        fieldnames = ['file_name', 'trajectory_points', 'imputed_paths', 'execution_time_seconds']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        if write_header:
+            writer.writeheader()
+        writer.writerow(stats)
+
+def find_path(G, start_point, end_point, heuristic, weight):
+    return nx.astar_path(G, start_point, end_point, heuristic=heuristic, weight=weight)
+
+
+def find_and_impute_paths(G, trajectory_points, file_name, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size, added_nodes, added_edges, add_execution_time):
     start_time = time.time()
     
     imputed_paths = []
-    timeout_occurred = False
-    print("Started imputation inside function")
+    consecutive_timeouts = 0 
+    num_cpus = os.cpu_count()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=num_cpus) as executor:
+        for i in range(len(trajectory_points) - 1):
 
-    for i in range(len(trajectory_points) - 1):
-        
-        if time.time() - start_time > 240:
-            print(f"Timeout occurred: Imputation for {file_name} exceeded {240} seconds and was skipped.")
-            timeout_occurred = True
-            revert_graph_changes(G, added_nodes, added_edges)
-            break
+            start_props = trajectory_points[i]["properties"]
+            end_props = trajectory_points[i + 1]["properties"]
 
-        start_props = trajectory_points[i]["properties"]
-        end_props = trajectory_points[i + 1]["properties"]
+            start_point = (start_props["latitude"], start_props["longitude"])
+            end_point = (end_props["latitude"], end_props["longitude"])
 
-        start_point = (start_props["latitude"], start_props["longitude"])
-        end_point = (end_props["latitude"], end_props["longitude"])
+            direct_path_exists = G.has_edge(start_point, end_point)
 
-        direct_path_exists = G.has_edge(start_point, end_point)
-
-        if direct_path_exists:
-            path = [start_point, end_point]
-            imputed_paths.append(path)
-        else:
-            try:
-                path = nx.astar_path(G, start_point, end_point, heuristic=heuristics, weight='weight')
-                imputed_paths.append(path)
-            except nx.NetworkXNoPath:
+            if direct_path_exists:
                 path = [start_point, end_point]
                 imputed_paths.append(path)
-    
-    end_time = time.time()
-    execution_time = end_time - start_time 
-    print("Imputation took:",execution_time)
+                consecutive_timeouts = 0
+            else:
+                future = executor.submit(find_path, G, start_point, end_point, heuristics, 'weight')
+                try:
+                    path = future.result(timeout=120)  
+                    imputed_paths.append(path)
+                    consecutive_timeouts = 0  
+                except concurrent.futures.TimeoutError:
+                    print(f"Timeout for pathfinding from {start_point} to {end_point}")
+                    path = [start_point, end_point]  
+                    imputed_paths.append(path)
+                    consecutive_timeouts += 1  
+                except nx.NetworkXNoPath:
+                    path = [start_point, end_point]
+                    imputed_paths.append(path)
+                    consecutive_timeouts += 1
 
-    if not timeout_occurred:
-        unique_nodes = []
-        seen_nodes = set()
-        edges = []
+        end_time = time.time()
+        execution_time = end_time - start_time 
+        print(f"Imputation took: {add_execution_time + execution_time} \n")
 
-        for path in imputed_paths:
-            for node in path:
-                if node not in seen_nodes:
-                    unique_nodes.append(node)
-                    seen_nodes.add(node) 
-            for i in range(len(path)-1):
-                edges.append((path[i], path[i+1]))
-
-        IMPUTATION_OUTPUT_path = os.path.join(IMPUTATION_OUTPUT, f'{type}//{size}//{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}//{file_name}')
-
-        if not os.path.exists(IMPUTATION_OUTPUT_path):
-            os.makedirs(IMPUTATION_OUTPUT_path)
-
-        imputed_nodes_file_path = os.path.join(IMPUTATION_OUTPUT_path, f'{file_name}_nodes.geojson')
-        imputed_edges_file_path = os.path.join(IMPUTATION_OUTPUT_path, f'{file_name}_edges.geojson')
-
-        nodes_to_geojson(G, unique_nodes, imputed_nodes_file_path)
-        edges_to_geojson(G, edges, imputed_edges_file_path)
-
-        stats = {
-            'file_name': file_name,
-            'trajectory_points': len(trajectory_points),
-            'imputed_paths': len(unique_nodes),
-            'execution_time_seconds': execution_time
-        }
-
-        output_directory  = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'data//stats//imputation_stats//{type}//{size}')
-        os.makedirs(output_directory, exist_ok=True)
-        stats_file = os.path.join(output_directory, f'{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}_imputation.csv')
-
-        write_header = not os.path.exists(stats_file)
-
-        with open(stats_file, mode='a', newline='') as csvfile:
-            fieldnames = ['file_name', 'trajectory_points', 'imputed_paths', 'execution_time_seconds']
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            if write_header:
-                writer.writeheader()  
-            writer.writerow(stats)
+        generate_output_files_and_stats(G, imputed_paths, file_name, type, size, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, trajectory_points, execution_time, add_execution_time)
         
         revert_graph_changes(G, added_nodes, added_edges)
 
@@ -270,10 +276,8 @@ def load_graphs_and_impute_trajectory(file_name, file_path, G, node_dist_thresho
     except Exception as e:
         logging.warning(f'Error occurred trying to retrieve trajectory to impute: {repr(e)}')
 
-    new_g, added_nodes, added_edges = add_nodes_and_edges(G, trajectory_points, edge_dist_threshold)
-    print("Starting imputation")
-    find_and_impute_paths(new_g, trajectory_points, file_name, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size, added_nodes, added_edges)
-    print("Imputation done \n")
+    new_g, added_nodes, added_edges, add_execution_time = add_nodes_and_edges(G, trajectory_points, edge_dist_threshold)
+    find_and_impute_paths(new_g, trajectory_points, file_name, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size, added_nodes, added_edges, add_execution_time)
 
 
 
