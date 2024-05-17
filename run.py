@@ -63,7 +63,6 @@ def load_all_graph_process_trajectories(type, size, sparse_trajectories, graph_p
     for root, dirs, files in os.walk(sparse_trajectories):
         for file_name in files:
             if file_name.endswith('.txt'):
-
                 file_path = os.path.join(root, file_name)
                 print(f"Imputing trajectory {file_name}")
                 load_graphs_and_impute_trajectory(file_name, file_path, original_graph, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size)
@@ -112,7 +111,7 @@ for edge_dist_threshold in edge_dist_threshold:
     types = ['realistic'] #'many_gap', 'single_gap', 'realistic'
     for size in sparse:
         for type in types:
-            if types == 'realistic':
+            if type == 'realistic':
                 sparse_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI//data//input_imputation//test//sparsed//all//{type}')
             else:
                 sparse_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI//data//input_imputation//test//sparsed//all//{type}//{size}')

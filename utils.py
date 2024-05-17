@@ -136,17 +136,18 @@ def nodes_within_radius(G, point, radius):
     
     return nodes_within
 
-def adjust_edge_weights_for_draught(G, start_point, end_point, base_penalty=1000):
+def adjust_edge_weights_for_draught(G, start_point, end_point, tree, base_penalty=1000):
     radius = haversine_distance(start_point[0], start_point[1], end_point[0], end_point[1])
 
     radiusNew = radius / 100 
 
-    relevant_nodes_start = set(nodes_within_radius(G, start_point, radiusNew))
-    relevant_nodes_end = set(nodes_within_radius(G, end_point, radiusNew))
+    start_indices_within_radius = set(tree.query_ball_point([start_point[0], start_point[1]], radiusNew))
+    end_indices_within_radius = set(tree.query_ball_point([end_point[0], end_point[1]], radiusNew))
 
-    relevant_nodes = relevant_nodes_start.union(relevant_nodes_end)
-
+    relevant_nodes = start_indices_within_radius.union(end_indices_within_radius)
+    
     processed_edges = set()
+    
     for node in relevant_nodes:
         for neighbor in G.neighbors(node):
             edge = tuple(sorted([node, neighbor]))
