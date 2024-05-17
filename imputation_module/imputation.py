@@ -209,46 +209,34 @@ def find_and_impute_paths(G, trajectory_points, file_name, node_dist_threshold, 
     start_time = time.time()
     
     imputed_paths = []
-    consecutive_timeouts = 0 
-    num_cpus = os.cpu_count()
-    with concurrent.futures.ThreadPoolExecutor(max_workers=num_cpus) as executor:
-        for i in range(len(trajectory_points) - 1):
+    for i in range(len(trajectory_points) - 1):
 
-            start_props = trajectory_points[i]["properties"]
-            end_props = trajectory_points[i + 1]["properties"]
+        start_props = trajectory_points[i]["properties"]
+        end_props = trajectory_points[i + 1]["properties"]
 
-            start_point = (start_props["latitude"], start_props["longitude"])
-            end_point = (end_props["latitude"], end_props["longitude"])
+        start_point = (start_props["latitude"], start_props["longitude"])
+        end_point = (end_props["latitude"], end_props["longitude"])
 
-            direct_path_exists = G.has_edge(start_point, end_point)
+        direct_path_exists = G.has_edge(start_point, end_point)
 
-            if direct_path_exists:
+        if direct_path_exists:
+            path = [start_point, end_point]
+            imputed_paths.append(path)
+        else:
+            try:
+                path = nx.astar_path(G, start_point, end_point, heuristic=heuristics, weight='weight')
+                imputed_paths.append(path)
+            except nx.NetworkXNoPath:
                 path = [start_point, end_point]
                 imputed_paths.append(path)
-                consecutive_timeouts = 0
-            else:
-                future = executor.submit(find_path, G, start_point, end_point, heuristics, 'weight')
-                try:
-                    path = future.result(timeout=120)  
-                    imputed_paths.append(path)
-                    consecutive_timeouts = 0  
-                except concurrent.futures.TimeoutError:
-                    print(f"Timeout for pathfinding from {start_point} to {end_point}")
-                    path = [start_point, end_point]  
-                    imputed_paths.append(path)
-                    consecutive_timeouts += 1  
-                except nx.NetworkXNoPath:
-                    path = [start_point, end_point]
-                    imputed_paths.append(path)
-                    consecutive_timeouts += 1
 
-        end_time = time.time()
-        execution_time = end_time - start_time 
-        print(f"Imputation took: {add_execution_time + execution_time} \n")
+    end_time = time.time()
+    execution_time = end_time - start_time 
+    print(f"Imputation took: {add_execution_time + execution_time} \n")
 
-        generate_output_files_and_stats(G, imputed_paths, file_name, type, size, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, trajectory_points, execution_time, add_execution_time)
-        
-        revert_graph_changes(G, added_nodes, added_edges)
+    generate_output_files_and_stats(G, imputed_paths, file_name, type, size, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, trajectory_points, execution_time, add_execution_time)
+    
+    revert_graph_changes(G, added_nodes, added_edges)
 
     return imputed_paths
 
