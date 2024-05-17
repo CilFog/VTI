@@ -189,7 +189,7 @@ def generate_output_files_and_stats(G, imputed_paths, file_name, type, size, nod
         'execution_time_seconds': add_execution_time + execution_time
     }
 
-    output_directory  = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data/stats/imputation_stats/{type}/{size}')
+    output_directory  = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'data/stats/imputation_stats/{type}/{size}')
     os.makedirs(output_directory, exist_ok=True)
     stats_file = os.path.join(output_directory, f'{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}_imputation.csv')
 
