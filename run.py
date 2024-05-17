@@ -90,7 +90,7 @@ def load_intersecting_graphs_process_trajectories(type, size, sparse_trajectorie
 CELLS = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'VTI//data//cells.txt')
 
 node_dist_threshold = 0.001
-edge_dist_threshold = [0.002] # 0.001, 0.002, 0.003, 0.004, 0.005
+edge_dist_threshold = [0.001, 0.002, 0.003, 0.004] # 0.001, 0.002, 0.003, 0.004, 0.005
 cog_angle_threshold = 45
 graph_output_name = 'skagen'
     
