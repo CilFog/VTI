@@ -59,25 +59,19 @@ def load_complete_graph(graph_path):
 def load_all_graph_process_trajectories(type, size, sparse_trajectories, graph_path, node_dist_threshold, edge_dist_threshold, cog_angle_threshold):
     
     original_graph = load_complete_graph(graph_path)
-    file_count = 0
     
     for root, dirs, files in os.walk(sparse_trajectories):
         for file_name in files:
             if file_name.endswith('.txt'):
-                if file_count >= 200:  
-                    break  
 
                 file_path = os.path.join(root, file_name)
                 print(f"Imputing trajectory {file_name}")
                 load_graphs_and_impute_trajectory(file_name, file_path, original_graph, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size)
-                file_count += 1 
 
                 # imputed_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI/data/output_imputation/{type}/{size}/{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}')
                 # original_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'VTI/data/input_imputation/test/original')
                 # find_all_and_compare(imputed_trajectories, original_trajectories, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, size, type)
 
-        if file_count >= 200:
-            break 
                 
 def load_intersecting_graphs_process_trajectories(type, size, sparse_trajectories, graph_path, node_dist_threshold, edge_dist_threshold, cog_angle_threshold):
     for root, dirs, files in os.walk(sparse_trajectories):
@@ -114,8 +108,8 @@ for edge_dist_threshold in edge_dist_threshold:
         Impute all trajectories in test folder
     """
 
-    sparse = [2000, 4000, 8000] # 500, 1000, 2000, 4000, 8000
-    types = ['single_gap', 'realistic'] #'many_gap', 'single_gap', 'realistic'
+    sparse = [1000] # 500, 1000, 2000, 4000, 8000
+    types = ['mangy_gap','single_gap', 'realistic'] #'many_gap', 'single_gap', 'realistic'
     for size in sparse:
         for type in types:
             if types == 'realistic':
