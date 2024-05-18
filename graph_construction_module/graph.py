@@ -81,13 +81,13 @@ def process_geometric_vessel_sample(indices, coord_index, trajectories, sampled_
         cog_diff = calculate_cog_difference(trajectories[coord_index][4], trajectories[j][4])
 
         # Determine which quadrant the point falls into based on COG difference
-        if cog_diff < 90:
+        if cog_diff <= 45 or cog_diff >= 315:
             quadrant = 0
-        elif cog_diff < 180:
+        elif cog_diff > 45 and cog_diff <= 115:
             quadrant = 1
-        elif cog_diff < 270:
+        elif cog_diff > 115 and cog_diff <= 225:
             quadrant = 2
-        elif cog_diff < 360:
+        elif cog_diff > 225 and cog_diff < 315:
             quadrant = 3
         else:
             continue # Just in case, but should not happen
@@ -210,7 +210,6 @@ def degree_distance(lat1, lon1, lat2, lon2):
     """Calculate the Euclidean distance in degrees between two points."""
     return math.sqrt((lat2 - lat1) ** 2 + (lon2 - lon1) ** 2)
 
-
 def create_edges(G, initial_edge_radius_threshold, max_angle, nodes_file_path, edges_file_path):
     print("Creating Edges")
     """
@@ -254,7 +253,6 @@ def create_edges(G, initial_edge_radius_threshold, max_angle, nodes_file_path, e
 
     return total_edge_count
     
-
 def create_graphs_for_cells(node_threshold, edge_threshold, cog_threshold, graph_output_name):
 
     stats_list = []
