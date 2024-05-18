@@ -108,7 +108,7 @@ def add_nodes_and_edges(G, trajectory_points, edge_dist_threshold):
 
     node_positions = np.array([(data['latitude'], data['longitude']) for node, data in G.nodes(data=True)])
     tree = cKDTree(node_positions)
-
+    
     added_nodes = []
     added_edges = []
 
@@ -150,7 +150,7 @@ def add_nodes_and_edges(G, trajectory_points, edge_dist_threshold):
     end_time = time.time()
     execution_time = end_time - start_time 
 
-    return G, added_nodes, added_edges, execution_time
+    return G, added_nodes, added_edges, execution_time, tree, node_positions
 
 def revert_graph_changes(G, added_nodes, added_edges):
     for edge in added_edges:
@@ -201,7 +201,7 @@ def generate_output_files_and_stats(G, imputed_paths, file_name, type, size, nod
             writer.writeheader()
         writer.writerow(stats)
 
-def find_and_impute_paths(G, trajectory_points, file_name, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size, added_nodes, added_edges, add_execution_time):
+def find_and_impute_paths(G, trajectory_points, file_name, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size, added_nodes, added_edges, add_execution_time, tree, node_positions):
     start_time = time.time()
     
     imputed_paths = []
@@ -220,7 +220,7 @@ def find_and_impute_paths(G, trajectory_points, file_name, node_dist_threshold, 
             imputed_paths.append(path)
         else:
             try:
-                G = adjust_edge_weights_for_draught(G, start_point, end_point)
+                #G = adjust_edge_weights_for_draught(G, start_point, end_point, tree, node_positions)
                 path = nx.astar_path(G, start_point, end_point, heuristic=heuristics, weight='weight')
                 imputed_paths.append(path)
             except nx.NetworkXNoPath:
@@ -261,8 +261,8 @@ def load_graphs_and_impute_trajectory(file_name, file_path, G, node_dist_thresho
     except Exception as e:
         logging.warning(f'Error occurred trying to retrieve trajectory to impute: {repr(e)}')
 
-    new_g, added_nodes, added_edges, add_execution_time = add_nodes_and_edges(G, trajectory_points, edge_dist_threshold)
-    find_and_impute_paths(new_g, trajectory_points, file_name, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size, added_nodes, added_edges, add_execution_time)
+    new_g, added_nodes, added_edges, add_execution_time, tree, node_positions = add_nodes_and_edges(G, trajectory_points, edge_dist_threshold)
+    find_and_impute_paths(new_g, trajectory_points, file_name, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size, added_nodes, added_edges, add_execution_time, tree, node_positions)
 
 
 
