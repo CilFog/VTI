@@ -162,13 +162,17 @@ def revert_graph_changes(G, added_nodes, added_edges):
 
 
 def generate_output_files_and_stats(G, imputed_paths, file_name, type, size, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, trajectory_points, execution_time, add_execution_time):
-    unique_nodes = set()
+    unique_nodes = []
+    seen_nodes = set()
     edges = []
+
     for path in imputed_paths:
         for node in path:
-            unique_nodes.add(node)
-        for j in range(len(path)-1):
-            edges.append((path[j], path[j+1]))
+            if node not in seen_nodes:
+                unique_nodes.append(node)
+                seen_nodes.add(node) 
+        for i in range(len(path)-1):
+            edges.append((path[i], path[i+1]))
 
     # Output path construction and file writing
     IMPUTATION_OUTPUT_path = os.path.join(IMPUTATION_OUTPUT, f'{type}/{size}/{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}/{file_name}')
