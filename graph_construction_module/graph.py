@@ -11,7 +11,7 @@ from scipy.spatial import cKDTree
 from sqlalchemy import create_engine
 from data.logs.logging import setup_logger
 from db_connection.config import load_config
-from utils import calculate_bearing_difference, export_graph_to_geojson, haversine_distance
+from utils import calculate_bearing_difference, export_graph_to_geojson, calculate_bearing
 
 """
     Graph input in the form of trajectory points extracted from the raw AIS data
@@ -144,12 +144,6 @@ def geometric_sampling(trajectories, min_distance_threshold):
 
     return sampled_trajectories
 
-# Function to find the maximum depth within 50 meters
-def max_draught_within_radius(point, all_points, radius=50):
-    buffer = point.buffer(radius)
-    within_buffer = all_points[all_points.intersects(buffer)]
-    return within_buffer['draught'].max()*-1
-
 def create_nodes(sampled_trajectories):
     print("Creating Nodes")
     """
@@ -234,11 +228,15 @@ def create_edges(G, initial_edge_radius_threshold, max_angle, nodes_file_path, e
                         nearby_node, nearby_data = node_coords_list[nearby_index]
                         nearby_cog = nearby_data['cog']
                         
-                        cog_diff = calculate_bearing_difference(data['cog'], nearby_cog)
-                        
+                        compass_bearing = calculate_bearing(
+                            lat1=data['latitude'], 
+                            lon1=data['longitude'], 
+                            lat2=nearby_data['latitude'], 
+                            lon2=nearby_data['longitude'])
+
                         distance = degree_distance(node[0], node[1], nearby_node[0], nearby_node[1])
                         
-                        penalty = angular_penalty(cog_diff, max_angle)
+                        penalty = angular_penalty(compass_bearing, max_angle)
                         adjusted_distance = distance + penalty
                         
                         # Create an edge if the adjusted distance is within the threshold
