@@ -18,26 +18,26 @@ def calculate_bearing_difference(bearing1, bearing2):
     diff = abs(bearing1 - bearing2) % 360
     return min(diff, 360 - diff)
 
-def calculate_bearing(point1, point2):
+def calculate_bearing(lat1, lng1, lat2, lng2):
     # Convert latitude and longitude from degrees to radians
-    lat1, lon1 = radians(point1[0]), radians(point1[1])
-    lat2, lon2 = radians(point2[0]), radians(point2[1])
+    lat1, lng1 = radians(lat1), radians(lng1)
+    lat2, lng2 = radians(lat2), radians(lng2)
 
     # Calculate the difference in longitudes
-    dlon = lon2 - lon1
+    diff_lng = lng2 - lng1
 
     # Calculate the bearing using the atan2 function
-    y = sin(dlon) * cos(lat2)
-    x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dlon)
-    bearing = atan2(y, x)
+    x = sin(diff_lng) * cos(lat2)
+    y = cos(lat1) * sin(lat2) - (sin(lat1) 
+                                 * cos(lat2) * cos(diff_lng))
+    # values now ranges from -180 to 180 degrees
+    initial_bearing = atan2(x, y)
 
-    # Convert bearing from radians to degrees
-    bearing = degrees(bearing)
+    # Normalize the bearing such that values now ranges from 0 to 360 degrees
+    initial_bearing = degrees(initial_bearing)
+    compass_bearing = (initial_bearing + 360) % 360
 
-    # Normalize bearing to range from 0 to 360 degrees
-    bearing = (bearing + 360) % 360
-
-    return bearing
+    return compass_bearing
 
 def haversine_distance(lat1, lon1, lat2, lon2):
     # Radius of the Earth in kilometers
@@ -197,7 +197,7 @@ def adjust_edge_weights_for_draught(G, start_point, end_point, tree, node_positi
 
     return G
 
-
+def add_draught_penalty()
 """
     Functions used in the graph module
 """
@@ -314,17 +314,3 @@ def get_radian_and_radian_diff_columns(df_curr:gpd.GeoDataFrame, df_next:gpd.Geo
     
     
     return (df_curr.fillna(0).infer_objects(), df_next)
-
-# Function to calculate distance and adjust based on COG
-def adjusted_distance(x, y):
-    # Calculate Haversine distance
-    haversine_dist = geodesic((x[0], x[1]), (y[0], y[1])).m
-    
-    # Example COG adjustment: if COG difference is > 45 degrees, increase distance
-    cog_diff = abs(x[2] - y[2])
-    cog_diff = min(cog_diff, 360-cog_diff)
-
-    # apply the angle penalty
-    haversine_dist = np.sqrt(haversine_dist ** 2 + (THETA_ANGLE_PENALTY * cog_diff /180) ** 2)
-
-    return haversine_dist
