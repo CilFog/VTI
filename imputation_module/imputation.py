@@ -94,9 +94,9 @@ def find_relevant_cells(trajectory_points, cells_df):
 def add_nodes_and_edges(G, trajectory_points, edge_dist_threshold, max_angle):
     start_time = time.time()
 
-    node_positions = np.array([(data['latitude'], data['longitude'], data['draught'], data['avg_depth'], data['cog']) for node, data in G.nodes(data=True)])
-    tree = cKDTree(node_positions)
-    
+    node_positions = np.array([(data['longitude'], data['latitude'], data['draught'], data['avg_depth'], data['cog']) for node, data in G.nodes(data=True)])
+    tree = cKDTree([(lon, lat) for lon, lat, draught, avg_depth, cog in node_positions])
+
     added_nodes = []
     added_edges = []
 
