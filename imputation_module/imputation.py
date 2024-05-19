@@ -1,21 +1,17 @@
 import os
 import csv
 import json
-import networkx as nx
-import numpy as np
-from sqlalchemy import Tuple
-from data.logs.logging import setup_logger
-from utils import haversine_distance, heuristics, adjust_edge_weights_for_draught, nodes_within_radius, nodes_to_geojson, edges_to_geojson
 import time
 import numpy as np
 import pandas as pd
+import networkx as nx
 import geopandas as gpd
+from sqlalchemy import Tuple
 from typing import List, Tuple
-from data.logs.logging import setup_logger
-from shapely.geometry import Point, box
 from scipy.spatial import cKDTree
-import time
-import concurrent.futures
+from shapely.geometry import Point, box
+from data.logs.logging import setup_logger
+from utils import haversine_distance, heuristics, edge_weight, nodes_to_geojson, edges_to_geojson
 
 LOG_PATH = 'imputation_log.txt'
 
@@ -95,18 +91,10 @@ def find_relevant_cells(trajectory_points, cells_df):
                 relevant_cell_ids.add(row['cell_id'])
     return list(relevant_cell_ids)
 
-
-
-
-
-
-
-
-
-def add_nodes_and_edges(G, trajectory_points, edge_dist_threshold):
+def add_nodes_and_edges(G, trajectory_points, edge_dist_threshold, max_angle):
     start_time = time.time()
 
-    node_positions = np.array([(data['latitude'], data['longitude']) for node, data in G.nodes(data=True)])
+    node_positions = np.array([(data['latitude'], data['longitude'], data['draught'], data['avg_depth'], data['cog']) for node, data in G.nodes(data=True)])
     tree = cKDTree(node_positions)
     
     added_nodes = []
@@ -130,22 +118,62 @@ def add_nodes_and_edges(G, trajectory_points, edge_dist_threshold):
         for idx in start_point_idx:
             node_point = tuple(node_positions[idx])
             if node_point != start_point:
-                distance = haversine_distance(start_point[0], start_point[1], node_point[0], node_point[1])
-                G.add_edge(start_point, node_point, weight=distance)
-                G.add_edge(node_point, start_point, weight=distance)
-                added_edges.append((start_point, node_point))
-                added_edges.append((node_point, start_point))
+                weight1 = edge_weight(
+                            lat1=start_point[0],
+                            lng1=start_point[1],
+                            cog1=start_props['cog'], 
+                            source_draught=start_props['draught'], 
+                            lat2=node_point[0], 
+                            lng2=node_point[1], 
+                            cog2=node_point[4],
+                            destination_avg_depth=node_point[3], 
+                            max_angle=max_angle)
+                
+                weight2 = edge_weight(
+                            lat2=node_point[0],
+                            lng2=node_point[1],
+                            cog2=node_point[4],
+                            source_draught=node_point[2],
+                            lat1=start_point[0],
+                            lng1=start_point[1],
+                            cog1=start_props['cog'],
+                            destination_avg_depth=start_props['draught'],
+                            max_angle=max_angle)
+
+                if weight1 <= edge_dist_threshold:
+                    G.add_edge(start_point, node_point, weight=weight1)
+                
+                if weight2 <= edge_dist_threshold:
+                    G.add_edge(node_point, start_point, weight=weight2)
 
             # Query for end point
         end_point_idx = tree.query_ball_point([end_point[0], end_point[1]], edge_dist_threshold)
         for idx in end_point_idx:
             node_point = tuple(node_positions[idx])
             if node_point != end_point:
-                distance = haversine_distance(end_point[0], end_point[1], node_point[0], node_point[1])
-                G.add_edge(end_point, node_point, weight=distance)
-                G.add_edge(node_point, end_point, weight=distance)
-                added_edges.append((end_point, node_point))
-                added_edges.append((node_point, end_point))
+                weight1 = edge_weight(
+                            lat1=end_point[0],
+                            lng1=end_point[1], 
+                            source_draught=end_props['draught'], 
+                            lat2=node_point[0], 
+                            lng2=node_point[1], 
+                            destination_avg_depth=node_point[3], 
+                            max_angle=max_angle)
+                
+                weight2 = edge_weight(
+                            lat1=node_point[0],
+                            lng1=node_point[1],
+                            source_draught=node_point[2],
+                            lat2=end_point[0],
+                            lng2=end_point[1],
+                            destination_avg_depth=end_props['draught'],
+                            max_angle=max_angle)
+
+                if weight1 <= edge_dist_threshold:
+                    G.add_edge(start_point, node_point, weight=weight1)
+                
+                if weight2 <= edge_dist_threshold:
+                    G.add_edge(node_point, start_point, weight=weight2)
 
     end_time = time.time()
     execution_time = end_time - start_time 
@@ -159,7 +187,6 @@ def revert_graph_changes(G, added_nodes, added_edges):
     for node in added_nodes:
         if G.has_node(node):
             G.remove_node(node)
-
 
 def generate_output_files_and_stats(G, imputed_paths, file_name, type, size, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, trajectory_points, execution_time, add_execution_time):
     unique_nodes = []
@@ -241,8 +268,6 @@ def find_and_impute_paths(G, trajectory_points, file_name, node_dist_threshold, 
 
     return imputed_paths
 
-
-
 def load_graphs_and_impute_trajectory(file_name, file_path, G, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size):
     trajectory_points = []
     try:
@@ -267,8 +292,6 @@ def load_graphs_and_impute_trajectory(file_name, file_path, G, node_dist_thresho
 
     new_g, added_nodes, added_edges, add_execution_time, tree, node_positions = add_nodes_and_edges(G, trajectory_points, edge_dist_threshold)
     find_and_impute_paths(new_g, trajectory_points, file_name, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size, added_nodes, added_edges, add_execution_time, tree, node_positions)
-
-
 
 def load_intersecting_graphs_and_impute_trajectory(file_name, file_path, graphs, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size):
     G = nx.Graph()
@@ -312,16 +335,6 @@ def load_intersecting_graphs_and_impute_trajectory(file_name, file_path, graphs,
 
     find_and_impute_paths(new_g, trajectory_points, file_name, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size)
     print("Imputation done")
-
-
-
-
-
-
-
-
-
-
 
 def calculate_center_position(positions:List[Tuple[float,float]]):
     """Calculate the center position of the trajectory segment."""

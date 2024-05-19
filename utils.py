@@ -10,6 +10,7 @@ from scipy.spatial import cKDTree
 
 pd.set_option('future.no_silent_downcasting', True)
 THETA_ANGLE_PENALTY = 50
+THETA_DRAUGHT_PENALTY = 1000
 
 """
     Functions used in the imputation module
@@ -156,7 +157,6 @@ def adjust_edge_weights_for_draught(G, start_point, end_point, tree, node_positi
     # If you need to convert it back to a list of lists:
     union_of_positions_list = [set(position) for position in union_of_positions]
 
-
     print(union_of_positions_list)
 
     start_nodes_within = set([list(G.nodes)[i] for i in start_indices_within_radius])
@@ -197,10 +197,55 @@ def adjust_edge_weights_for_draught(G, start_point, end_point, tree, node_positi
 
     return G
 
-def add_draught_penalty()
-"""
-    Functions used in the graph module
-"""
+def draught_penalty(source_draught, destination_depth):
+    # Calculate the difference in draught between the two nodes
+    adjusted_draught = source_draught * 0.15
+
+    depth = destination_depth + adjusted_draught
+
+    if depth > 0:
+        penalty = THETA_DRAUGHT_PENALTY
+    else:
+        penalty = 0
+
+    return penalty
+
+def angular_penalty(compass_bearing, cog1, cog2, max_angle, penalty_rate=0.01):
+    """ Calculate additional distance penalty based on the angle difference. """
+    cog1_rad = math.radians(cog1)
+    cog2_rad = math.radians(cog2)
+    
+    # Calculate the average using cosine and sine components
+    cos_mean = (math.cos(cog1_rad) + math.cos(cog2_rad)) / 2
+    sin_mean = (math.sin(cog1_rad) + math.sin(cog2_rad)) / 2
+    average_cog_rad = math.atan2(sin_mean, cos_mean)
+    average_cog = math.degrees(average_cog_rad)
+
+    # Normalize the average COG within the range of 0 to 360 degrees
+    average_cog = (average_cog + 360) % 360
+    
+    # Calculate the absolute difference between the compass bearing and the average COG
+    angle_diff = abs(compass_bearing - average_cog)
+    angle_diff = min(angle_diff, 360 - angle_diff)  # Normalize the difference within 0 to 180 degrees
+
+    # Calculate penalty as a function of the angle difference
+    penalty = (angle_diff / max_angle) * penalty_rate
+    return penalty
+
+def degree_distance(lat1, lon1, lat2, lon2):
+    """Calculate the Euclidean distance in degrees between two points."""
+    return math.sqrt((lat2 - lat1) ** 2 + (lon2 - lon1) ** 2)
+
+def edge_weight(lat1, lng1, cog1, source_draught, lat2, lng2, cog2, destination_avg_depth, max_angle=180):
+    """Calculate the weight of an edge based on the distance and angle between two points."""
+    distance = degree_distance(lat1, lng1, lat2, lng2)
+    compass_bearing = calculate_bearing(lat1, lng1, lat2, lng2)
+
+    distance = distance + angular_penalty(compass_bearing, cog1, cog2, max_angle)
+    distance = distance + draught_penalty(source_draught=source_draught, destination_depth=destination_avg_depth)
+
+    return distance
+
 def export_graph_to_geojson(G, nodes_file_path, edges_file_path):
     # Nodes
     nodes_features = []

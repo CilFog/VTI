@@ -11,8 +11,7 @@ from scipy.spatial import cKDTree
 from sqlalchemy import create_engine
 from data.logs.logging import setup_logger
 from db_connection.config import load_config
-from utils import calculate_bearing_difference, export_graph_to_geojson, calculate_bearing
-
+from utils import export_graph_to_geojson, edge_weight
 """
     Graph input in the form of trajectory points extracted from the raw AIS data
 """
@@ -195,15 +194,6 @@ def create_nodes(sampled_trajectories):
 
     return G
 
-def angular_penalty(angle_difference, max_angle, penalty_rate=0.01):
-    """ Calculate additional distance penalty based on the angle difference. """
-    angle_difference = min(angle_difference, 360 - angle_difference)
-    return (angle_difference / max_angle) * penalty_rate
-
-def degree_distance(lat1, lon1, lat2, lon2):
-    """Calculate the Euclidean distance in degrees between two points."""
-    return math.sqrt((lat2 - lat1) ** 2 + (lon2 - lon1) ** 2)
-
 def create_edges(G, initial_edge_radius_threshold, max_angle, nodes_file_path, edges_file_path):
     print("Creating Edges")
     """
@@ -217,8 +207,8 @@ def create_edges(G, initial_edge_radius_threshold, max_angle, nodes_file_path, e
     total_edge_count = 0
 
     for i, (node, data) in enumerate(node_coords_list):
-            edge_radius_threshold = initial_edge_radius_threshold
             edge_found = False
+            edge_radius_threshold = initial_edge_radius_threshold
             
             while not edge_found:
                 nearby_indices = kdtree.query_ball_point(node, edge_radius_threshold)
@@ -226,24 +216,22 @@ def create_edges(G, initial_edge_radius_threshold, max_angle, nodes_file_path, e
                 for nearby_index in nearby_indices:
                     if nearby_index != i:
                         nearby_node, nearby_data = node_coords_list[nearby_index]
-                        nearby_cog = nearby_data['cog']
-                        
-                        compass_bearing = calculate_bearing(
+                        weight=edge_weight(
                             lat1=data['latitude'], 
-                            lon1=data['longitude'], 
+                            lng1=data['longitude'],
+                            cog1=data['cog'], 
+                            source_draught=data['draught'], 
                             lat2=nearby_data['latitude'], 
-                            lon2=nearby_data['longitude'])
-
-                        distance = degree_distance(node[0], node[1], nearby_node[0], nearby_node[1])
-                        
-                        penalty = angular_penalty(compass_bearing, max_angle)
-                        adjusted_distance = distance + penalty
+                            lng2=nearby_data['longitude'], 
+                            cog2=nearby_data['cog'],
+                            destination_avg_depth=nearby_data['avg_depth'], 
+                            max_angle=max_angle)
                         
                         # Create an edge if the adjusted distance is within the threshold
-                        if adjusted_distance <= edge_radius_threshold:
-                            G.add_edge(node, nearby_node, weight=adjusted_distance)
-                            edge_found = True
+                        if weight <= edge_radius_threshold:
+                            G.add_edge(node, nearby_node, weight=weight)
                             total_edge_count += 1
+                            edge_found = True
 
                 edge_radius_threshold = edge_radius_threshold * 1.1
 
@@ -382,28 +370,23 @@ def connect_graphs(base_cell_id, cells_df, output_graph_folder, threshold_distan
                 if neighbor_graph:
                     connect_two_graphs(base_graph, neighbor_graph, base_cell_id, neighbor_id, threshold_distance, edge_threhsold, cog_threshold, graph_output_name)
 
-def connect_two_graphs(G1, G2, base_cell_id, neighbor_id, threshold_distance, edge_threhsold, cog_threshold, graph_output_name):
-    G1_nodes = [(node, data['longitude'], data['latitude']) for node, data in G1.nodes(data=True) if 'longitude' in data and 'latitude' in data]
-    G2_nodes = [(node, data['longitude'], data['latitude']) for node, data in G2.nodes(data=True) if 'longitude' in data and 'latitude' in data]
+def connect_two_graphs(G1, G2, base_cell_id, neighbor_id, threshold_distance, edge_threhsold, cog_threshold, graph_output_name, max_angle=180):
+    G1_nodes = [(node, data['longitude'], data['latitude'], data['draught'], data['avg_depth'], data['cog']) for node, data in G1.nodes(data=True) if 'longitude' in data and 'latitude' in data]
+    G2_nodes = [(node, data['longitude'], data['latitude'], data['draught'], data['avg_depth'], data['cog']) for node, data in G2.nodes(data=True) if 'longitude' in data and 'latitude' in data]
     tree_G2 = cKDTree([(lon, lat) for _, lon, lat in G2_nodes])
 
-    new_edges_G1 = []
-    new_edges_G2 = []
-
-    for node1, lon1, lat1 in G1_nodes:
+    for node1, lon1, lat1, draught1, avg_depth1, cog1 in G1_nodes:
         nearby_indices = tree_G2.query_ball_point([lon1, lat1], (threshold_distance + 0.001))
         for index in nearby_indices:
-            node2, lon2, lat2 = G2_nodes[index]
-            distance = np.sqrt((lon2 - lon1)**2 + (lat2 - lat1)**2)
-            if distance <= (threshold_distance + 0.001):
-                new_edges_G1.append((node1, node2, distance))
-                new_edges_G2.append((node2, node1, distance))
+            node2, lon2, lat2, draught2, avg_dept2, cog2 = G2_nodes[index]
+            weight1 = edge_weight(lat1, lon1, cog1, draught1, lat2, lon2, cog2, avg_dept2, max_angle)
+            weight2 = edge_weight(lat2, lon2, cog2, draught2, lat1, lon1, cog1, avg_depth1, max_angle)
 
-    for node1, node2, dist in new_edges_G1:
-        G1.add_edge(node1, node2, weight=dist)
-
-    for node2, node1, dist in new_edges_G2:
-        G2.add_edge(node2, node1, weight=dist)
+            if weight1 <= threshold_distance:
+                G1.add_edge(node1, node2, weight=weight1)
+            
+            if weight2 <= threshold_distance:
+                G2.add_edge(node2, node1, wight=weight2)
 
     output_graph_folder = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'data/output_graph/{graph_output_name}_{threshold_distance}_{edge_threhsold}_{cog_threshold}')
 
