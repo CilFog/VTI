@@ -297,6 +297,8 @@ def create_graphs_for_cells(node_threshold, edge_threshold, cog_threshold, graph
 
     stats_df = pd.DataFrame(stats_list)
 
+    os.makedirs(os.path.join(STATS_OUTPUT, 'solution_stats'), exist_ok=True)
+
     stats_df.to_csv(os.path.join(STATS_OUTPUT, f'solution_stats//{node_threshold}_{edge_threshold}_{cog_threshold}_graph.csv'), index=False)
     return stats_df
 
@@ -370,17 +372,17 @@ def connect_graphs(base_cell_id, cells_df, output_graph_folder, threshold_distan
                 if neighbor_graph:
                     connect_two_graphs(base_graph, neighbor_graph, base_cell_id, neighbor_id, threshold_distance, edge_threhsold, cog_threshold, graph_output_name)
 
-def connect_two_graphs(G1, G2, base_cell_id, neighbor_id, threshold_distance, edge_threhsold, cog_threshold, graph_output_name, max_angle=180):
+def connect_two_graphs(G1, G2, base_cell_id, neighbor_id, threshold_distance, edge_threhsold, cog_threshold, graph_output_name):
     G1_nodes = [(node, data['longitude'], data['latitude'], data['draught'], data['avg_depth'], data['cog']) for node, data in G1.nodes(data=True) if 'longitude' in data and 'latitude' in data]
     G2_nodes = [(node, data['longitude'], data['latitude'], data['draught'], data['avg_depth'], data['cog']) for node, data in G2.nodes(data=True) if 'longitude' in data and 'latitude' in data]
-    tree_G2 = cKDTree([(lon, lat) for _, lon, lat in G2_nodes])
+    tree_G2 = cKDTree([(lon, lat) for _, lon, lat, draught, avg_depth, cog in G2_nodes])
 
     for node1, lon1, lat1, draught1, avg_depth1, cog1 in G1_nodes:
         nearby_indices = tree_G2.query_ball_point([lon1, lat1], (threshold_distance + 0.001))
         for index in nearby_indices:
             node2, lon2, lat2, draught2, avg_dept2, cog2 = G2_nodes[index]
-            weight1 = edge_weight(lat1, lon1, cog1, draught1, lat2, lon2, cog2, avg_dept2, max_angle)
-            weight2 = edge_weight(lat2, lon2, cog2, draught2, lat1, lon1, cog1, avg_depth1, max_angle)
+            weight1 = edge_weight(lat1, lon1, cog1, draught1, lat2, lon2, cog2, avg_dept2, cog_threshold)
+            weight2 = edge_weight(lat2, lon2, cog2, draught2, lat1, lon1, cog1, avg_depth1, cog_threshold)
 
             if weight1 <= threshold_distance:
                 G1.add_edge(node1, node2, weight=weight1)

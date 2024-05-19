@@ -199,7 +199,7 @@ def adjust_edge_weights_for_draught(G, start_point, end_point, tree, node_positi
 
 def draught_penalty(source_draught, destination_depth):
     # Calculate the difference in draught between the two nodes
-    adjusted_draught = source_draught * 0.15
+    adjusted_draught = source_draught + source_draught * 0.15
 
     depth = destination_depth + adjusted_draught
 
@@ -229,7 +229,7 @@ def angular_penalty(compass_bearing, cog1, cog2, max_angle, penalty_rate=0.01):
     angle_diff = min(angle_diff, 360 - angle_diff)  # Normalize the difference within 0 to 180 degrees
 
     # Calculate penalty as a function of the angle difference
-    penalty = (angle_diff / max_angle) * penalty_rate
+    penalty = (angle_diff/max_angle) * penalty_rate
     return penalty
 
 def degree_distance(lat1, lon1, lat2, lon2):

@@ -290,7 +290,7 @@ def load_graphs_and_impute_trajectory(file_name, file_path, G, node_dist_thresho
     except Exception as e:
         logging.warning(f'Error occurred trying to retrieve trajectory to impute: {repr(e)}')
 
-    new_g, added_nodes, added_edges, add_execution_time, tree, node_positions = add_nodes_and_edges(G, trajectory_points, edge_dist_threshold)
+    new_g, added_nodes, added_edges, add_execution_time, tree, node_positions = add_nodes_and_edges(G, trajectory_points, edge_dist_threshold, cog_angle_threshold)
     find_and_impute_paths(new_g, trajectory_points, file_name, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size, added_nodes, added_edges, add_execution_time, tree, node_positions)
 
 def load_intersecting_graphs_and_impute_trajectory(file_name, file_path, graphs, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size):
@@ -331,7 +331,7 @@ def load_intersecting_graphs_and_impute_trajectory(file_name, file_path, graphs,
     execution_time = end_time - start_time 
     print("Reading graph took:", execution_time)
 
-    new_g, added_nodes, added_edges = add_nodes_and_edges(G, trajectory_points, edge_dist_threshold)
+    new_g, added_nodes, added_edges = add_nodes_and_edges(G, trajectory_points, edge_dist_threshold, cog_angle_threshold)
 
     find_and_impute_paths(new_g, trajectory_points, file_name, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size)
     print("Imputation done")
