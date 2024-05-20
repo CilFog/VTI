@@ -157,6 +157,9 @@ def adjust_edge_weights_for_draught(G, start_point, end_point, tree, node_positi
         if node_depth >= start_draught * 1.2:
             valid_nodes.add(node)
 
+    valid_nodes.add(start_point)
+    valid_nodes.add(end_point)
+
     subgraph = G.subgraph(valid_nodes).copy() 
 
     return subgraph
