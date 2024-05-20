@@ -97,61 +97,6 @@ def find_relevant_cells(trajectory_points, cells_df):
 
 
 
-
-
-
-
-
-
-def add_nodes_and_edges(G, trajectory_points, edge_dist_threshold):
-    start_time = time.time()
-
-    node_positions = np.array([(data['latitude'], data['longitude']) for node, data in G.nodes(data=True)])
-    tree = cKDTree(node_positions)
-    
-    added_nodes = []
-    added_edges = []
-
-    for i in range(len(trajectory_points) - 1):
-        start_props = trajectory_points[i]["properties"]
-        end_props = trajectory_points[i + 1]["properties"]
-
-        start_point = (start_props["latitude"], start_props["longitude"])
-        end_point = (end_props["latitude"], end_props["longitude"])
-
-        if start_point not in G:
-            G.add_node(start_point, **start_props)
-            added_nodes.append(start_point)
-        if end_point not in G:
-            G.add_node(end_point, **end_props)
-            added_nodes.append(end_point)
-
-        start_point_idx = tree.query_ball_point([start_point[0], start_point[1]], edge_dist_threshold)
-        for idx in start_point_idx:
-            node_point = tuple(node_positions[idx])
-            if node_point != start_point:
-                distance = haversine_distance(start_point[0], start_point[1], node_point[0], node_point[1])
-                G.add_edge(start_point, node_point, weight=distance)
-                G.add_edge(node_point, start_point, weight=distance)
-                added_edges.append((start_point, node_point))
-                added_edges.append((node_point, start_point))
-
-            # Query for end point
-        end_point_idx = tree.query_ball_point([end_point[0], end_point[1]], edge_dist_threshold)
-        for idx in end_point_idx:
-            node_point = tuple(node_positions[idx])
-            if node_point != end_point:
-                distance = haversine_distance(end_point[0], end_point[1], node_point[0], node_point[1])
-                G.add_edge(end_point, node_point, weight=distance)
-                G.add_edge(node_point, end_point, weight=distance)
-                added_edges.append((end_point, node_point))
-                added_edges.append((node_point, end_point))
-
-    end_time = time.time()
-    execution_time = end_time - start_time 
-
-    return G, added_nodes, added_edges, execution_time, tree, node_positions
-
 def revert_graph_changes(G, added_nodes, added_edges):
     for edge in added_edges:
         if G.has_edge(*edge):
@@ -205,10 +150,71 @@ def generate_output_files_and_stats(G, imputed_paths, file_name, type, size, nod
             writer.writeheader()
         writer.writerow(stats)
 
+
+
+
+
+def add_nodes_and_edges(G, trajectory_points, edge_dist_threshold):
+    start_time = time.time()
+
+    added_nodes = []
+    added_edges = []
+
+    for i in range(len(trajectory_points) - 1):
+        start_props = trajectory_points[i]["properties"]
+        end_props = trajectory_points[i + 1]["properties"]
+
+        start_point = (start_props["latitude"], start_props["longitude"])
+        end_point = (end_props["latitude"], end_props["longitude"])
+
+        if start_point not in G:
+            G.add_node(start_point, **start_props)
+            added_nodes.append(start_point)
+        if end_point not in G:
+            G.add_node(end_point, **end_props)
+            added_nodes.append(end_point)
+
+    node_positions = np.array([(data['latitude'], data['longitude']) for node, data in G.nodes(data=True)])
+    tree = cKDTree(node_positions)
+
+    for i in range(len(trajectory_points) - 1):
+
+        start_props = trajectory_points[i]["properties"]
+        end_props = trajectory_points[i + 1]["properties"]
+
+        start_point = (start_props["latitude"], start_props["longitude"])
+        end_point = (end_props["latitude"], end_props["longitude"])
+
+        start_point_idx = tree.query_ball_point([start_point[0], start_point[1]], edge_dist_threshold)
+        for idx in start_point_idx:
+            node_point = tuple(node_positions[idx])
+            if node_point != start_point:
+                distance = haversine_distance(start_point[0], start_point[1], node_point[0], node_point[1])
+                G.add_edge(start_point, node_point, weight=distance)
+                G.add_edge(node_point, start_point, weight=distance)
+                added_edges.append((start_point, node_point))
+                added_edges.append((node_point, start_point))
+
+        # Query for end point
+        end_point_idx = tree.query_ball_point([end_point[0], end_point[1]], edge_dist_threshold)
+        for idx in end_point_idx:
+            node_point = tuple(node_positions[idx])
+            if node_point != end_point:
+                distance = haversine_distance(end_point[0], end_point[1], node_point[0], node_point[1])
+                G.add_edge(end_point, node_point, weight=distance)
+                G.add_edge(node_point, end_point, weight=distance)
+                added_edges.append((end_point, node_point))
+                added_edges.append((node_point, end_point))
+
+    end_time = time.time()
+    execution_time = end_time - start_time 
+    return G, added_nodes, added_edges, execution_time, tree, node_positions
+
+
 def find_and_impute_paths(G, trajectory_points, file_name, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size, added_nodes, added_edges, add_execution_time, tree, node_positions):
     start_time = time.time()
-    
     imputed_paths = []
+
     for i in range(len(trajectory_points) - 1):
 
         start_props = trajectory_points[i]["properties"]
@@ -224,7 +230,9 @@ def find_and_impute_paths(G, trajectory_points, file_name, node_dist_threshold, 
             imputed_paths.append(path)
         else:
             try:
-                G = adjust_edge_weights_for_draught(G, start_point, end_point, tree, node_positions)
+                print("Performing A-star")
+                start_draught = start_props["draught"]
+                #G = adjust_edge_weights_for_draught(G, start_point, end_point, tree, node_positions, start_draught)
                 path = nx.astar_path(G, start_point, end_point, heuristic=heuristics, weight='weight')
                 imputed_paths.append(path)
             except nx.NetworkXNoPath:

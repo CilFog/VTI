@@ -136,7 +136,7 @@ def nodes_within_radius(G, point, radius):
     
     return nodes_within
 
-def adjust_edge_weights_for_draught(G, start_point, end_point, tree, node_positions, base_penalty=1000):
+def adjust_edge_weights_for_draught(G, start_point, end_point, tree, node_positions, start_draught, base_penalty=1000):
     radius = haversine_distance(start_point[0], start_point[1], end_point[0], end_point[1])
 
     radiusNew = radius / 100 
@@ -151,13 +151,13 @@ def adjust_edge_weights_for_draught(G, start_point, end_point, tree, node_positi
     end_positions_set = set(map(tuple, end_actual_positions))
 
     # Get the union of both sets
-    union_of_positions = start_positions_set.union(end_positions_set)
+    #union_of_positions = start_positions_set.union(end_positions_set)
 
     # If you need to convert it back to a list of lists:
-    union_of_positions_list = [set(position) for position in union_of_positions]
+    #union_of_positions_list = [set(position) for position in union_of_positions]
 
 
-    print(union_of_positions_list)
+    #print(union_of_positions_list)
 
     start_nodes_within = set([list(G.nodes)[i] for i in start_indices_within_radius])
     end_nodes_within = set([list(G.nodes)[i] for i in end_indices_within_radius])
@@ -171,8 +171,6 @@ def adjust_edge_weights_for_draught(G, start_point, end_point, tree, node_positi
     #     G.add_edge(u, v, weight=new_weight)  # Or add the edge if it doesn't exist
 
     processed_edges = set()
-    #node_ids = list(G.nodes())
-    #print(node_ids)
     for node in relevant_nodes:
         for neighbor in G.neighbors(node):
             edge = tuple(sorted([node, neighbor]))
@@ -180,14 +178,14 @@ def adjust_edge_weights_for_draught(G, start_point, end_point, tree, node_positi
                 processed_edges.add(edge)
                 data = G.get_edge_data(node, neighbor)
                 
-                # Calculate minimum depth between nodes
-                u_depth = G.nodes[node].get('avg_depth', G.nodes[node].get('draught'))
-                v_depth = G.nodes[neighbor].get('avg_depth', G.nodes[neighbor].get('draught'))
-
-                difference = abs(u_depth - v_depth)
-                threshold = abs(v_depth * 0.2)
+                u_depth = abs(G.nodes[node].get('avg_depth', G.nodes[node].get('draught')))
+                v_depth = abs(G.nodes[neighbor].get('avg_depth', G.nodes[neighbor].get('draught')))
                 
-                if difference < threshold:
+                if start_draught * 1.2 > u_depth:
+                    print("draught val was below")
+                    penalty = base_penalty
+                elif start_draught * 1.2 > v_depth:
+                    print("draught val was below")
                     penalty = base_penalty
                 else:
                     penalty = 0
