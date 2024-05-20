@@ -50,7 +50,7 @@ def write_trajectories_for_area(file:str, outputfolder: str, output_json:str):
         (aalborg_harbor_to_kattegat_path, aalborg_harbor_to_kattegat_bbox),
         (skagen_harbor_path, skagens_harbor_bbox)]
     
-    if ('test' not in file):
+    if ('test' not in outputfolder):
         brunsbuettel_to_kiel_path = os.path.join(outputfolder, 'brunsbuettel_to_kiel')
         doggersbank_to_lemvig_path = os.path.join(outputfolder, 'doggersbank_to_lemvig')
 
@@ -75,7 +75,7 @@ def write_trajectories_for_area_with_threshold(file:str, outputfolder: str, thre
         (aalborg_harbor_to_kattegat_path, aalborg_harbor_to_kattegat_bbox),
         (skagen_harbor_path, skagens_harbor_bbox)]
     
-    if ('test' not in file):
+    if ('test' not in outputfolder):
         brunsbuettel_to_kiel_path = os.path.join(outputfolder, 'brunsbuettel_to_kiel')
         doggersbank_to_lemvig_path = os.path.join(outputfolder, 'doggersbank_to_lemvig')
 
@@ -403,59 +403,67 @@ def find_cell_input_files():
     logging.info('Finished finding area input files')        
 
 threshold_values = [500, 1000, 2000, 4000, 8000]
-test_all_threshold = os.path.join(STATS_TEST_ALL, 'all_threshold.json')
-test_area_threshold = os.path.join(STATES_TEST_AREA, 'area_threshold.json')
-test_all_realistic = os.path.join(STATS_TEST_ALL, 'all_realistic.json')
-test_area_realistic = os.path.join(STATES_TEST_AREA, 'area_realistic.json')
+# test_all_threshold = os.path.join(STATS_TEST_ALL, 'all_threshold.json')
+# test_area_threshold = os.path.join(STATES_TEST_AREA, 'area_threshold.json')
+# test_all_realistic = os.path.join(STATS_TEST_ALL, 'all_realistic.json')
+# test_area_realistic = os.path.join(STATES_TEST_AREA, 'area_realistic.json')
 validation_all_threshold = os.path.join(STATS_VALIDATION_ALL, 'all_threshold.json')
 validation_area_threshold = os.path.join(STATS_VALIDATIOM_AREA, 'area_threshold.json')
 validation_all_realistic = os.path.join(STATS_VALIDATION_ALL, 'all_realistic.json')
 validation_area_realistic = os.path.join(STATS_VALIDATIOM_AREA, 'area_realistic.json')
 
-os.makedirs(STATS_TEST_ALL, exist_ok=True)
-os.makedirs(STATES_TEST_AREA, exist_ok=True)
+# os.makedirs(STATS_TEST_ALL, exist_ok=True)
+# os.makedirs(STATES_TEST_AREA, exist_ok=True)
 os.makedirs(STATS_VALIDATION_ALL, exist_ok=True)
 os.makedirs(STATS_VALIDATIOM_AREA, exist_ok=True)
 stats = Sparse_Statistics()
 
-test_files = list(Path(INPUT_TEST_DATA_FOLDER_ORIGINAL_FOLDER).rglob('*.txt')) # List all files in the directory recursively
-test_files = [str(path) for path in test_files] # Convert Path objects to strings
+# test_files = list(Path(INPUT_TEST_DATA_FOLDER_ORIGINAL_FOLDER).rglob('*.txt')) # List all files in the directory recursively
+# test_files = [str(path) for path in test_files] # Convert Path objects to strings
 
-random_test_files_to_move = random.sample(test_files, 1000)
+# random_test_files_to_move = random.sample(test_files, 1000)
 
-print('making data for test')
-for file in random_test_files_to_move:
-    for threshold in threshold_values:
-        write_trajectories_for_all_with_threshold(file, INPUT_TEST_SPARSED_ALL_FOLDER, threshold=threshold, output_json=test_all_threshold)
-        write_trajectories_for_area_with_threshold(file, INPUT_TEST_SPARSED_AREA_FOLDER, threshold=threshold, output_json=test_area_threshold)
+# print('making data for test')
+# for file in random_test_files_to_move:
+#     for threshold in threshold_values:
+#         write_trajectories_for_all_with_threshold(file, INPUT_TEST_SPARSED_ALL_FOLDER, threshold=threshold, output_json=test_all_threshold)
+#         write_trajectories_for_area_with_threshold(file, INPUT_TEST_SPARSED_AREA_FOLDER, threshold=threshold, output_json=test_area_threshold)
 
-    write_trajectories_for_all(file, INPUT_TEST_SPARSED_ALL_FOLDER, output_json=test_all_realistic)
-    write_trajectories_for_area(file, INPUT_TEST_SPARSED_AREA_FOLDER, output_json=test_area_realistic)
+#     write_trajectories_for_all(file, INPUT_TEST_SPARSED_ALL_FOLDER, output_json=test_all_realistic)
+#     write_trajectories_for_area(file, INPUT_TEST_SPARSED_AREA_FOLDER, output_json=test_area_realistic)
 
-print('making stats for test with')
-stats.make_statistics_with_threshold(test_all_threshold)
-stats.make_statistics_with_threshold(test_area_threshold)
-stats.make_statistics_no_threshold(test_all_realistic)
-stats.make_statistics_no_threshold(test_area_realistic)
+# print('making stats for test with')
+# stats.make_statistics_with_threshold(test_all_threshold)
+# stats.make_statistics_with_threshold(test_area_threshold)
+# stats.make_statistics_no_threshold(test_all_realistic)
+# stats.make_statistics_no_threshold(test_area_realistic)
 
-
-validation_files = list(Path(INPUT_VALIDATION_DATA_FOLDER).rglob('*.txt'))
-validation_files = [str(path) for path in validation_files]
-random_validation_files_to_move = random.sample(validation_files, 1000)
+paths = []
+print('gettings vessels folders')
+vessel_folders = [folder for folder in Path(INPUT_VALIDATION_DATA_ORIGINAL_FOLDER).iterdir() if folder.is_dir()]
+# Traverse 
 print('making data for validation')
-for file in random_validation_files_to_move:
-    for threshold in threshold_values:
-        write_trajectories_for_all_with_threshold(file, INPUT_VALIDATION_SPARSED_ALL_FOLDER, threshold=threshold, output_json=validation_all_threshold)
-        write_trajectories_for_area_with_threshold(file, INPUT_VALIDATION_SPARSED_AREA_FOLDER, threshold=threshold, output_json=validation_area_threshold)
+for folder in vessel_folders:
+    if (folder.name.lower() == 'fishing'):
+        continue
+    vessel_files = list(folder.rglob('*.txt'))
+    vessel_files = [str(path) for path in vessel_files]
+    random_files = []
+    try:
+        random_files = random.sample(vessel_files, 50)
+    except Exception:
+        random_files = vessel_files
 
-    write_trajectories_for_all(file, INPUT_VALIDATION_SPARSED_ALL_FOLDER, output_json=validation_all_realistic)
-    write_trajectories_for_area(file, INPUT_VALIDATION_SPARSED_AREA_FOLDER, output_json=validation_area_realistic)
+    for file in random_files:
+        for threshold in threshold_values:
+            write_trajectories_for_all_with_threshold(file, INPUT_VALIDATION_SPARSED_ALL_FOLDER, threshold=threshold, output_json=validation_all_threshold)
+            write_trajectories_for_area_with_threshold(file, INPUT_VALIDATION_SPARSED_AREA_FOLDER, threshold=threshold, output_json=validation_area_threshold)
 
+        write_trajectories_for_all(file, INPUT_VALIDATION_SPARSED_ALL_FOLDER, output_json=validation_all_realistic)
+        write_trajectories_for_area(file, INPUT_VALIDATION_SPARSED_AREA_FOLDER, output_json=validation_area_realistic)
 
 print('making stats for validation')
 stats.make_statistics_with_threshold(validation_all_threshold)
 stats.make_statistics_with_threshold(validation_area_threshold)
 stats.make_statistics_no_threshold(validation_all_realistic)
 stats.make_statistics_no_threshold(validation_area_realistic)
-
-print('Finished. Exiting')
