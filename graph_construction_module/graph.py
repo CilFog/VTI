@@ -220,34 +220,29 @@ def create_edges(G, initial_edge_radius_threshold, max_angle, nodes_file_path, e
     node_array = np.array([node for node, data in node_coords_list])
     
     kdtree = cKDTree(node_array)
+    edge_count = 0
     total_edge_count = 0
 
     for i, (node, data) in enumerate(node_coords_list):
-            edge_radius_threshold = initial_edge_radius_threshold
-            edge_found = False
-            
-            while not edge_found:
-                nearby_indices = kdtree.query_ball_point(node, edge_radius_threshold)
-                
-                for nearby_index in nearby_indices:
-                    if nearby_index != i:
-                        nearby_node, nearby_data = node_coords_list[nearby_index]
-                        nearby_cog = nearby_data['cog']
-                        
-                        cog_diff = calculate_bearing_difference(data['cog'], nearby_cog)
-                        
-                        distance = degree_distance(node[0], node[1], nearby_node[0], nearby_node[1])
-                        
-                        penalty = angular_penalty(cog_diff, max_angle)
-                        adjusted_distance = distance + penalty
-                        
-                        # Create an edge if the adjusted distance is within the threshold
-                        if adjusted_distance <= edge_radius_threshold:
-                            G.add_edge(node, nearby_node, weight=adjusted_distance)
-                            edge_found = True
-                            total_edge_count += 1
+        edge_radius_threshold = initial_edge_radius_threshold
 
-                edge_radius_threshold = edge_radius_threshold * 1.1
+        while edge_count == 0:
+            nearby_indices = kdtree.query_ball_point(node, edge_radius_threshold)
+
+            for nearby_index in nearby_indices:
+                if nearby_index != i: 
+                    nearby_node, nearby_data = node_coords_list[nearby_index]
+                    nearby_cog = nearby_data['cog']
+
+                    cog_diff = calculate_bearing_difference(data['cog'], nearby_cog)
+
+                    if cog_diff <= max_angle:
+                        distance = haversine_distance(node[0], node[1], nearby_node[0], nearby_node[1])
+                        G.add_edge(node, nearby_node, weight=distance)
+                        edge_count += 1
+                        total_edge_count += 1
+
+            edge_radius_threshold = edge_radius_threshold * 1.1
 
     export_graph_to_geojson(G, nodes_file_path, edges_file_path)
 
