@@ -257,7 +257,7 @@ def create_edges(G, initial_edge_radius_threshold, max_angle, nodes_file_path, e
 def create_graphs_for_cells(node_threshold, edge_threshold, cog_threshold, graph_output_name):
 
     stats_list = []
-    cells_to_consider = ["9_10"] #"9_9", "9_10", "9_11", "10_9", "10_10", "10_11", "11_9", "11_10", "11_11"
+    cells_to_consider = ["9_9", "9_10", "9_11", "10_9", "10_10", "10_11", "11_9", "11_10", "11_11"]
  
 
     for cell_name in os.listdir(GRAPH_INPUT):
