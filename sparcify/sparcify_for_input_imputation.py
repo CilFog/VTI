@@ -440,7 +440,7 @@ stats = Sparse_Statistics()
 
 paths = []
 print('gettings vessels folders')
-vessel_folders = Path(INPUT_VALIDATION_DATA_ORIGINAL_FOLDER).iterdir() if folder.is_dir()]
+vessel_folders = [folder for folder in Path(INPUT_VALIDATION_DATA_ORIGINAL_FOLDER).iterdir() if folder.is_dir()]
 # Traverse 
 print('making data for validation')
 for folder in vessel_folders:
@@ -449,7 +449,6 @@ for folder in vessel_folders:
     vessel_files = list(folder.rglob('*.txt'))
     vessel_files = [str(path) for path in vessel_files]
     random_files = []
-
     try:
         random_files = random.sample(vessel_files, 50)
     except Exception:
