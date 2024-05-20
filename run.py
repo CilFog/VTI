@@ -91,23 +91,23 @@ for edge_dist_threshold in edge_dist_threshold:
     """
         Create graphs and connect them
     """
-    #create_graphs_for_cells(node_dist_threshold, edge_dist_threshold, cog_angle_threshold, graph_output_name)
-    #process_all_cells(cells_data, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, graph_output_name)
+    create_graphs_for_cells(node_dist_threshold, edge_dist_threshold, cog_angle_threshold, graph_output_name)
+    process_all_cells(cells_data, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, graph_output_name)
 
     """
         Impute all trajectories in test folder
     """
 
-    sparse = [1000] # 500, 1000, 2000, 4000, 8000
-    types = ['single_gap'] #'many_gap', 'single_gap', 'realistic'
-    for size in sparse:
-        for type in types:
-            if type == 'realistic':
-                sparse_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI//data//input_imputation//test//sparsed//all//{type}')
-            else:
-                sparse_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI//data//input_imputation//test//sparsed//all//{type}//{size}')
+    # sparse = [1000] # 500, 1000, 2000, 4000, 8000
+    # types = ['single_gap'] #'many_gap', 'single_gap', 'realistic'
+    # for size in sparse:
+    #     for type in types:
+    #         if type == 'realistic':
+    #             sparse_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI//data//input_imputation//test//sparsed//all//{type}')
+    #         else:
+    #             sparse_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI//data//input_imputation//test//sparsed//all//{type}//{size}')
                 
-            load_all_graph_process_trajectories(type, size, sparse_trajectories, graph_path, node_dist_threshold, edge_dist_threshold, cog_angle_threshold)
+    #         load_all_graph_process_trajectories(type, size, sparse_trajectories, graph_path, node_dist_threshold, edge_dist_threshold, cog_angle_threshold)
 
             # print("comparing trajectories")
             # imputed_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI/data/output_imputation/{type}/{size}/{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}')
