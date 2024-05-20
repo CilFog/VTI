@@ -230,9 +230,8 @@ def find_and_impute_paths(G, trajectory_points, file_name, node_dist_threshold, 
             imputed_paths.append(path)
         else:
             try:
-                print("Performing A-star")
                 start_draught = start_props["draught"]
-                G = adjust_edge_weights_for_draught(G, start_point, end_point, tree, node_positions, start_draught)
+                #G = adjust_edge_weights_for_draught(G, start_point, end_point, tree, node_positions, start_draught)
                 path = nx.astar_path(G, start_point, end_point, heuristic=heuristics, weight='weight')
                 imputed_paths.append(path)
             except nx.NetworkXNoPath:
