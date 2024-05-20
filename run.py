@@ -81,7 +81,7 @@ CELLS = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'VTI//data//cel
 
 node_dist_threshold = 0.0012
 edge_dist_threshold = [0.0024] # 0.001, 0.002, 0.003, 0.004
-cog_angle_threshold = 45
+cog_angle_threshold = 180
 graph_output_name = 'skagen_new_cog_penalty'
     
 for edge_dist_threshold in edge_dist_threshold:
