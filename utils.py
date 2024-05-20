@@ -142,59 +142,24 @@ def adjust_edge_weights_for_draught(G, start_point, end_point, tree, node_positi
     radiusNew = radius / 100 
 
     start_indices_within_radius = tree.query_ball_point([start_point[0], start_point[1]], radiusNew)
-    start_actual_positions = node_positions[start_indices_within_radius]
 
     end_indices_within_radius = tree.query_ball_point([end_point[0], end_point[1]], radiusNew)
-    end_actual_positions = node_positions[end_indices_within_radius]
 
-    start_positions_set = set(map(tuple, start_actual_positions))
-    end_positions_set = set(map(tuple, end_actual_positions))
-
-    # Get the union of both sets
-    #union_of_positions = start_positions_set.union(end_positions_set)
-
-    # If you need to convert it back to a list of lists:
-    #union_of_positions_list = [set(position) for position in union_of_positions]
-
-
-    #print(union_of_positions_list)
 
     start_nodes_within = set([list(G.nodes)[i] for i in start_indices_within_radius])
     end_nodes_within = set([list(G.nodes)[i] for i in end_indices_within_radius])
     
     relevant_nodes = start_nodes_within.union(end_nodes_within)
-    
-        # Update the edge weight directly
-    # if (u, v) in G.edges or (v, u) in G.edges:  # Check if the edge exists
-    #     G[u][v]['weight'] = new_weight  # Update the weight
-    # else:
-    #     G.add_edge(u, v, weight=new_weight)  # Or add the edge if it doesn't exist
 
-    processed_edges = set()
+    valid_nodes = set()
     for node in relevant_nodes:
-        for neighbor in G.neighbors(node):
-            edge = tuple(sorted([node, neighbor]))
-            if edge not in processed_edges and neighbor in relevant_nodes:
-                processed_edges.add(edge)
-                data = G.get_edge_data(node, neighbor)
-                
-                u_depth = abs(G.nodes[node].get('avg_depth', G.nodes[node].get('draught')))
-                v_depth = abs(G.nodes[neighbor].get('avg_depth', G.nodes[neighbor].get('draught')))
-                
-                if start_draught * 1.2 > u_depth:
-                    print("draught val was below")
-                    penalty = base_penalty
-                elif start_draught * 1.2 > v_depth:
-                    print("draught val was below")
-                    penalty = base_penalty
-                else:
-                    penalty = 0
-                
-                initial_weight = data.get('weight')
-                G[node][neighbor]['weight'] = initial_weight + penalty
+        node_depth = abs(G.nodes[node].get('avg_depth', G.nodes[node].get('draught')))
+        if node_depth >= start_draught:
+            valid_nodes.add(node)
 
-    return G
+    subgraph = G.subgraph(valid_nodes).copy() 
 
+    return subgraph
 
 """
     Functions used in the graph module
