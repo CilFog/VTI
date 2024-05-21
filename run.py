@@ -80,16 +80,15 @@ def load_intersecting_graphs_process_trajectories(type, size, sparse_trajectorie
 CELLS = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'VTI//data//cells.txt')
 
 node_dist_threshold = [0.0006]
-edge_dist_threshold = 0.0024 
+edge_dist_threshold = 0.0012 
 cog_angle_threshold = 180
 graph_output_name = 'skagen_adjust_dist'
     
 for node_dist_threshold in node_dist_threshold:
+    edge_dist_threshold = node_dist_threshold * 2 
     graph_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI//data//output_graph//{graph_output_name}_{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}')
     cells_data = pd.read_csv(CELLS, index_col='cell_id')
 
-    edge_dist_threshold = node_dist_threshold * 2 
-    
     """
         Create graphs and connect them
     """
