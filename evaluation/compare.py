@@ -5,6 +5,7 @@ from scipy.spatial.distance import directed_hausdorff
 import numpy as np
 from tslearn.metrics import dtw
 import csv
+import glob
 
 def load_geojson_extract_coordinates(file_path):
     with open(file_path, 'r') as f:
@@ -53,17 +54,17 @@ def frechet_distance(original_trajectory, imputed_trajectory):
     return dp[-1, -1]
 
 
-def find_all_and_compare(imputed_trajectory_path, original_trajectory_path, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, path, type):
+def compare_imputed(imputed_trajectory_path, original_trajectory_path, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, path, type, sparsed_trajectories):
     output_directory  = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'data//stats//evaluation//{type}//{path}')
     os.makedirs(output_directory, exist_ok=True)
-    stats_file = os.path.join(output_directory, f'{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}_evaluation.csv')
+    stats_file = os.path.join(output_directory, f'imputed_{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}_evaluation.csv')
     
     with open(stats_file, mode='w', newline='') as csvfile:
         fieldnames = ['Trajectory', 'Original Length', 'Imputed Length', 'DTW', 'Frechet Distance']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
-        
-        for root, _, files in os.walk(imputed_trajectory_path):
+    
+    for root, _, files in os.walk(imputed_trajectory_path):
             for file in files:
                 if file.endswith('nodes.geojson'):
                     file_path = os.path.join(root, file)
@@ -88,3 +89,43 @@ def find_all_and_compare(imputed_trajectory_path, original_trajectory_path, node
                         'DTW': dtw,
                         'Frechet Distance': fd
                     })
+
+def compare_linear(imputed_trajectory_path, original_trajectory_path, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, path, type, sparsed_trajectories):
+    output_directory  = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'data//stats//evaluation//{type}//{path}')
+    os.makedirs(output_directory, exist_ok=True)
+    stats_file = os.path.join(output_directory, f'linear_{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}_evaluation.csv')
+    
+    with open(stats_file, mode='w', newline='') as csvfile:
+        fieldnames = ['Trajectory', 'Original Length', 'Linear Length', 'DTW', 'Frechet Distance']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+    
+    for root, _, files in os.walk(sparsed_trajectories):
+        for file in files:
+            file_path = os.path.join(root, file)
+            sparsed_trajectory = load_csv_extract_coordinates(file_path)
+            print(file)
+
+            for r, _, f in os.walk(original_trajectory_path):
+                for ff in f:
+                    if ff == file:
+                        ofile_path = os.path.join(r, ff)
+                        original_trajectory = load_csv_extract_coordinates(ofile_path)
+            
+            original_len = len(original_trajectory)
+            linear_len = len(sparsed_trajectory)
+            dtw = dynamic_time_warping(original_trajectory, sparsed_trajectory)
+            fd = frechet_distance(original_trajectory, sparsed_trajectory)
+            
+            writer.writerow({
+                'Trajectory': file,
+                'Original Length': original_len,
+                'Linear Length': linear_len,
+                'DTW': dtw,
+                'Frechet Distance': fd
+            })
+
+
+def find_all_and_compare(imputed_trajectory_path, original_trajectory_path, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, path, type, sparsed_trajectories):
+    #compare_imputed(imputed_trajectory_path, original_trajectory_path, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, path, type, sparsed_trajectories)
+    compare_linear(imputed_trajectory_path, original_trajectory_path, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, path, type, sparsed_trajectories)
