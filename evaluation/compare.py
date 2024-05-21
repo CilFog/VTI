@@ -108,7 +108,7 @@ def compare_linear(imputed_trajectory_path, original_trajectory_path, node_dist_
                 for r, _, f in os.walk(original_trajectory_path):
                     for ff in f:
                         if ff == file:
-                            print(f"Processing {f}")
+                            print(f"Processing {ff}")
                             ofile_path = os.path.join(r, ff)
                             original_trajectory = load_csv_extract_coordinates(ofile_path)
                 
