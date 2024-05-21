@@ -100,29 +100,29 @@ def compare_linear(imputed_trajectory_path, original_trajectory_path, node_dist_
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
     
-    for root, _, files in os.walk(sparsed_trajectories):
-        for file in files:
-            file_path = os.path.join(root, file)
-            sparsed_trajectory = load_csv_extract_coordinates(file_path)
+        for root, _, files in os.walk(sparsed_trajectories):
+            for file in files:
+                file_path = os.path.join(root, file)
+                sparsed_trajectory = load_csv_extract_coordinates(file_path)
 
-            for r, _, f in os.walk(original_trajectory_path):
-                for ff in f:
-                    if ff == file:
-                        ofile_path = os.path.join(r, ff)
-                        original_trajectory = load_csv_extract_coordinates(ofile_path)
-            
-            original_len = len(original_trajectory)
-            linear_len = len(sparsed_trajectory)
-            dtw = dynamic_time_warping(original_trajectory, sparsed_trajectory)
-            fd = frechet_distance(original_trajectory, sparsed_trajectory)
-            
-            writer.writerow({
-                'Trajectory': file,
-                'Original Length': original_len,
-                'Linear Length': linear_len,
-                'DTW': dtw,
-                'Frechet Distance': fd
-            })
+                for r, _, f in os.walk(original_trajectory_path):
+                    for ff in f:
+                        if ff == file:
+                            ofile_path = os.path.join(r, ff)
+                            original_trajectory = load_csv_extract_coordinates(ofile_path)
+                
+                original_len = len(original_trajectory)
+                linear_len = len(sparsed_trajectory)
+                dtw = dynamic_time_warping(original_trajectory, sparsed_trajectory)
+                fd = frechet_distance(original_trajectory, sparsed_trajectory)
+                
+                writer.writerow({
+                    'Trajectory': file,
+                    'Original Length': original_len,
+                    'Linear Length': linear_len,
+                    'DTW': dtw,
+                    'Frechet Distance': fd
+                })
 
 
 
