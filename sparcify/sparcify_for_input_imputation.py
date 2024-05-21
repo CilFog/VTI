@@ -2,17 +2,16 @@ import os
 import sys
 import shutil
 import random
+import numpy as np
 import pandas as pd
 import geopandas as gpd
 from pathlib import Path
 from typing import List
-from shapely.geometry import box
-from multiprocessing import freeze_support
+from shapely.geometry import box, Polygon
 from data.logs.logging import setup_logger
 from data.stats.statistics import Sparse_Statistics
-from .classes import brunsbuettel_to_kiel_polygon, aalborg_harbor_to_kattegat_bbox, doggersbank_to_lemvig_bbox, skagens_harbor_bbox
-from .sparcify_methods import sparcify_trajectories_realisticly, sparcify_large_meter_gap_by_threshold, sparcify_trajectories_with_meters_gaps_by_treshold, get_trajectory_df_from_txt, check_if_trajectory_is_dense
-
+from utils import get_radian_and_radian_diff_columns, calculate_initial_compass_bearing, get_haversine_dist_df_in_meters
+from .classes import brunsbuettel_to_kiel_polygon, aalborg_harbor_to_kattegat_bbox, doggersbank_to_lemvig_bbox, skagens_harbor_bbox, cells_bbox
 DATA_FOLDER = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 CELL_TXT = os.path.join(DATA_FOLDER, 'cells.txt')
 INPUT_GRAPH_FOLDER = os.path.join(DATA_FOLDER, 'input_graph')
@@ -29,6 +28,9 @@ INPUT_VALIDATION_DATA_ORIGINAL_FOLDER = os.path.join(INPUT_VALIDATION_DATA_FOLDE
 INPUT_VALIDATION_SPARSED_FOLDER = os.path.join(INPUT_VALIDATION_DATA_FOLDER, 'sparsed')
 INPUT_VALIDATION_SPARSED_ALL_FOLDER = os.path.join(INPUT_VALIDATION_SPARSED_FOLDER, 'all')
 INPUT_VALIDATION_SPARSED_AREA_FOLDER = os.path.join(INPUT_VALIDATION_SPARSED_FOLDER, 'area')
+INPUT_VALIDATION_SPARSED2_FOLDER = os.path.join(INPUT_VALIDATION_DATA_FOLDER, 'sparsed2')
+INPUT_VALIDATION_SPARSED2_ALL_FOLDER = os.path.join(INPUT_VALIDATION_SPARSED2_FOLDER, 'all')
+INPUT_VALIDATION_SPARSED2_AREA_FOLDER = os.path.join(INPUT_VALIDATION_SPARSED2_FOLDER, 'area')
 
 STATS_FOLDER = os.path.join(DATA_FOLDER, 'stats')
 STATS_INPUT_IMPUTATION = os.path.join(STATS_FOLDER, 'input_imputation')
@@ -37,23 +39,497 @@ STATS_TEST_ALL = os.path.join(STATS_TEST, 'all')
 STATES_TEST_AREA = os.path.join(STATS_TEST, 'area')
 STATS_VALIDATION = os.path.join(STATS_INPUT_IMPUTATION, 'validation')
 STATS_VALIDATION_ALL = os.path.join(STATS_VALIDATION, 'all')
-STATS_VALIDATIOM_AREA = os.path.join(STATS_VALIDATION, 'area')
+STATS_VALIDATION_AREA = os.path.join(STATS_VALIDATION, 'area')
+STATS_TEST_THRESHOLD = os.path.join(STATS_TEST, 'stats_threshold.csv')
+STATS_TEST_REALISTIC = os.path.join(STATS_TEST, 'stats_realistic.csv')
+STATS_VALIDATION_THRESHOLD = os.path.join(STATS_VALIDATION, 'stats_threshold.csv')
+STATS_VALIDATION_REALISTIC = os.path.join(STATS_VALIDATION, 'stats_realistic.csv')
+STATS_VALIDATION2_THRESHOLD = os.path.join(STATS_VALIDATION, 'stats_threshold2.csv')
+STATS_VALIDATION2_REALISTIC = os.path.join(STATS_VALIDATION, 'stats_realistic2.csv')
 SPARCIFY_LOG = 'sparcify_log.txt'
 
+
 logging = setup_logger(name=SPARCIFY_LOG, log_file=SPARCIFY_LOG)
+
+def get_trajectory_df_from_txt(file_path:str) -> gpd.GeoDataFrame:
+    """
+    Summary:
+        Reads a trajectory txt file, add meta data and returns is as a dataframe with srid 3857
+        
+    Args:
+        file_path (str): file_path to txt file with trajectory
+
+    Returns:
+        gpd.GeoDataFrame: trajectory as a dataframe
+    """
+    try:
+        df = pd.read_csv(file_path, header=0)
+        
+        if (df.empty):
+            logging.warning(f'No coordinates to extract for {file_path}')
+            print('issue......')
+            quit()
+
+        df = gpd.GeoDataFrame(df, geometry=gpd.points_from_xy(df['longitude'], df['latitude']), crs="EPSG:4326")
+        df = df.sort_values(by='timestamp')
+        df = add_meta_data(trajectory_df=df)
+        return df
+    except Exception as e:
+        logging.warning(f'Error occurred trying to retrieve trajectory csv: {repr(e)}')
+
+def add_meta_data(trajectory_df: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    # add meta data
+    gdf_next = trajectory_df.shift(-1)
+    trajectory_df, gdf_next = get_radian_and_radian_diff_columns(trajectory_df, gdf_next)
+    
+    bearing_df = calculate_initial_compass_bearing(df_curr=trajectory_df, df_next=gdf_next)
+    trajectory_df['cog'] = trajectory_df['cog'].fillna(bearing_df)
+
+    trajectory_df['dist'] = get_haversine_dist_df_in_meters(df_curr=trajectory_df, df_next=gdf_next).fillna(0)
+    # Calculate the time difference between consecutive points    
+    time_differences = gdf_next['timestamp'] - trajectory_df['timestamp']
+    time_differences = time_differences.fillna(0)
+
+    # Calculate speed for points with subsequent points available
+    speeds_mps = trajectory_df['dist'] / time_differences
+    speeds_mps.fillna(0, inplace=True)
+    
+    trajectory_df['speed_mps'] = speeds_mps
+    trajectory_df['speed_knots'] = trajectory_df['speed_mps'] * 1.943844
+    
+    return trajectory_df
+
+def sparcify_trajectories_with_meters_gaps_by_treshold(filepath:str, folderpath: str, stats, output_json:str, threshold:float = 0.0, boundary_box:Polygon = None):
+    try:
+        os_split = '/' if '/' in filepath else '\\'
+        reduced_points:int = 0
+        number_of_vessel_samples:int = 0
+                                
+        trajectory_df:gpd.GeoDataFrame = get_trajectory_df_from_txt(file_path=filepath)
+        filename = os.path.basename(filepath)
+        gaps_folder =  os.path.join(folderpath, 'many_gap')
+        gaps_folder = os.path.join(gaps_folder, f'{threshold}'.replace('.', '_'))
+        vessel_folder = filepath.split(os_split)[-3]
+        vessel_folder_path = os.path.join(gaps_folder, vessel_folder)
+        new_filepath = os.path.join(vessel_folder_path, filename)
+        
+        trajectory_df['group'] = 0
+        
+        distances = trajectory_df['dist'].to_numpy()
+
+        total_dist = distances.sum()
+
+        if total_dist < threshold:
+            return
+
+        if boundary_box:
+            gdf_bbox = gpd.GeoDataFrame([1], geometry=[boundary_box], crs="EPSG:4326").geometry.iloc[0] 
+            trajectory_df['within_boundary_box'] = trajectory_df.within(gdf_bbox)               
+            change_detected = trajectory_df['within_boundary_box'] != trajectory_df['within_boundary_box'].shift(1)
+            trajectory_df['group'] = change_detected.cumsum()
+            
+            # Find the largest group within the boundary box
+            group_sizes = trajectory_df[trajectory_df['within_boundary_box']].groupby('group').size()
+            valid_groups = group_sizes[group_sizes >= 2]
+
+            if not valid_groups.empty:
+                largest_group_id = valid_groups.idxmax()
+
+                # Filter trajectory points based on the largest group within the boundary box
+                trajectory_filtered_df = trajectory_df[(trajectory_df['group'] == largest_group_id) & trajectory_df['within_boundary_box']]
+                distances = trajectory_filtered_df['dist'].to_numpy()
+                distances[-1] = 0
+                total_dist = distances.sum()
+
+                if total_dist < threshold:
+                    return
+                
+                # Update total number of points
+                number_of_vessel_samples = len(trajectory_filtered_df)
+            else:
+                # No valid groups within the boundary box
+                return
+        else:
+            # If no boundary box is provided, use the original dataframe
+            trajectory_filtered_df = trajectory_df
+            number_of_vessel_samples = len(trajectory_filtered_df)
+        
+        if number_of_vessel_samples < 2:
+            return        
+
+        keep = np.full(shape=number_of_vessel_samples, fill_value=False, dtype=bool)
+   
+        curr_distance = 0
+        prev_point = 0
+        for i in range(1, number_of_vessel_samples):
+            curr_distance += distances[prev_point]
+            prev_point = i
+            if (curr_distance > threshold):
+                keep[i] = True
+                curr_distance = 0
+
+        keep[0] = keep[-1] = True # keep first and last
+
+        os.makedirs(vessel_folder_path, exist_ok=True)  # Create the folder if it doesn't exist
+        
+        sparse_trajectory_df = trajectory_filtered_df[keep]
+        sparse_trajectory_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'navigational_status', 'speed_mps', 'speed_knots']].reset_index(drop=True).to_csv(new_filepath, sep=',', index=True, header=True, mode='w')
+
+        reduced_points = len(trajectory_filtered_df) - len(sparse_trajectory_df)    
+        
+        stats.output_folder = gaps_folder
+        stats.threshold = threshold
+        stats.vessel_samples = number_of_vessel_samples
+        stats.reduced = reduced_points
+        stats.total_distance = total_dist
+        stats.vessel_type = vessel_folder
+        stats.add_to_file(output_json)
+
+    except Exception as e:
+        logging.error(f'Error occurred with: {repr(e)}')
+        quit()
+
+def sparcify_trajectories_realisticly(filepath:str, folderpath: str, stats, output_json:str, boundary_box:Polygon = None):
+    try:    
+        os_split = '/' if '/' in filepath else '\\'
+        reduced_vessel_samples:int = 0
+        number_of_vessel_samples:int = 0
+        
+        trajectory_df:gpd.GeoDataFrame = get_trajectory_df_from_txt(file_path=filepath)
+        filename = os.path.basename(filepath)
+        folderpath = os.path.join(folderpath, 'realistic')
+        vessel_folder = filepath.split(os_split)[-3]
+        vessel_folder_path = os.path.join(folderpath, vessel_folder)
+        new_filepath = os.path.join(vessel_folder_path, filename)
+        trajectory_df['group'] = 0
+        
+        total_dist = trajectory_df['dist'].sum()
+
+        if boundary_box:
+            gdf_bbox = gpd.GeoDataFrame([1], geometry=[boundary_box], crs="EPSG:4326").geometry.iloc[0] 
+            trajectory_df['within_boundary_box'] = trajectory_df.within(gdf_bbox)            
+            change_detected = trajectory_df['within_boundary_box'] != trajectory_df['within_boundary_box'].shift(1)
+            trajectory_df['group'] = change_detected.cumsum()
+            
+            # Find the largest group within the boundary box
+            group_sizes = trajectory_df[trajectory_df['within_boundary_box']].groupby('group').size()
+            valid_groups = group_sizes[group_sizes >= 2]
+
+            if not valid_groups.empty:
+                largest_group_id = valid_groups.idxmax()
+
+                # Filter trajectory points based on the largest group within the boundary box
+                trajectory_filtered_df = trajectory_df[(trajectory_df['group'] == largest_group_id) & trajectory_df['within_boundary_box']]
+
+                # Update total number of points
+                number_of_vessel_samples = len(trajectory_filtered_df)
+            else:
+                # No valid groups within the boundary box
+                return
+        else:
+            # If no boundary box is provided, use the original dataframe
+            trajectory_filtered_df = trajectory_df
+            total_dist = trajectory_filtered_df['dist'].sum()
+            number_of_vessel_samples = len(trajectory_filtered_df)
+            if number_of_vessel_samples < 2:
+                return
+        
+        if number_of_vessel_samples < 2:
+            return       
+        
+        os.makedirs(vessel_folder_path, exist_ok=True)  # Create the folder if it doesn't exist
+
+        if number_of_vessel_samples > 2:
+            # Convert relevant columns to numpy arrays for faster access
+            timestamps = trajectory_filtered_df['timestamp'].to_numpy()
+            speed_knots = trajectory_filtered_df['speed_knots'].to_numpy()
+            navigational_status = trajectory_filtered_df['navigational_status'].to_numpy()
+            cogs = trajectory_filtered_df['cog'].to_numpy()
+        
+            # Pre-allocate a boolean array to mark points to keep
+            keep = np.full(shape=len(trajectory_filtered_df), fill_value=False, dtype=bool)
+            stationed_navigational_status = ['anchored', 'moored']
+            
+            #first point is always kept
+            last_kept_index = 0
+
+            # Loop over points starting from the second one
+            for i in range(1, len(trajectory_filtered_df)):
+                time_diff = timestamps[i] - timestamps[last_kept_index]
+                speed_last_kept = speed_knots[last_kept_index]
+                navigation_last_kept = navigational_status[last_kept_index]
+                cog_last_kept = cogs[last_kept_index]
+                
+                speed_curr = speed_knots[i]
+                navigation_curr = navigational_status[i]
+                cog_curr = cogs[i]
+                    
+                keep_conditions = (navigation_last_kept in stationed_navigational_status and navigation_curr in stationed_navigational_status and time_diff > 180) or \
+                                (navigation_last_kept in stationed_navigational_status and time_diff > 180) or \
+                                (0 <= speed_last_kept <= 14 and 0 <= speed_curr <= 14 and time_diff > 10) or \
+                                (0 <= speed_last_kept <= 14 and 0 <= speed_curr <= 14 and cog_last_kept != cog_curr and time_diff > 3.33) or \
+                                (14 < speed_last_kept <= 23 and 14 < speed_curr <= 23 and time_diff > 6) or \
+                                (14 < speed_last_kept <= 23 and 14 < speed_curr <= 23 and time_diff > 6 and cog_last_kept != cog_curr and time_diff > 2) or \
+                                (speed_last_kept > 23 and speed_curr > 23 and time_diff > 2) or \
+                                (speed_last_kept > 23 and speed_curr > 23 and cog_last_kept != cog_curr and time_diff > 2) or \
+                                (0 <= speed_last_kept <= 14 and cog_last_kept != cog_curr and time_diff > 3.33 and time_diff > 3.33) or \
+                                (0 <= speed_last_kept <= 14 and time_diff > 10) or \
+                                (14 < speed_last_kept <= 23 and cog_last_kept != cog_curr and time_diff > 2) or \
+                                (14 < speed_last_kept <= 23 and time_diff > 6) or \
+                                (speed_last_kept > 23 and time_diff > 2)
+
+                
+                # If the condition is false, mark the current point to be kept
+                if keep_conditions:
+                    keep[i] = True
+                    last_kept_index = i
+
+            keep[0] = keep[-1] = True # keep first and last
+
+            sparse_trajectory_df = trajectory_filtered_df[keep]
+            sparse_trajectory_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'navigational_status', 'speed_mps', 'speed_knots']].reset_index(drop=True).to_csv(new_filepath, sep=',', index=True, header=True, mode='w')                
+            
+            
+            reduced_vessel_samples = len(trajectory_filtered_df) - len(sparse_trajectory_df)
+        else:
+            trajectory_filtered_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'navigational_status', 'speed_mps', 'speed_knots']].to_csv(new_filepath, sep=',', index=True, header=True, mode='w')     
+        
+        stats.output_folder = folderpath
+        stats.threshold = 0
+        stats.vessel_samples = number_of_vessel_samples
+        stats.reduced = reduced_vessel_samples
+        stats.total_distance = total_dist
+        stats.vessel_type = vessel_folder
+        stats.add_to_file(output_json)
+
+    except Exception as e:
+        logging.error(f'Error occurred with: {repr(e)}')    
+        quit()
+
+def sparcify_realisticly_strict_trajectories(filepath:str, folderpath: str, stats, output_json:str, boundary_box:Polygon = None):
+    try:
+        os_split = '/' if '/' in filepath else '\\'
+        reduced_vessel_samples:int = 0
+        number_of_vessel_samples:int = 0
+  
+        trajectory_df:gpd.GeoDataFrame = get_trajectory_df_from_txt(file_path=filepath)
+        filename = os.path.basename(filepath)
+        folderpath = os.path.join(folderpath, 'realistic_strict')
+        vessel_folder = filepath.split(os_split)[-3]
+        vessel_folder_path = os.path.join(folderpath, vessel_folder)
+        new_filepath = os.path.join(vessel_folder_path, filename)
+        
+        trajectory_df['group'] = 0
+        total_dist = trajectory_df['dist'].sum()
+        
+        if boundary_box:
+            gdf_bbox = gpd.GeoDataFrame([1], geometry=[boundary_box], crs="EPSG:4326").geometry.iloc[0] 
+            trajectory_df['within_boundary_box'] = trajectory_df.within(gdf_bbox)                   
+            change_detected = trajectory_df['within_boundary_box'] != trajectory_df['within_boundary_box'].shift(1)
+            trajectory_df['group'] = change_detected.cumsum()
+            
+            # Find the largest group within the boundary box
+            group_sizes = trajectory_df[trajectory_df['within_boundary_box']].groupby('group').size()
+            valid_groups = group_sizes[group_sizes >= 2]
+
+            if not valid_groups.empty:
+                largest_group_id = valid_groups.idxmax()
+
+                # Filter trajectory points based on the largest group within the boundary box
+                trajectory_filtered_df = trajectory_df[(trajectory_df['group'] == largest_group_id) & trajectory_df['within_boundary_box']]
+
+                # Update total number of points
+                number_of_vessel_samples = len(trajectory_filtered_df)
+
+                total_dist = trajectory_filtered_df['dist'].sum()
+            else:
+                # No valid groups within the boundary box
+                return
+        else:
+            # If no boundary box is provided, use the original dataframe
+            trajectory_filtered_df = trajectory_df
+            number_of_vessel_samples = len(trajectory_filtered_df)
+        
+        if number_of_vessel_samples < 2:
+            return
+        os.makedirs(vessel_folder_path, exist_ok=True)  # Create the folder if it doesn't exist
+        
+        if number_of_vessel_samples > 2:
+            # Convert relevant columns to numpy arrays for faster access
+            timestamps = trajectory_filtered_df['timestamp'].to_numpy()
+            speed_knots = trajectory_filtered_df['speed_knots'].to_numpy()
+            navigational_status = trajectory_filtered_df['navigational_status'].to_numpy()
+            cogs = trajectory_filtered_df['cog'].to_numpy()
+
+            # Pre-allocate a boolean array to mark points to keep
+            keep = np.full(shape=len(trajectory_filtered_df), fill_value=False, dtype=bool)
+            stationed_navigational_status = ['anchored', 'moored']
+            
+            # Loop over points starting from the second one
+            last_kept_index = 0
+
+            for i in range(1, len(trajectory_filtered_df)):
+                time_diff = timestamps[i] - timestamps[last_kept_index]
+                speed_last_kept = speed_knots[last_kept_index]
+                navigation_last_kept = navigational_status[last_kept_index]
+                cog_last_kept = cogs[last_kept_index]
+                
+                speed_curr = speed_knots[i]
+                navigation_curr = navigational_status[i]
+                cog_curr = cogs[i]
+                
+                keep_conditions = (navigation_last_kept in stationed_navigational_status and navigation_curr in stationed_navigational_status and time_diff > 180) or \
+                                (0 <= speed_last_kept <= 14 and 0 <= speed_curr <= 14 and time_diff > 10) or \
+                                (0 <= speed_last_kept <= 14 and 0 <= speed_curr <= 14 and cog_last_kept != cog_curr and time_diff > 3.33) or \
+                                (14 < speed_last_kept <= 23 and 14 < speed_curr <= 23 and time_diff > 6) or \
+                                (14 < speed_last_kept <= 23 and 14 < speed_curr <= 23 and time_diff > 6 and cog_last_kept != cog_curr and time_diff > 2) or \
+                                (speed_last_kept > 23 and speed_curr > 23 and time_diff > 2) or \
+                                (speed_last_kept > 23 and speed_curr > 23 and cog_last_kept != cog_curr and time_diff > 2) 
+
+                # If the condition is false, mark the current point to be kept
+                if keep_conditions:
+                    keep[i] = True
+                    last_kept_index = i
+            
+            keep[0] = keep[-1] = True # keep first and last
+
+            sparse_trajectory_df = trajectory_filtered_df[keep]
+            sparse_trajectory_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'navigational_status', 'speed_mps', 'speed_knots']].reset_index(drop=True).to_csv(new_filepath, sep=',', index=True, header=True, mode='w')        
+            reduced_vessel_samples = len(trajectory_filtered_df) - len(sparse_trajectory_df)
+        else:
+            if number_of_vessel_samples == 2:
+                trajectory_filtered_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'navigational_status', 'speed_mps', 'speed_knots']].to_csv(new_filepath, sep=',', index=True, header=True, mode='w')     
+                
+        stats.output_folder = folderpath
+        stats.threshold = 0
+        stats.vessel_samples = number_of_vessel_samples
+        stats.reduced = reduced_vessel_samples
+        stats.total_distance = total_dist
+        stats.vessel_type = vessel_folder
+        stats.add_to_file(output_json)
+    except Exception as e:
+        print(e)
+        quit()
+
+def sparcify_large_meter_gap_by_threshold(filepath:str, folderpath: str, stats, output_json:str, threshold:float = 0.0, boundary_box:Polygon = None):
+    try:
+        os_split = '/' if '/' in filepath else '\\'
+        reduced_vessel_samples = 0
+        number_of_vessel_samples = 0
+          
+        trajectory_df = get_trajectory_df_from_txt(file_path=filepath)
+        filename = os.path.basename(filepath)
+        gap_folder =  os.path.join(folderpath, 'single_gap')
+        gap_folder = os.path.join(gap_folder, f'{threshold}'.replace('.', '_'))
+        vessel_folder = filepath.split(os_split)[-3]
+        vessel_folder_path = os.path.join(gap_folder, vessel_folder)
+        new_filepath = os.path.join(vessel_folder_path, filename)
+
+        distances = trajectory_df['dist'].to_numpy()
+
+        total_dist = distances.sum()
+
+        if total_dist < threshold:
+            return
+
+        trajectory_df['group'] = 0
+        
+        if boundary_box:
+            gdf_bbox = gpd.GeoDataFrame([1], geometry=[boundary_box], crs="EPSG:4326").geometry.iloc[0] 
+            trajectory_df['within_boundary_box'] = trajectory_df.within(gdf_bbox)            
+            change_detected = trajectory_df['within_boundary_box'] != trajectory_df['within_boundary_box'].shift(-1)
+            trajectory_df['group'] = change_detected.cumsum()
+            
+            # Find the largest group within the boundary box
+            group_sizes = trajectory_df[trajectory_df['within_boundary_box']].groupby('group').size()
+            valid_groups = group_sizes[group_sizes >= 2]
+
+            if not valid_groups.empty:
+                largest_group_id = valid_groups.idxmax()
+
+                # Filter trajectory points based on the largest group within the boundary box
+                trajectory_filtered_df = trajectory_df[(trajectory_df['group'] == largest_group_id) & trajectory_df['within_boundary_box']]
+                distances = trajectory_filtered_df['dist'].to_numpy()
+                distances[-1] = 0
+                total_dist = distances.sum()
+
+                if total_dist < threshold:
+                    return
+                
+                # Update total number of points
+                number_of_vessel_samples = len(trajectory_filtered_df)
+
+            else:
+                # No valid groups within the boundary box
+                return
+        else:
+            # If no boundary box is provided, use the original dataframe
+            trajectory_filtered_df = trajectory_df
+            number_of_vessel_samples = len(trajectory_filtered_df)
+            
+        if number_of_vessel_samples < 2:
+            return
+        keep = np.full(shape=number_of_vessel_samples, fill_value=False, dtype=bool)
+
+        curr_distance = 0
+        prev_point = 0
+        for i in range(1, number_of_vessel_samples):
+            curr_distance += distances[prev_point]
+            prev_point = i
+            if (curr_distance > threshold):
+                keep[i] = True
+                keep[i+1:] = [True] * (number_of_vessel_samples - i - 1)  # Set all subsequent entries to True
+                break
+
+        keep[0] = keep[-1] = True # keep first and last
+
+        os.makedirs(vessel_folder_path, exist_ok=True)  # Create the folder if it doesn't exist
+        
+        sparse_trajectory_df = trajectory_filtered_df[keep]
+        sparse_trajectory_df[['latitude', 'longitude', 'timestamp', 'sog', 'cog', 'draught', 'ship_type', 'navigational_status', 'speed_mps', 'speed_knots']].reset_index(drop=True).to_csv(new_filepath, sep=',', index=True, header=True, mode='w')
+
+        reduced_vessel_samples = len(trajectory_filtered_df) - len(sparse_trajectory_df)
+        
+        stats.output_folder = gap_folder
+        stats.threshold = threshold
+        stats.vessel_samples = number_of_vessel_samples
+        stats.reduced = reduced_vessel_samples
+        stats.total_distance = total_dist
+        stats.vessel_type = vessel_folder
+        stats.add_to_file(output_json)
+
+    except Exception as e:
+        logging.error(f'Error occurred with: {repr(e)}')
+        quit()
+
+def check_if_trajectory_is_dense(trajectory_df: pd.DataFrame) -> bool:
+    try:    
+        # Convert timestamps to numpy array for efficient calculations
+        timestamps = trajectory_df['timestamp'].to_numpy()
+
+        # Calculate the time differences between consecutive points
+        time_diffs = np.diff(timestamps)
+
+        # Check if all differences are less than or equal to the 30 seconds
+        return np.all(time_diffs <= 30)
+    except Exception as e:
+        logging.error(f'Error occurred with: {repr(e)}')    
+        quit()
 
 def write_trajectories_for_area(file:str, outputfolder: str, output_json:str):
     aalborg_harbor_to_kattegat_path = os.path.join(outputfolder, 'aalborg_harbor_to_kattegat')
     skagen_harbor_path = os.path.join(outputfolder, 'skagen_harbor')
+    cells_path = os.path.join(outputfolder, 'cells')
     
     outputfolders = [
         (aalborg_harbor_to_kattegat_path, aalborg_harbor_to_kattegat_bbox),
-        (skagen_harbor_path, skagens_harbor_bbox)]
+        (skagen_harbor_path, skagens_harbor_bbox),
+        (cells_path, cells_bbox)]
     
     if ('test' not in outputfolder):
         brunsbuettel_to_kiel_path = os.path.join(outputfolder, 'brunsbuettel_to_kiel')
         doggersbank_to_lemvig_path = os.path.join(outputfolder, 'doggersbank_to_lemvig')
-
+        
         outputfolders.append((brunsbuettel_to_kiel_path, brunsbuettel_to_kiel_polygon))
         outputfolders.append((doggersbank_to_lemvig_path, doggersbank_to_lemvig_bbox))
     
@@ -70,10 +546,12 @@ def write_trajectories_for_all(file: str, outputfolder:str, output_json:str):
 def write_trajectories_for_area_with_threshold(file:str, outputfolder: str, threshold:float, output_json:str):
     aalborg_harbor_to_kattegat_path = os.path.join(outputfolder, 'aalborg_harbor_to_kattegat')
     skagen_harbor_path = os.path.join(outputfolder, 'skagen_harbor')
-    
+    cells_path = os.path.join(outputfolder, 'cells')
+
     outputfolders = [
         (aalborg_harbor_to_kattegat_path, aalborg_harbor_to_kattegat_bbox),
-        (skagen_harbor_path, skagens_harbor_bbox)]
+        (skagen_harbor_path, skagens_harbor_bbox),
+        (cells_path, cells_bbox)]
     
     if ('test' not in outputfolder):
         brunsbuettel_to_kiel_path = os.path.join(outputfolder, 'brunsbuettel_to_kiel')
@@ -402,68 +880,50 @@ def find_cell_input_files():
 
     logging.info('Finished finding area input files')        
 
-threshold_values = [500, 1000, 2000, 4000, 8000]
-# test_all_threshold = os.path.join(STATS_TEST_ALL, 'all_threshold.json')
-# test_area_threshold = os.path.join(STATES_TEST_AREA, 'area_threshold.json')
-# test_all_realistic = os.path.join(STATS_TEST_ALL, 'all_realistic.json')
-# test_area_realistic = os.path.join(STATES_TEST_AREA, 'area_realistic.json')
-validation_all_threshold = os.path.join(STATS_VALIDATION_ALL, 'all_threshold.json')
-validation_area_threshold = os.path.join(STATS_VALIDATIOM_AREA, 'area_threshold.json')
-validation_all_realistic = os.path.join(STATS_VALIDATION_ALL, 'all_realistic.json')
-validation_area_realistic = os.path.join(STATS_VALIDATIOM_AREA, 'area_realistic.json')
+def make_test_and_validation_data():
+    threshold_values = [500, 1000, 2000, 4000, 8000]
+    # test_all_threshold = os.path.join(STATS_TEST_ALL, 'all_threshold.json')
+    # test_area_threshold = os.path.join(STATES_TEST_AREA, 'area_threshold.json')
+    # test_all_realistic = os.path.join(STATS_TEST_ALL, 'all_realistic.json')
+    # test_area_realistic = os.path.join(STATES_TEST_AREA, 'area_realistic.json')
+    validation_all_threshold = os.path.join(STATS_VALIDATION_ALL, 'all_threshold2.json')
+    validation_area_threshold = os.path.join(STATS_VALIDATION_AREA, 'area_threshold2.json')
+    validation_all_realistic = os.path.join(STATS_VALIDATION_ALL, 'all_realistic2.json')
+    validation_area_realistic = os.path.join(STATS_VALIDATION_AREA, 'area_realistic2.json')
 
-# os.makedirs(STATS_TEST_ALL, exist_ok=True)
-# os.makedirs(STATES_TEST_AREA, exist_ok=True)
-os.makedirs(STATS_VALIDATION_ALL, exist_ok=True)
-os.makedirs(STATS_VALIDATIOM_AREA, exist_ok=True)
-stats = Sparse_Statistics()
+    # os.makedirs(STATS_TEST_ALL, exist_ok=True)
+    # os.makedirs(STATES_TEST_AREA, exist_ok=True)
+    os.makedirs(STATS_VALIDATION_ALL, exist_ok=True)
+    os.makedirs(STATS_VALIDATION_AREA, exist_ok=True)
+    stats = Sparse_Statistics()
 
-# test_files = list(Path(INPUT_TEST_DATA_FOLDER_ORIGINAL_FOLDER).rglob('*.txt')) # List all files in the directory recursively
-# test_files = [str(path) for path in test_files] # Convert Path objects to strings
+    print('gettings vessels folders')
+    vessel_folders = [folder for folder in Path(INPUT_TEST_DATA_FOLDER_ORIGINAL_FOLDER).iterdir() if folder.is_dir()]
+    # Traverse 
+    print('making data for validation')
+    for folder in vessel_folders:
+        if (folder.name.lower() == 'fishing'):
+            continue
+        vessel_files = list(folder.rglob('*.txt'))
+        vessel_files = [str(path) for path in vessel_files]
+        random_files = []
+        try:
+            random_files = random.sample(vessel_files, 50)
+        except Exception:
+            random_files = vessel_files
+        
+        for file in random_files:
+            for threshold in threshold_values:
+                write_trajectories_for_all_with_threshold(file, INPUT_VALIDATION_SPARSED2_ALL_FOLDER, threshold=threshold, output_json=validation_all_threshold)
+                write_trajectories_for_area_with_threshold(file, INPUT_VALIDATION_SPARSED2_AREA_FOLDER, threshold=threshold, output_json=validation_area_threshold)
 
-# random_test_files_to_move = random.sample(test_files, 1000)
+            write_trajectories_for_all(file, INPUT_VALIDATION_SPARSED2_ALL_FOLDER, output_json=validation_all_realistic)
+            write_trajectories_for_area(file, INPUT_VALIDATION_SPARSED2_AREA_FOLDER, output_json=validation_area_realistic)
 
-# print('making data for test')
-# for file in random_test_files_to_move:
-#     for threshold in threshold_values:
-#         write_trajectories_for_all_with_threshold(file, INPUT_TEST_SPARSED_ALL_FOLDER, threshold=threshold, output_json=test_all_threshold)
-#         write_trajectories_for_area_with_threshold(file, INPUT_TEST_SPARSED_AREA_FOLDER, threshold=threshold, output_json=test_area_threshold)
+    print('making stats for validation')
+    stats.make_statistics_with_threshold(validation_all_threshold)
+    stats.make_statistics_with_threshold(validation_area_threshold)
+    stats.make_statistics_no_threshold(validation_all_realistic)
+    stats.make_statistics_no_threshold(validation_area_realistic)
 
-#     write_trajectories_for_all(file, INPUT_TEST_SPARSED_ALL_FOLDER, output_json=test_all_realistic)
-#     write_trajectories_for_area(file, INPUT_TEST_SPARSED_AREA_FOLDER, output_json=test_area_realistic)
-
-# print('making stats for test with')
-# stats.make_statistics_with_threshold(test_all_threshold)
-# stats.make_statistics_with_threshold(test_area_threshold)
-# stats.make_statistics_no_threshold(test_all_realistic)
-# stats.make_statistics_no_threshold(test_area_realistic)
-
-paths = []
-print('gettings vessels folders')
-vessel_folders = [folder for folder in Path(INPUT_VALIDATION_DATA_ORIGINAL_FOLDER).iterdir() if folder.is_dir()]
-# Traverse 
-print('making data for validation')
-for folder in vessel_folders:
-    if (folder.name.lower() == 'fishing'):
-        continue
-    vessel_files = list(folder.rglob('*.txt'))
-    vessel_files = [str(path) for path in vessel_files]
-    random_files = []
-    try:
-        random_files = random.sample(vessel_files, 50)
-    except Exception:
-        random_files = vessel_files
-
-    for file in random_files:
-        for threshold in threshold_values:
-            write_trajectories_for_all_with_threshold(file, INPUT_VALIDATION_SPARSED_ALL_FOLDER, threshold=threshold, output_json=validation_all_threshold)
-            write_trajectories_for_area_with_threshold(file, INPUT_VALIDATION_SPARSED_AREA_FOLDER, threshold=threshold, output_json=validation_area_threshold)
-
-        write_trajectories_for_all(file, INPUT_VALIDATION_SPARSED_ALL_FOLDER, output_json=validation_all_realistic)
-        write_trajectories_for_area(file, INPUT_VALIDATION_SPARSED_AREA_FOLDER, output_json=validation_area_realistic)
-
-print('making stats for validation')
-stats.make_statistics_with_threshold(validation_all_threshold)
-stats.make_statistics_with_threshold(validation_area_threshold)
-stats.make_statistics_no_threshold(validation_all_realistic)
-stats.make_statistics_no_threshold(validation_area_realistic)
+make_test_and_validation_data()

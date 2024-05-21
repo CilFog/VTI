@@ -297,7 +297,7 @@ class Sparse_Statistics:
 
             os.makedirs(filepath, exist_ok=True)
 
-            filepath_stats = os.path.join(filepath, f'{folder_name}.csv')
+            filepath_stats = os.path.join(filepath, f'{folder_name}2.csv')
             
             # Writing DataFrame to CSV
             df_stats.to_csv(filepath_stats)
@@ -312,6 +312,6 @@ class Sparse_Statistics:
             vessel_dict['Total'] = group['Vessel Type'].count()
 
             df_vessel = pd.DataFrame(vessel_dict, index=[0])
-            vessel_file = os.path.join(filepath, f'{folder_name}_vessels_stats.csv')
+            vessel_file = os.path.join(filepath, f'{folder_name}_vessels_stats2.csv')
 
             df_vessel.to_csv(vessel_file)

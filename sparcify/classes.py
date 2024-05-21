@@ -46,5 +46,5 @@ brunsbuettel_to_kiel_polygon:Polygon = Polygon([(9.148469, 53.8867593),
 
 aalborg_harbor_to_kattegat_bbox:Polygon = box(minx=9.841940, miny=56.970433, maxx=10.416415, maxy=57.098774)
 doggersbank_to_lemvig_bbox:Polygon = box(minx=3.5, miny=54.5, maxx=8.5, maxy=56.5)
-skagens_harbor_bbox:Polygon = box(minx=10.39820, miny=57.54558, maxx=11.14786, maxy=58.41927)
-
+skagens_harbor_bbox:Polygon = box(minx=10.39820, miny=57.54558, maxx=11.14786, maxy=57.940711462450594)
+cells_bbox:Polygon = box(minx=9.425769493249735, miny=56.59324469996407, maxx=11.835433053218384, maxy=57.940711462450594)
