@@ -79,17 +79,16 @@ def load_intersecting_graphs_process_trajectories(type, size, sparse_trajectorie
 
 CELLS = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'VTI//data//cells.txt')
 
-node_dist_threshold = [0.0006, 0.0008, 0.0012, 0.00014]
-edge_dist_threshold = 0.0024 
+node_dist_threshold = [0.0008]
+edge_dist_threshold = 0.0016 
 cog_angle_threshold = 180
-graph_output_name = 'skagen_adjust_dist'
+graph_output_name = 'final_graph_skagen'
     
 for node_dist_threshold in node_dist_threshold:
+    edge_dist_threshold = node_dist_threshold * 2 
     graph_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI//data//output_graph//{graph_output_name}_{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}')
     cells_data = pd.read_csv(CELLS, index_col='cell_id')
-    
-    edge_dist_threshold = node_dist_threshold * 2 
-    
+
     """
         Create graphs and connect them
     """
@@ -101,7 +100,7 @@ for node_dist_threshold in node_dist_threshold:
     """
 
     # sparse = [1000] # 500, 1000, 2000, 4000, 8000
-    # types = ['single_gap'] #'many_gap', 'single_gap', 'realistic'
+    # types = ['many_gap', 'single_gap', 'realistic'] #'many_gap', 'single_gap', 'realistic'
     # for size in sparse:
     #     for type in types:
     #         if type == 'realistic':
@@ -111,8 +110,9 @@ for node_dist_threshold in node_dist_threshold:
                 
     #         load_all_graph_process_trajectories(type, size, sparse_trajectories, graph_path, node_dist_threshold, edge_dist_threshold, cog_angle_threshold)
 
-            #print("comparing trajectories")
+            # print("comparing trajectories")
             # imputed_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI/data/output_imputation/{type}/{size}/{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}')
+            # sparsed_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI//data//input_imputation//test//sparsed//all//{type}//{size}')
             # original_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'VTI/data/input_imputation/test/original')
-            # find_all_and_compare(imputed_trajectories, original_trajectories, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, size, type)
+            # find_all_and_compare(imputed_trajectories, original_trajectories, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, size, type, sparsed_trajectories)
 
