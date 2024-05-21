@@ -312,7 +312,7 @@ def create_graphs_for_cells(node_threshold, edge_threshold, cog_threshold, graph
 
     stats_df = pd.DataFrame(stats_list)
 
-    stats_df.to_csv(os.path.join(STATS_OUTPUT, f'solution_stats//{node_threshold}_{edge_threshold}_{cog_threshold}_graph.csv'), index=False)
+    stats_df.to_csv(os.path.join(STATS_OUTPUT, f'solution_stats//{node_threshold}_{edge_threshold}_{cog_threshold}_final.csv'), index=False)
     return stats_df
 
 def load_geojson(file_path):
@@ -323,7 +323,7 @@ def create_graph_from_geojson(nodes_geojson_path, edges_geojson_path):
     if not os.path.exists(nodes_geojson_path) or not os.path.exists(edges_geojson_path):
         return None
 
-    G = nx.DiGraph()
+    G = nx.Graph()
     
     # Load GeoJSON files
     nodes_geojson = load_geojson(nodes_geojson_path)
