@@ -102,13 +102,13 @@ def compare_linear(imputed_trajectory_path, original_trajectory_path, node_dist_
     
         for root, _, files in os.walk(sparsed_trajectories):
             for file in files:
-                print(file)
                 file_path = os.path.join(root, file)
                 sparsed_trajectory = load_csv_extract_coordinates(file_path)
 
                 for r, _, f in os.walk(original_trajectory_path):
                     for ff in f:
                         if ff == file:
+                            print(f"Processing {f}")
                             ofile_path = os.path.join(r, ff)
                             original_trajectory = load_csv_extract_coordinates(ofile_path)
                 
