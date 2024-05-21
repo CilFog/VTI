@@ -100,54 +100,30 @@ def compare_linear(imputed_trajectory_path, original_trajectory_path, node_dist_
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
     
-    # for root, _, files in os.walk(sparsed_trajectories):
-    #     for file in files:
-    #         file_path = os.path.join(root, file)
-    #         sparsed_trajectory = load_csv_extract_coordinates(file_path)
-    #         print(file)
+    for root, _, files in os.walk(sparsed_trajectories):
+        for file in files:
+            file_path = os.path.join(root, file)
+            sparsed_trajectory = load_csv_extract_coordinates(file_path)
 
-    #         for r, _, f in os.walk(original_trajectory_path):
-    #             for ff in f:
-    #                 if ff == file:
-    #                     ofile_path = os.path.join(r, ff)
-    #                     original_trajectory = load_csv_extract_coordinates(ofile_path)
+            for r, _, f in os.walk(original_trajectory_path):
+                for ff in f:
+                    if ff == file:
+                        ofile_path = os.path.join(r, ff)
+                        original_trajectory = load_csv_extract_coordinates(ofile_path)
             
-    #         original_len = len(original_trajectory)
-    #         linear_len = len(sparsed_trajectory)
-    #         dtw = dynamic_time_warping(original_trajectory, sparsed_trajectory)
-    #         fd = frechet_distance(original_trajectory, sparsed_trajectory)
-            
-    #         writer.writerow({
-    #             'Trajectory': file,
-    #             'Original Length': original_len,
-    #             'Linear Length': linear_len,
-    #             'DTW': dtw,
-    #             'Frechet Distance': fd
-    #         })
-
-    for file_path in glob.glob(os.path.join(sparsed_trajectories, '**', '*.txt'), recursive=True):
-        base_name = os.path.basename(file_path)
-        sparsed_trajectory = load_csv_extract_coordinates(file_path)
-
-        original_file_pattern = os.path.join(original_trajectory_path, '**', base_name)
-        original_file_list = glob.glob(original_file_pattern, recursive=True)
-
-        if original_file_list:
-            original_file_path = original_file_list[0]
-            original_trajectory = load_csv_extract_coordinates(original_file_path)
-
             original_len = len(original_trajectory)
             linear_len = len(sparsed_trajectory)
             dtw = dynamic_time_warping(original_trajectory, sparsed_trajectory)
             fd = frechet_distance(original_trajectory, sparsed_trajectory)
             
             writer.writerow({
-                'Trajectory': base_name,
+                'Trajectory': file,
                 'Original Length': original_len,
                 'Linear Length': linear_len,
                 'DTW': dtw,
                 'Frechet Distance': fd
             })
+
 
 
 def find_all_and_compare(imputed_trajectory_path, original_trajectory_path, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, path, type, sparsed_trajectories):
