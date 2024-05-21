@@ -100,7 +100,7 @@ for node_dist_threshold in node_dist_threshold:
     """
 
     sparse = [8000] # 500, 1000, 2000, 4000, 8000
-    types = ['single_gap'] #'many_gap', 'single_gap', 'realistic'
+    types = ['many_gap'] #'many_gap', 'single_gap', 'realistic'
     for size in sparse:
         for type in types:
             if type == 'realistic':
