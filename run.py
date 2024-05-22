@@ -98,14 +98,14 @@ for node_dist_threshold in node_dist_threshold:
         Impute all trajectories in test folder
     """
 
-    sparse = [8000] # 500, 1000, 2000, 4000, 8000
+    sparse = [2000] # 500, 1000, 2000, 4000, 8000
     types = ['many_gap', 'single_gap'] #'many_gap', 'single_gap', 'realistic'
     for size in sparse:
         for type in types:
             if type == 'realistic':
-                sparse_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI//data//input_imputation//validation//sparsed3//area//{type}')
+                sparse_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI//data//input_imputation//validation//sparsed2//all//{type}')
             else:
-                sparse_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI//data//input_imputation//validation//sparsed3//area//{type}//{size}')
+                sparse_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI//data//input_imputation//validation//sparsed2//all//{type}//{size}')
                 
             load_all_graph_process_trajectories(type, size, sparse_trajectories, graph_path, node_dist_threshold, edge_dist_threshold, cog_angle_threshold)
 
@@ -113,5 +113,6 @@ for node_dist_threshold in node_dist_threshold:
             # imputed_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI/data/output_imputation/all/{type}/{size}/{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}')
             # imputed_trajectories_gti = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI/data/output_imputation/area/{type}/{size}')
             # original_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'VTI/data/input_imputation/test/original')
+            
             # find_all_and_compare(imputed_trajectories, original_trajectories, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, size, type, sparse_trajectories, imputed_trajectories_gti)
 
