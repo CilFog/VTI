@@ -120,7 +120,7 @@ def generate_output_files_and_stats(G, imputed_paths, file_name, type, size, nod
             edges.append((path[i], path[i+1]))
 
     # Output path construction and file writing
-    IMPUTATION_OUTPUT_path = os.path.join(IMPUTATION_OUTPUT, f'{type}/{size}/{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}/{file_name}')
+    IMPUTATION_OUTPUT_path = os.path.join(IMPUTATION_OUTPUT, f'area/{type}/{size}/{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}/{file_name}')
     if not os.path.exists(IMPUTATION_OUTPUT_path):
         os.makedirs(IMPUTATION_OUTPUT_path)
 
@@ -138,7 +138,7 @@ def generate_output_files_and_stats(G, imputed_paths, file_name, type, size, nod
         'execution_time_seconds': add_execution_time + execution_time
     }
 
-    output_directory  = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'data/stats/imputation_stats/{type}/{size}')
+    output_directory  = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'data/stats/imputation_stats/area/{type}/{size}')
     os.makedirs(output_directory, exist_ok=True)
     stats_file = os.path.join(output_directory, f'{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}_imputation.csv')
 

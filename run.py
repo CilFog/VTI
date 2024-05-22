@@ -99,7 +99,7 @@ for node_dist_threshold in node_dist_threshold:
     """
 
     sparse = [4000, 2000, 1000] # 500, 1000, 2000, 4000, 8000
-    types = ['single_gap'] #'many_gap', 'single_gap', 'realistic'
+    types = ['many_gap', 'single_gap'] #'many_gap', 'single_gap', 'realistic'
     for size in sparse:
         for type in types:
             if type == 'realistic':
@@ -109,15 +109,15 @@ for node_dist_threshold in node_dist_threshold:
                 sparse_trajectories_gti = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI//data//input_imputation//validation//sparsed3//area//{type}//{size}')
                 sparse_trajectories_dgivt = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI//data//input_imputation//validation//sparsed2//all//{type}//{size}')
                 
-            #load_all_graph_process_trajectories(type, size, sparse_trajectories, graph_path, node_dist_threshold, edge_dist_threshold, cog_angle_threshold)
+            load_all_graph_process_trajectories(type, size, sparse_trajectories_gti, graph_path, node_dist_threshold, edge_dist_threshold, cog_angle_threshold)
 
-            print("comparing trajectories")
-            imputed_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI/data/output_imputation/all/{type}/{size}/{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}')
-            imputed_trajectories_gti = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI/data/output_imputation/area/{type}/{size}')
+            # print("comparing trajectories")
+            # imputed_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI/data/output_imputation/all/{type}/{size}/{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}')
+            # imputed_trajectories_gti = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI/data/output_imputation/area/{type}/{size}')
 
-            original_trajectories_gti = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'VTI/data/input_imputation/test/original_area')
-            original_trajectories_linear_dgivt = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'VTI/data/input_imputation/test/original')
+            # original_trajectories_gti = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'VTI/data/input_imputation/test/original_area')
+            # original_trajectories_linear_dgivt = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'VTI/data/input_imputation/test/original')
 
-            #compare_linear(original_trajectories_linear_dgivt, size, type, sparse_trajectories_dgivt)
-            #compare_imputed(imputed_trajectories, original_trajectories_linear_dgivt, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, size, type, sparse_trajectories_dgivt)
-            compare_gti(imputed_trajectories, original_trajectories_gti, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, size, type, sparse_trajectories_gti, imputed_trajectories_gti)
+            # #compare_linear(original_trajectories_linear_dgivt, size, type, sparse_trajectories_dgivt)
+            # #compare_imputed(imputed_trajectories, original_trajectories_linear_dgivt, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, size, type, sparse_trajectories_dgivt)
+            # compare_gti(imputed_trajectories, original_trajectories_gti, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, size, type, sparse_trajectories_gti, imputed_trajectories_gti)
