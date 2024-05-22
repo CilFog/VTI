@@ -36,28 +36,23 @@ def create_graph_from_geojson(nodes_geojson_path, edges_geojson_path):
 
 def load_complete_graph(graph_path):
     G = nx.Graph()
-    
-    target_dirs = {'9_9', '9_10', '10_9', '10_10'}
 
     # Walk through the directories in the graph_path
     for root, dirs, files in os.walk(graph_path):
-        last_dir = os.path.basename(root)
-        if last_dir in target_dirs:
+        node_file = None
+        edge_file = None
         
-            node_file = None
-            edge_file = None
-            
-            # Check if the current directory has the required geojson files
-            for file in files:
-                if file == 'nodes.geojson':
-                    node_file = os.path.join(root, file)
-                elif file == 'edges.geojson':
-                    edge_file = os.path.join(root, file)
-            
-            # If both files are found, load them into a graph and merge it with the main graph
-            if node_file and edge_file:
-                G_sub = create_graph_from_geojson(node_file, edge_file)
-                G = nx.compose(G, G_sub)  # Merge the current subgraph into the main graph
+        # Check if the current directory has the required geojson files
+        for file in files:
+            if file == 'nodes.geojson':
+                node_file = os.path.join(root, file)
+            elif file == 'edges.geojson':
+                edge_file = os.path.join(root, file)
+        
+        # If both files are found, load them into a graph and merge it with the main graph
+        if node_file and edge_file:
+            G_sub = create_graph_from_geojson(node_file, edge_file)
+            G = nx.compose(G, G_sub)  # Merge the current subgraph into the main graph
 
     return G
 
