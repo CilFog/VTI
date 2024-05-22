@@ -37,29 +37,33 @@ def create_graph_from_geojson(nodes_geojson_path, edges_geojson_path):
 def load_complete_graph(graph_path):
     G = nx.Graph()
     
+    target_dirs = {'9_9', '9_10', '10_9', '10_10'}
+
     # Walk through the directories in the graph_path
     for root, dirs, files in os.walk(graph_path):
-        node_file = None
-        edge_file = None
+        last_dir = os.path.basename(root)
+        if last_dir in target_dirs:
         
-        # Check if the current directory has the required geojson files
-        for file in files:
-            if file == 'nodes.geojson':
-                node_file = os.path.join(root, file)
-            elif file == 'edges.geojson':
-                edge_file = os.path.join(root, file)
-        
-        # If both files are found, load them into a graph and merge it with the main graph
-        if node_file and edge_file:
-            G_sub = create_graph_from_geojson(node_file, edge_file)
-            G = nx.compose(G, G_sub)  # Merge the current subgraph into the main graph
+            node_file = None
+            edge_file = None
+            
+            # Check if the current directory has the required geojson files
+            for file in files:
+                if file == 'nodes.geojson':
+                    node_file = os.path.join(root, file)
+                elif file == 'edges.geojson':
+                    edge_file = os.path.join(root, file)
+            
+            # If both files are found, load them into a graph and merge it with the main graph
+            if node_file and edge_file:
+                G_sub = create_graph_from_geojson(node_file, edge_file)
+                G = nx.compose(G, G_sub)  # Merge the current subgraph into the main graph
 
     return G
 
 def load_all_graph_process_trajectories(type, size, sparse_trajectories, graph_path, node_dist_threshold, edge_dist_threshold, cog_angle_threshold):
     
     original_graph = load_complete_graph(graph_path)
-    
     for root, dirs, files in os.walk(sparse_trajectories):
         for file_name in files:
             if file_name.endswith('.txt'):
@@ -99,20 +103,20 @@ for node_dist_threshold in node_dist_threshold:
         Impute all trajectories in test folder
     """
 
-    sparse = [4000] # 500, 1000, 2000, 4000, 8000
-    types = ['single_gap', 'realistic', 'many_gap'] #'many_gap', 'single_gap', 'realistic'
+    sparse = [8000] # 500, 1000, 2000, 4000, 8000
+    types = ['many_gap', 'single_gap'] #'many_gap', 'single_gap', 'realistic'
     for size in sparse:
         for type in types:
             if type == 'realistic':
-                sparse_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI//data//input_imputation//validation//sparsed2//all//{type}')
+                sparse_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI//data//input_imputation//validation//sparsed3//area//{type}')
             else:
-                sparse_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI//data//input_imputation//validation//sparsed2//all//{type}//{size}')
+                sparse_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI//data//input_imputation//validation//sparsed3//area//{type}//{size}')
                 
             load_all_graph_process_trajectories(type, size, sparse_trajectories, graph_path, node_dist_threshold, edge_dist_threshold, cog_angle_threshold)
 
             # print("comparing trajectories")
-            # imputed_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI/data/output_imputation/{type}/{size}/{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}')
-            # sparsed_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI//data//input_imputation//validation//sparsed2//all//{type}//{size}')
+            # imputed_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI/data/output_imputation/all/{type}/{size}/{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}')
+            # imputed_trajectories_gti = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI/data/output_imputation/area/{type}/{size}')
             # original_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'VTI/data/input_imputation/test/original')
-            # find_all_and_compare(imputed_trajectories, original_trajectories, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, size, type, sparsed_trajectories)
+            # find_all_and_compare(imputed_trajectories, original_trajectories, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, size, type, sparse_trajectories, imputed_trajectories_gti)
 
