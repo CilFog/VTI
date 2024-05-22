@@ -99,8 +99,8 @@ for node_dist_threshold in node_dist_threshold:
         Impute all trajectories in test folder
     """
 
-    sparse = [8000] # 500, 1000, 2000, 4000, 8000
-    types = ['single_gap', 'realistic'] #'many_gap', 'single_gap', 'realistic'
+    sparse = [4000] # 500, 1000, 2000, 4000, 8000
+    types = ['single_gap', 'realistic', 'many_gap'] #'many_gap', 'single_gap', 'realistic'
     for size in sparse:
         for type in types:
             if type == 'realistic':
