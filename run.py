@@ -102,23 +102,22 @@ def process_trajectory(size, type):
             Impute all trajectories in test folder
         """
 
-        for size in sparse:
-            for type in types:
-                if type == 'realistic':
-                    sparse_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI//data//input_imputation//validation//sparsed3//area//{type}')
-                else:
-                    sparse_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI//data//input_imputation//validation//sparsed3//area//{type}//{size}')
-                    
-                #load_all_graph_process_trajectories(type, size, sparse_trajectories, graph_path, node_dist_threshold, edge_dist_threshold, cog_angle_threshold)
 
-                print("comparing trajectories")
-                imputed_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI/data/output_imputation/area/{type}/{size}/{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}')
+        if type == 'realistic':
+            sparse_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI//data//input_imputation//validation//sparsed3//area//{type}')
+        else:
+            sparse_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI//data//input_imputation//validation//sparsed3//area//{type}//{size}')
+            
+        #load_all_graph_process_trajectories(type, size, sparse_trajectories, graph_path, node_dist_threshold, edge_dist_threshold, cog_angle_threshold)
 
-                original_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'VTI/data/input_imputation/test/original_area')
+        print("comparing trajectories")
+        imputed_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI/data/output_imputation/area/{type}/{size}/{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}')
 
-                #compare_linear(original_trajectories_linear_dgivt, size, type, sparse_trajectories_dgivt)
-                compare_imputed(imputed_trajectories, original_trajectories, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, size, type)
-                #compare_gti(imputed_trajectories, original_trajectories_gti, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, size, type, sparse_trajectories_gti, imputed_trajectories_gti)
+        original_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'VTI/data/input_imputation/test/original_area')
+
+        #compare_linear(original_trajectories_linear_dgivt, size, type, sparse_trajectories_dgivt)
+        compare_imputed(imputed_trajectories, original_trajectories, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, size, type)
+        #compare_gti(imputed_trajectories, original_trajectories_gti, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, size, type, sparse_trajectories_gti, imputed_trajectories_gti)
 
 with ThreadPoolExecutor() as executor:
     futures = [executor.submit(process_trajectory, size, type) for size in sparse for type in types]
