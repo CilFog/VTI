@@ -415,7 +415,7 @@ def refine_trajectory_double(trajectory: List[Tuple[float,float]], epsilon=1e-7)
 
     return gpd.GeoDataFrame(geometry=refined_geometries)
 
-def refine_trajectory(trajectory: List[Tuple[float,float]], epsilon=1e-7):
+def refine_trajectory(trajectory: List[Tuple[float,float]], epsilon=1e-5):
     if len(trajectory) < 3:
         return gpd.GeoDataFrame(geometry=[Point(y, x) for x, y in trajectory])
     
@@ -457,10 +457,8 @@ def refine_trajectory(trajectory: List[Tuple[float,float]], epsilon=1e-7):
 
     # Add the last refined sub-trajectory
     final_trajectory.extend(previous_fit)
-    # Convert refined points back to a GeoDataFrame
-    refined_geometries = [Point(y, x) for x, y in final_trajectory]
 
-    return gpd.GeoDataFrame(geometry=refined_geometries)
+    return final_trajectory
 
 def find_swapping_point(trip, i, j): # GTI
     # print(trip)
@@ -503,14 +501,6 @@ def process_imputated_trajectory(filepath_nodes:str):
     nodes_gdf = gpd.read_file(filepath_nodes)
     coordinates = np.column_stack((nodes_gdf['geometry'].map(lambda p: p.x), nodes_gdf['geometry'].map(lambda p: p.y)))
 
-    nodes_refined_gdf = refine_trajectory(coordinates)
+    refined = refine_trajectory(coordinates)
 
-    os_path_split = '/' if '/' in filepath_nodes else '\\'
-    basedir = os.path.dirname(filepath_nodes).split(os_path_split)[-1]
-    filename = os.path.basename(filepath_nodes).split('_nodes')[0]
-
-    new_filepath = os.path.join(OUTPUT_FOLDER_PROCESSED, basedir)
-    os.makedirs(new_filepath, exist_ok=True)
-    new_filepath = os.path.join(new_filepath, f'{filename}_refined.geojson')
-
-    nodes_refined_gdf.to_file(new_filepath, driver='GeoJSON')
+    return np.array(refined)

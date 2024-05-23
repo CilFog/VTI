@@ -5,6 +5,7 @@ from scipy.spatial.distance import directed_hausdorff
 import numpy as np
 from tslearn.metrics import dtw
 import csv
+from imputation_module.imputation import process_imputated_trajectory
 from utils import haversine_distance
 
 def load_geojson_extract_coordinates(file_path):
@@ -87,10 +88,10 @@ def frechet_distance(original_trajectory, imputed_trajectory):
 
 
 
-def compare_imputed(imputed_trajectory_path, original_trajectory_path, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, path, type, sparsed_trajectories):
+def compare_imputed(imputed_trajectory_path, original_trajectory_path, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, path, type):
     output_directory  = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'data//stats//evaluation//all//{type}//{path}')
     os.makedirs(output_directory, exist_ok=True)
-    stats_file = os.path.join(output_directory, f'imputed_{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}_evaluation.csv')
+    stats_file = os.path.join(output_directory, f'imputedR_evaluation.csv')
     
     original_files = {}
     for root, dirs, files in os.walk(original_trajectory_path):
@@ -113,7 +114,7 @@ def compare_imputed(imputed_trajectory_path, original_trajectory_path, node_dist
                         ofile_path = original_files[base_name]
                         print(f"Found DGIVT file: matching file {file_counter}")
                         
-                        imputed_trajectory = load_geojson_extract_coordinates(file_path)
+                        imputed_trajectory = process_imputated_trajectory(file_path)
                         original_trajectory = load_csv_extract_coordinates(ofile_path)
                         
                         original_len = len(original_trajectory)
@@ -180,7 +181,7 @@ def compare_linear(original_trajectory_path, path, type, sparsed_trajectories):
 
 
 def compare_gti(imputed_trajectory_path, original_trajectory_path, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, path, type, imputed_trajectories_gti):
-    output_directory  = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'data//stats//evaluation//area//{type}//{path}')
+    output_directory  = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'data//stats//evaluation//all//{type}//{path}')
     os.makedirs(output_directory, exist_ok=True)
     stats_file = os.path.join(output_directory, f'gti_{type}_{path}_evaluation.csv')
 
