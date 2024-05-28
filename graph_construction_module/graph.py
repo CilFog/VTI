@@ -118,7 +118,7 @@ def geometric_sampling(trajectories, min_distance_threshold):
         logging.error('No trajectories data provided to geometric_sampling.')
         return []
 
-    trajectories = [point for point in trajectories if point[-1] == 'Cargo']
+    trajectories = [point for point in trajectories if point[-1] == 'Fishing']
 
     # Create a KDTree from the trajectories
     trajectories = np.array(trajectories, dtype='object')  # Use 'object' to accommodate mixed types
