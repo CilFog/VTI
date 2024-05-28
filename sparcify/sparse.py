@@ -211,7 +211,7 @@ for filepath in files:
     try:
         vessel = filepath.split('/')[-3]
         if vessel in vessels.keys():
-            if vessels[vessel][0] == 5:
+            if vessels[vessel][0] == 50:
                 continue
 
         trajectory_cell_df = get_trajectory_df_from_txt(filepath)
@@ -267,14 +267,14 @@ for filepath in files:
 print('Found valid files. Began gathering original files')
 for vessel in vessels.keys():
     try:
-        if vessels[vessel][0] < 5:
+        if vessels[vessel][0] < 50:
             continue
         
         i = 0
 
-        while i < 5:
+        while i < 50:
             for (filepath) in vessels[vessel][1]:
-                if i == 5:
+                if i == 50:
                     break
 
                 trajectory_cell_df = get_trajectory_df_from_txt(filepath)
