@@ -231,8 +231,8 @@ def find_and_impute_paths(G, trajectory_points, file_name, node_dist_threshold, 
         else:
             try:
                 start_draught = start_props["draught"]
-                #GG = adjust_edge_weights_for_draught(G, start_point, end_point, tree, node_positions, start_draught)
-                path = nx.astar_path(G, start_point, end_point, heuristic=heuristics, weight='weight')
+                GG = adjust_edge_weights_for_draught(G, start_point, end_point, tree, node_positions, start_draught)
+                path = nx.astar_path(GG, start_point, end_point, heuristic=heuristics, weight='weight')
                 imputed_paths.append(path)
             except nx.NetworkXNoPath:
                 path = [start_point, end_point]
@@ -448,7 +448,7 @@ def refine_trajectory(trajectory: List[Tuple[float,float]], epsilon=1e-5):
         if (turn_detected):
             turn_detected = False
             final_trajectory.extend(previous_fit)
-            anchor += window_size
+            anchor += window_size - 1
             window_size = 3
             previous_fit = trajectory[anchor:anchor + 2]
         else:
@@ -457,8 +457,10 @@ def refine_trajectory(trajectory: List[Tuple[float,float]], epsilon=1e-5):
 
     # Add the last refined sub-trajectory
     final_trajectory.extend(previous_fit)
+    # Convert refined points back to a GeoDataFrame
+    refined_geometries = [Point(y, x) for x, y in final_trajectory]
 
-    return final_trajectory
+    return gpd.GeoDataFrame(geometry=refined_geometries)
 
 def find_swapping_point(trip, i, j): # GTI
     # print(trip)
@@ -480,7 +482,7 @@ def refinement(trip): # GTI
             continue
         residuals, x1, y1, m1, c1 = find_swapping_point(trip, breaking_point, i)
 
-        if i > breaking_point + 2 and residuals[0] > 1e-7:
+        if i > breaking_point + 2 and residuals[0] > 1e-5:
         # if i > breaking_point + 2 and abs(old_bearing - new_bearing) > 10:
             m1_c1s.append((prev_m1, prev_c1, i))
             new_points += [(y1[0], x1[0])]
@@ -496,11 +498,24 @@ def refinement(trip): # GTI
     refined_geometries = [Point(x, y) for x, y in new_points]
     return gpd.GeoDataFrame(geometry=refined_geometries)
 
-# TODO newfilepath should be correct
+
+OUTPUT_FOLDER_PROCESSED = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data//output_imputation')
+input = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data//output_imputation\\all\\single_gap\\4000\\0.0008_0.0016_180\\209536000_05-12-2023_21-14-24\\209536000_05-12-2023_21-14-24nodes.geojson')
+
 def process_imputated_trajectory(filepath_nodes:str):
     nodes_gdf = gpd.read_file(filepath_nodes)
     coordinates = np.column_stack((nodes_gdf['geometry'].map(lambda p: p.x), nodes_gdf['geometry'].map(lambda p: p.y)))
 
-    refined = refine_trajectory(coordinates)
+    nodes_refined_gdf = refine_trajectory(coordinates)
 
-    return np.array(refined)
+    os_path_split = '/' if '/' in filepath_nodes else '\\'
+    basedir = os.path.dirname(filepath_nodes).split(os_path_split)[-1]
+    filename = os.path.basename(filepath_nodes).split('_nodes')[0]
+
+    new_filepath = os.path.join(OUTPUT_FOLDER_PROCESSED, basedir)
+    os.makedirs(new_filepath, exist_ok=True)
+    new_filepath = os.path.join(new_filepath, f'{filename}_refined.geojson')
+
+    nodes_refined_gdf.to_file(new_filepath, driver='GeoJSON')
+
+#process_imputated_trajectory(input)
