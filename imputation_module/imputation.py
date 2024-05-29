@@ -122,8 +122,8 @@ def generate_output_files_and_stats(G, imputed_paths, file_name, type, size, nod
             edges.append((path[i], path[i+1]))
 
     # Output path construction and file writing
-    imputation_output_path = os.path.join(OUTPUT_FOLDER_RAW, f'area/{type}/{size}/{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}/{file_name}')
-    refined_output_path = os.path.join(OUTPUT_FOLDER_PROCESSED, f'area/{type}/{size}/{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}/{file_name}')
+    imputation_output_path = os.path.join(OUTPUT_FOLDER_RAW, f'all/{type}/{size}/{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}/{file_name}')
+    refined_output_path = os.path.join(OUTPUT_FOLDER_PROCESSED, f'all/{type}/{size}/{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}/{file_name}')
 
     if not os.path.exists(imputation_output_path):
         os.makedirs(imputation_output_path)

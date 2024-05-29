@@ -77,32 +77,33 @@ def load_intersecting_graphs_process_trajectories(type, size, sparse_trajectorie
                 print(f"Imputing trajectory {file_name}")
                 load_intersecting_graphs_and_impute_trajectory(file_name, file_path, graph_path, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size)
             
-sparse = [8000] # 500, 1000, 2000, 4000, 8000
-types = ['realistic'] #'many_gap', 'single_gap', 'realistic'
-def process_trajectory():
+sparse = [4000] # 500, 1000, 2000, 4000, 8000
+types = ['many_gap'] #'many_gap', 'single_gap', 'realistic'
+def process_trajectory(size, type):
     CELLS = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'VTI//data//cells.txt')
 
     node_dist_threshold = [0.0008]
     edge_dist_threshold = 0.0016 
     cog_angle_threshold = 180
-    graph_output_name = 'final_graph_fishing'
+    graph_output_name = 'final_graph_skagen' #final_graph_cargo and final_graph_fishing
         
     for node_dist_threshold in node_dist_threshold:
         edge_dist_threshold = node_dist_threshold * 2 
         graph_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI//data//output_graph//{graph_output_name}_{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}')
         cells_data = pd.read_csv(CELLS, index_col='cell_id')
+        sparse_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI//data//input_imputation//test//sparsed_exam//all//{type}//{size}')
 
         """
             Create graphs and connect them
         """
-        create_graphs_for_cells(node_dist_threshold, edge_dist_threshold, cog_angle_threshold, graph_output_name)
-        process_all_cells(cells_data, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, graph_output_name)
+        #create_graphs_for_cells(node_dist_threshold, edge_dist_threshold, cog_angle_threshold, graph_output_name)
+        #process_all_cells(cells_data, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, graph_output_name)
 
         """
             Impute all trajectories in test folder
         """
 
-        #load_all_graph_process_trajectories(type, size, sparse_trajectories, graph_path, node_dist_threshold, edge_dist_threshold, cog_angle_threshold)
+        load_all_graph_process_trajectories(type, size, sparse_trajectories, graph_path, node_dist_threshold, edge_dist_threshold, cog_angle_threshold)
 
 #         print("comparing trajectories")
 #         imputed_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI/data/output_imputation/area/{type}/{size}/{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}')
@@ -119,4 +120,4 @@ def process_trajectory():
 #     for future in futures:
 #         future.result()
 
-process_trajectory()
+process_trajectory(sparse, types)
