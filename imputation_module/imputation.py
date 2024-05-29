@@ -122,16 +122,18 @@ def generate_output_files_and_stats(G, imputed_paths, file_name, type, size, nod
             edges.append((path[i], path[i+1]))
 
     # Output path construction and file writing
-    IMPUTATION_OUTPUT_path = os.path.join(OUTPUT_FOLDER_RAW, f'area/{type}/{size}/{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}/{file_name}')
-    
-    if not os.path.exists(IMPUTATION_OUTPUT_path):
-        os.makedirs(IMPUTATION_OUTPUT_path)
+    imputation_output_path = os.path.join(OUTPUT_FOLDER_RAW, f'area/{type}/{size}/{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}/{file_name}')
+    refined_output_path = os.path.join(OUTPUT_FOLDER_PROCESSED, f'area/{type}/{size}/{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}/{file_name}')
+
+    if not os.path.exists(imputation_output_path):
+        os.makedirs(imputation_output_path)
 
     # GeoJSON output
-    imputed_nodes_file_path = os.path.join(IMPUTATION_OUTPUT_path, f'{file_name}_nodes.geojson')
-    imputed_edges_file_path = os.path.join(IMPUTATION_OUTPUT_path, f'{file_name}_edges.geojson')
+    imputed_nodes_file_path = os.path.join(imputation_output_path, f'{file_name}_nodes.geojson')
+    imputed_edges_file_path = os.path.join(imputation_output_path, f'{file_name}_edges.geojson')
     nodes_to_geojson(G, list(unique_nodes), imputed_nodes_file_path)
     edges_to_geojson(G, edges, imputed_edges_file_path)
+
 
     # Statistics
     stats = {
@@ -140,6 +142,8 @@ def generate_output_files_and_stats(G, imputed_paths, file_name, type, size, nod
         'imputed_paths': len(unique_nodes),
         'execution_time_seconds': add_execution_time + execution_time
     }
+
+    process_imputated_trajectory(imputed_nodes_file_path, refined_output_path, f'{file_name}_nodes.geojson')
 
     output_directory  = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'data/stats/imputation_stats/area/{type}/{size}')
     os.makedirs(output_directory, exist_ok=True)
@@ -152,7 +156,6 @@ def generate_output_files_and_stats(G, imputed_paths, file_name, type, size, nod
         if write_header:
             writer.writeheader()
         writer.writerow(stats)
-
 
 def add_nodes_and_edges(G, trajectory_points, edge_dist_threshold):
     start_time = time.time()
@@ -210,7 +213,6 @@ def add_nodes_and_edges(G, trajectory_points, edge_dist_threshold):
     execution_time = end_time - start_time 
     return G, added_nodes, added_edges, execution_time, tree, node_positions
 
-
 def find_and_impute_paths(G, trajectory_points, file_name, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size, added_nodes, added_edges, add_execution_time, tree, node_positions):
     start_time = time.time()
     imputed_paths = []
@@ -248,8 +250,6 @@ def find_and_impute_paths(G, trajectory_points, file_name, node_dist_threshold, 
 
     return imputed_paths
 
-
-
 def load_graphs_and_impute_trajectory(file_name, file_path, G, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size):
     trajectory_points = []
     try:
@@ -274,8 +274,6 @@ def load_graphs_and_impute_trajectory(file_name, file_path, G, node_dist_thresho
 
     new_g, added_nodes, added_edges, add_execution_time, tree, node_positions = add_nodes_and_edges(G, trajectory_points, edge_dist_threshold)
     find_and_impute_paths(new_g, trajectory_points, file_name, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size, added_nodes, added_edges, add_execution_time, tree, node_positions)
-
-
 
 def load_intersecting_graphs_and_impute_trajectory(file_name, file_path, graphs, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size):
     G = nx.Graph()
@@ -402,25 +400,13 @@ def refine_trajectory(trajectory: List[Tuple[float,float]], epsilon=1e-6):
 
     return gpd.GeoDataFrame(geometry=refined_geometries)
 
-def process_imputated_trajectory(filepath_nodes:str):
+def process_imputated_trajectory(filepath_nodes:str, output_folder:str, filename:str):
     nodes_gdf = gpd.read_file(filepath_nodes)
     coordinates = nodes_gdf[['latitude', 'longitude']].apply(lambda x: (x['longitude'], x['latitude']), axis=1).tolist()
 
     nodes_refined_gdf4 = refine_trajectory(coordinates)
 
-    filename = os.path.basename(filepath_nodes).split('_nodes')[0]
+    os.makedirs(output_folder, exist_ok=True)
 
-    new_filepath = os.path.join(OUTPUT_FOLDER_PROCESSED)
-    os.makedirs(new_filepath, exist_ok=True)
-
-    new_filepath = os.path.join(new_filepath, f'{filename}.geojson')
+    new_filepath = os.path.join(output_folder, filename)
     nodes_refined_gdf4.to_file(new_filepath, driver='GeoJSON')
-
-
-# paths = Path('/Users/ceciliew.fog/Documents/KandidatSpeciale/VTI/data/output_imputation/area/many_gap/4000/0.0008_0.0016_180').rglob('*_nodes.geojson')
-# paths = [str(path) for path in paths]
-# i = 0
-# for path in paths:
-#     process_imputated_trajectory(path)
-#     i += 1
-#     print(i)
