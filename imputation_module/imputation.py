@@ -16,10 +16,12 @@ from shapely.geometry import Point, box
 from scipy.spatial import cKDTree
 import time
 import concurrent.futures
+from pathlib import Path
 
 LOG_PATH = 'imputation_log.txt'
-
 IMPUTATION_OUTPUT = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data//output_imputation')
+OUTPUT_FOLDER_RAW = os.path.join(IMPUTATION_OUTPUT, 'raw')
+OUTPUT_FOLDER_PROCESSED = os.path.join(IMPUTATION_OUTPUT, 'processed')
 
 CELLS = os.path.join(os.path.join(os.path.dirname(os.path.dirname(__file__))), 'data//cells.txt')
 
@@ -120,7 +122,8 @@ def generate_output_files_and_stats(G, imputed_paths, file_name, type, size, nod
             edges.append((path[i], path[i+1]))
 
     # Output path construction and file writing
-    IMPUTATION_OUTPUT_path = os.path.join(IMPUTATION_OUTPUT, f'area/{type}/{size}/{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}/{file_name}')
+    IMPUTATION_OUTPUT_path = os.path.join(OUTPUT_FOLDER_RAW, f'area/{type}/{size}/{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}/{file_name}')
+    
     if not os.path.exists(IMPUTATION_OUTPUT_path):
         os.makedirs(IMPUTATION_OUTPUT_path)
 
@@ -149,9 +152,6 @@ def generate_output_files_and_stats(G, imputed_paths, file_name, type, size, nod
         if write_header:
             writer.writeheader()
         writer.writerow(stats)
-
-
-
 
 
 def add_nodes_and_edges(G, trajectory_points, edge_dist_threshold):
@@ -320,25 +320,9 @@ def load_intersecting_graphs_and_impute_trajectory(file_name, file_path, graphs,
     find_and_impute_paths(new_g, trajectory_points, file_name, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size)
     print("Imputation done")
 
-
-
-
-
-
-
-
-
-
-
-def calculate_center_position(positions:List[Tuple[float,float]]):
+def calculate_center_position(p1, p2):
     """Calculate the center position of the trajectory segment."""
-    
-    if len(positions) < 3:
-        print('Error: At least three positions are required to calculate the center position.')
-    center_pos = (
-        (positions[0][0] + positions[2][0]) / 2,
-        (positions[0][1] + positions[2][1]) / 2
-    )
+    center_pos = ((p1[0] + p2[0]) / 2, (p1[1] + p2[1]) / 2)
     return center_pos
 
 def best_fit(segment: List[Tuple[float, float]]):
@@ -364,158 +348,79 @@ def best_fit(segment: List[Tuple[float, float]]):
         residuals_value = residuals[0]
 
     # compute the predicted Y-values based on the best-fit line
-    fitted_segment = [(slope * x + intercept, x) for x in x_coords]
+    fitted_segment = []
+    fitted_segment += [(x, slope * x + intercept) for x in x_coords]
 
     return fitted_segment, residuals_value
 
-def refine_trajectory_double(trajectory: List[Tuple[float,float]], epsilon=1e-7): # includes the last point of previous fit in the next fit
+def refine_trajectory(trajectory: List[Tuple[float,float]], epsilon=1e-6):
     if len(trajectory) < 3:
-        return gpd.GeoDataFrame(geometry=[Point(y, x) for x, y in trajectory])
+        refined_geometries = [Point(x, y) for x, y in trajectory]
+        return gpd.GeoDataFrame(geometry=refined_geometries)
     
     anchor: int = 0
     window_size: int = 3
     final_trajectory = []
     previous_fit = trajectory[:2]
     turn_detected = False
-
-    while anchor + window_size <= len(trajectory):
+    i = 0
+    while (anchor + window_size) <= len(trajectory):
         # extract the current segment
         current_segment:list = trajectory[anchor:anchor + window_size]
 
         # compute best fit for the current segment
         best_fit_segment, residual = best_fit(current_segment)
 
-        if residual > epsilon and anchor + window_size < len(trajectory):
+        if residual > epsilon and ((anchor + window_size + 1) < len(trajectory)):
             extended_segment = trajectory[anchor:anchor + window_size - 1]
-            extended_segment = np.append(extended_segment, [trajectory[anchor + window_size]], axis=0)
+            extended_segment.append(trajectory[anchor + window_size + 1])
 
             _, residual = best_fit(extended_segment)
 
             if residual > epsilon:
                 turn_detected = True 
             else:
-                new_point = calculate_center_position([extended_segment[-2], current_segment[-1], extended_segment[-1]])
+                new_point = calculate_center_position(extended_segment[-2], extended_segment[-1])
                 current_segment[-1] = new_point
-                best_fit_segment, residual = best_fit(current_segment)
-
-        if residual > epsilon:
-            turn_detected = False
-            final_trajectory.extend(previous_fit[:-1])
-            anchor += window_size - 1
-            window_size = 3
-            previous_fit = [previous_fit[-1]] + trajectory[anchor:anchor + 1]
-        else:
-            previous_fit = best_fit_segment
-            window_size += 1
-
-    # Add the last refined sub-trajectory
-    final_trajectory.extend(previous_fit)
-    # Convert refined points back to a GeoDataFrame
-    refined_geometries = [Point(y, x) for x, y in final_trajectory]
-
-    return gpd.GeoDataFrame(geometry=refined_geometries)
-
-def refine_trajectory(trajectory: List[Tuple[float,float]], epsilon=1e-5):
-    if len(trajectory) < 3:
-        return gpd.GeoDataFrame(geometry=[Point(y, x) for x, y in trajectory])
-    
-    anchor: int = 0
-    window_size: int = 3
-    final_trajectory = []
-    previous_fit = trajectory[:2]
-    turn_detected = False
-
-    while anchor + window_size <= len(trajectory):
-        # extract the current segment
-        current_segment:list = trajectory[anchor:anchor + window_size]
-
-        # compute best fit for the current segment
-        best_fit_segment, residual = best_fit(current_segment)
-
-        if residual > epsilon and anchor + window_size < len(trajectory):
-            extended_segment = trajectory[anchor:anchor + window_size - 1]
-            extended_segment = np.append(extended_segment, [trajectory[anchor + window_size]], axis=0)
-
-            _, residual = best_fit(extended_segment)
-
-            if residual > epsilon:
-                turn_detected = True 
-            else:
-                new_point = calculate_center_position([extended_segment[-2], current_segment[-1], extended_segment[-1]])
-                current_segment[-1] = new_point
-                best_fit_segment, residual = best_fit(current_segment)
 
         if (turn_detected):
             turn_detected = False
-            final_trajectory.extend(previous_fit)
-            anchor += window_size - 1
+            best_fit_segment, _ = best_fit(previous_fit)
+            final_trajectory.extend(best_fit_segment)
+            anchor += (window_size - 1)
             window_size = 3
             previous_fit = trajectory[anchor:anchor + 2]
         else:
-            previous_fit = best_fit_segment
+            previous_fit = current_segment
             window_size += 1
 
     # Add the last refined sub-trajectory
     final_trajectory.extend(previous_fit)
-    # Convert refined points back to a GeoDataFrame
-    refined_geometries = [Point(y, x) for x, y in final_trajectory]
+    if len(final_trajectory) != len(trajectory):
+        print("Lengths are not equal in 4")
+    refined_geometries = [Point(x, y) for x, y in final_trajectory]
 
     return gpd.GeoDataFrame(geometry=refined_geometries)
-
-def find_swapping_point(trip, i, j): # GTI
-    # print(trip)
-    x1 = list(map(lambda x: x[1], trip[i:j]))
-    y1 = list(map(lambda x: x[0], trip[i:j]))
-    A1 = np.vstack([x1, np.ones(len(x1))]).T
-    function = np.linalg.lstsq(A1, y1, rcond=None)
-    m1, c1 = function [0]
-    residuals = function[1]
-    return residuals, x1, y1, m1, c1
-
-def refinement(trip): # GTI
-    new_points = []
-    breaking_point = 0
-    m1_c1s = []
-    # old_bearing = calculate_initial_compass_bearing((trip[0][0], trip[0][1]), (trip[1][0], trip[1][1]))
-    for i in range(2, len(trip)):
-        if breaking_point == i + 1: 
-            continue
-        residuals, x1, y1, m1, c1 = find_swapping_point(trip, breaking_point, i)
-
-        if i > breaking_point + 2 and residuals[0] > 1e-5:
-        # if i > breaking_point + 2 and abs(old_bearing - new_bearing) > 10:
-            m1_c1s.append((prev_m1, prev_c1, i))
-            new_points += [(y1[0], x1[0])]
-            new_points += [(m1 * xx + c1, xx) for xx in x1[1:-1]]
-            new_points += [(y1[-1], x1[-1])]
-            breaking_point = i
-        prev_m1, prev_c1 = m1, c1
-    new_points += [(y1[0], x1[0])]
-    new_points += [(m1 * xx + c1, xx) for xx in x1[1:-1]]
-    new_points += [(y1[-1], x1[-1])]
-
-        # Convert refined points back to a GeoDataFrame
-    refined_geometries = [Point(x, y) for x, y in new_points]
-    return gpd.GeoDataFrame(geometry=refined_geometries)
-
-
-OUTPUT_FOLDER_PROCESSED = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data//output_imputation')
-input = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data//output_imputation\\all\\single_gap\\4000\\0.0008_0.0016_180\\209536000_05-12-2023_21-14-24\\209536000_05-12-2023_21-14-24nodes.geojson')
 
 def process_imputated_trajectory(filepath_nodes:str):
     nodes_gdf = gpd.read_file(filepath_nodes)
-    coordinates = np.column_stack((nodes_gdf['geometry'].map(lambda p: p.x), nodes_gdf['geometry'].map(lambda p: p.y)))
+    coordinates = nodes_gdf[['latitude', 'longitude']].apply(lambda x: (x['longitude'], x['latitude']), axis=1).tolist()
 
-    nodes_refined_gdf = refine_trajectory(coordinates)
+    nodes_refined_gdf4 = refine_trajectory(coordinates)
 
-    os_path_split = '/' if '/' in filepath_nodes else '\\'
-    basedir = os.path.dirname(filepath_nodes).split(os_path_split)[-1]
     filename = os.path.basename(filepath_nodes).split('_nodes')[0]
 
-    new_filepath = os.path.join(OUTPUT_FOLDER_PROCESSED, basedir)
+    new_filepath = os.path.join(OUTPUT_FOLDER_PROCESSED)
     os.makedirs(new_filepath, exist_ok=True)
-    new_filepath = os.path.join(new_filepath, f'{filename}_refined.geojson')
 
-    nodes_refined_gdf.to_file(new_filepath, driver='GeoJSON')
+    new_filepath = os.path.join(new_filepath, f'{filename}.geojson')
+    nodes_refined_gdf4.to_file(new_filepath, driver='GeoJSON')
 
-#process_imputated_trajectory(input)
+
+# paths = Path('/Users/ceciliew.fog/Documents/KandidatSpeciale/VTI/data/output_imputation/area/many_gap/4000/0.0008_0.0016_180').rglob('*_nodes.geojson')
+# paths = [str(path) for path in paths]
+# i = 0
+# for path in paths:
+#     process_imputated_trajectory(path)
+#     i += 1
+#     print(i)
