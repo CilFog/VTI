@@ -77,8 +77,8 @@ def load_intersecting_graphs_process_trajectories(type, size, sparse_trajectorie
                 print(f"Imputing trajectory {file_name}")
                 load_intersecting_graphs_and_impute_trajectory(file_name, file_path, graph_path, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, type, size)
             
-sparse = [4000] # 500, 1000, 2000, 4000, 8000
-types = ['many_gap'] #'many_gap', 'single_gap', 'realistic'
+sparse = 4000 # 500, 1000, 2000, 4000, 8000
+types = 'many_gap' #'many_gap', 'single_gap', 'realistic'
 def process_trajectory(size, type):
     CELLS = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'VTI//data//cells.txt')
 
@@ -92,7 +92,7 @@ def process_trajectory(size, type):
         graph_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI//data//output_graph//{graph_output_name}_{node_dist_threshold}_{edge_dist_threshold}_{cog_angle_threshold}')
         cells_data = pd.read_csv(CELLS, index_col='cell_id')
         sparse_trajectories = os.path.join(os.path.dirname(os.path.dirname(__file__)), f'VTI//data//input_imputation//test//sparsed_exam//all//{type}//{size}')
-
+        
         """
             Create graphs and connect them
         """
