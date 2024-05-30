@@ -85,7 +85,7 @@ def process_trajectory(size, type):
     node_dist_threshold = [0.0008]
     edge_dist_threshold = 0.0016 
     cog_angle_threshold = 180
-    graph_output_name = 'final_graph_cargo' #final_graph_cargo and final_graph_fishing
+    graph_output_name = 'final_graph_fishing' #final_graph_cargo and final_graph_fishing
         
     for node_dist_threshold in node_dist_threshold:
         edge_dist_threshold = node_dist_threshold * 2 
