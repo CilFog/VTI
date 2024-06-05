@@ -5,7 +5,7 @@ import networkx as nx
 import numpy as np
 from sqlalchemy import Tuple
 from data.logs.logging import setup_logger
-from utils import haversine_distance, heuristics, adjust_edge_weights_for_draught, nodes_within_radius, nodes_to_geojson, edges_to_geojson, interpolate_path
+from utils import haversine_distance, heuristics, adjust_edge_weights_for_draught, nodes_within_radius, nodes_to_geojson, edges_to_geojson, interpolate_path, nodes_to_geojson_imputed
 import time
 import numpy as np
 import pandas as pd
@@ -97,8 +97,6 @@ def find_relevant_cells(trajectory_points, cells_df):
                 relevant_cell_ids.add(row['cell_id'])
     return list(relevant_cell_ids)
 
-
-
 def revert_graph_changes(G, added_nodes, added_edges):
     for edge in added_edges:
         if G.has_edge(*edge):
@@ -106,7 +104,6 @@ def revert_graph_changes(G, added_nodes, added_edges):
     for node in added_nodes:
         if G.has_node(node):
             G.remove_node(node)
-
 
 def generate_output_files_and_stats(G, imputed_paths, file_name, type, size, node_dist_threshold, edge_dist_threshold, cog_angle_threshold, trajectory_points, execution_time, add_execution_time):
     unique_nodes = []
@@ -131,7 +128,7 @@ def generate_output_files_and_stats(G, imputed_paths, file_name, type, size, nod
     # GeoJSON output
     imputed_nodes_file_path = os.path.join(imputation_output_path, f'{file_name}_nodes.geojson')
     imputed_edges_file_path = os.path.join(imputation_output_path, f'{file_name}_edges.geojson')
-    nodes_to_geojson(G, list(unique_nodes), imputed_nodes_file_path)
+    nodes_to_geojson_imputed(G, list(unique_nodes), imputed_nodes_file_path)
     edges_to_geojson(G, edges, imputed_edges_file_path)
 
     # Statistics

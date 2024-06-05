@@ -75,18 +75,39 @@ def heuristics(coord1, coord2):
 def nodes_to_geojson(G, nodes, file_path):
     features = []    
     for node in nodes:
-        num_properties = len(node)
         node_properties = G.nodes[node]
         feature = {
             "type": "Feature",
             "geometry": {
                 "type": "Point",
+                "coordinates": [node[1], node[0]]
+            },
+            "properties": node_properties
+        }
+        features.append(feature)
+    
+    geojson = {
+        "type": "FeatureCollection",
+        "features": features
+    }
+    
+    with open(file_path, 'w') as f:
+        json.dump(geojson, f)
+
+def nodes_to_geojson_imputed(G, nodes, file_path):
+    features = []    
+    for node in nodes:
+        node_properties = G.nodes[(node[0],node[1])]
+        feature = {
+            "type": "Feature",
+            "geometry": {
+                "type": "Point",
                 "coordinates": [node[1], node[0]],
-                "timestamp": node[2] if num_properties == 7 else None,
-                "sog": node[3] if num_properties == 7 else None,
-                "cog": node[4] if num_properties == 7 else None,
-                "draught": node[5] if num_properties == 7 else None,
-                "ship_type": node[6] if num_properties == 7 else None
+                "timestamp": node[2],
+                "sog": node[3],
+                "cog": node[4],
+                "draught": node[5],
+                "ship_type": node[6]
             },
             "properties": node_properties
         }
