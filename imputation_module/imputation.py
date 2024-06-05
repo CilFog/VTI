@@ -5,7 +5,7 @@ import networkx as nx
 import numpy as np
 from sqlalchemy import Tuple
 from data.logs.logging import setup_logger
-from utils import haversine_distance, heuristics, adjust_edge_weights_for_draught, nodes_within_radius, nodes_to_geojson, edges_to_geojson
+from utils import haversine_distance, heuristics, adjust_edge_weights_for_draught, nodes_within_radius, nodes_to_geojson, edges_to_geojson, interpolate_path
 import time
 import numpy as np
 import pandas as pd
@@ -134,7 +134,6 @@ def generate_output_files_and_stats(G, imputed_paths, file_name, type, size, nod
     nodes_to_geojson(G, list(unique_nodes), imputed_nodes_file_path)
     edges_to_geojson(G, edges, imputed_edges_file_path)
 
-
     # Statistics
     stats = {
         'file_name': file_name,
@@ -228,6 +227,7 @@ def find_and_impute_paths(G, trajectory_points, file_name, node_dist_threshold, 
         direct_path_exists = G.has_edge(start_point, end_point)
 
         if direct_path_exists:
+            # to avoid adding the first point again, if it is already in the path
             path = [start_point, end_point]
             imputed_paths.append(path)
         else:
@@ -235,7 +235,14 @@ def find_and_impute_paths(G, trajectory_points, file_name, node_dist_threshold, 
                 start_draught = start_props["draught"]
                 GG = adjust_edge_weights_for_draught(G, start_point, end_point, tree, node_positions, start_draught)
                 path = nx.astar_path(GG, start_point, end_point, heuristic=heuristics, weight='weight')
-                imputed_paths.append(path)
+                
+                # to avoid adding the first point again, if it is already in the path
+                if i == 0:
+                    interpolated_path = interpolate_path(path, start_props, end_props)
+                    imputed_paths.append(interpolated_path)
+                else:
+                    imputed_paths.append(path[1:])
+                    
             except nx.NetworkXNoPath:
                 path = [start_point, end_point]
                 imputed_paths.append(path)
