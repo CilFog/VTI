@@ -117,7 +117,6 @@ def nodes_to_geojson_imputed(G, nodes, file_path):
         "type": "FeatureCollection",
         "features": features
     }
-    
     with open(file_path, 'w') as f:
         json.dump(geojson, f)
 
